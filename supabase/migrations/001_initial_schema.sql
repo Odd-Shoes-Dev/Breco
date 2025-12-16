@@ -1,9 +1,9 @@
 -- =====================================================
--- SCENESIDE L.L.C FINANCIAL SYSTEM DATABASE SCHEMA
--- Company: Sceneside L.L.C
--- Address: 121 Bedford Street, Waltham, MA 02453
--- EIN: 99-3334108
--- Bank: Bank of America, Acc: 466021944682
+-- BRECO SAFARIS LTD FINANCIAL & OPERATIONS SYSTEM
+-- Company: Breco Safaris Ltd
+-- Address: Plot 22 Bombo Road, Kampala, Uganda
+-- TIN: 1014756280
+-- Bank: Stanbic Bank Uganda
 -- =====================================================
 
 -- Enable required extensions
@@ -37,7 +37,8 @@ CREATE TYPE stock_movement_type AS ENUM ('purchase', 'sale', 'adjustment', 'tran
 CREATE TYPE asset_status AS ENUM ('active', 'disposed', 'fully_depreciated');
 CREATE TYPE depreciation_method AS ENUM ('straight_line', 'reducing_balance', 'units_of_production');
 
-CREATE TYPE user_role AS ENUM ('admin', 'accountant', 'manager', 'sales', 'auditor');
+-- Breco Safaris roles: admin, accountant, operations (tours/bookings), guide
+CREATE TYPE user_role AS ENUM ('admin', 'accountant', 'operations', 'guide');
 CREATE TYPE recurring_frequency AS ENUM ('daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'annually');
 
 -- =====================================================
@@ -46,16 +47,16 @@ CREATE TYPE recurring_frequency AS ENUM ('daily', 'weekly', 'biweekly', 'monthly
 
 CREATE TABLE company_settings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name VARCHAR(255) NOT NULL DEFAULT 'Sceneside L.L.C',
-  legal_name VARCHAR(255) DEFAULT 'Sceneside L.L.C',
-  ein VARCHAR(20) DEFAULT '99-3334108',
-  address_line1 VARCHAR(255) DEFAULT '121 Bedford Street',
+  name VARCHAR(255) NOT NULL DEFAULT 'Breco Safaris Ltd',
+  legal_name VARCHAR(255) DEFAULT 'Breco Safaris Ltd',
+  ein VARCHAR(20) DEFAULT '1014756280',
+  address_line1 VARCHAR(255) DEFAULT 'Plot 22 Bombo Road',
   address_line2 VARCHAR(255),
-  city VARCHAR(100) DEFAULT 'Waltham',
-  state VARCHAR(50) DEFAULT 'MA',
-  zip_code VARCHAR(20) DEFAULT '02453',
-  country VARCHAR(100) DEFAULT 'USA',
-  phone VARCHAR(50) DEFAULT '857-384-2899',
+  city VARCHAR(100) DEFAULT 'Kampala',
+  state VARCHAR(50) DEFAULT '',
+  zip_code VARCHAR(20) DEFAULT '',
+  country VARCHAR(100) DEFAULT 'Uganda',
+  phone VARCHAR(50) DEFAULT '+256 700 123456',
   email VARCHAR(255),
   website VARCHAR(255),
   logo_url VARCHAR(500),
@@ -71,10 +72,11 @@ CREATE TABLE company_settings (
 CREATE TABLE bank_accounts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name VARCHAR(255) NOT NULL,
-  bank_name VARCHAR(255) DEFAULT 'Bank of America',
+  bank_name VARCHAR(255) DEFAULT 'Stanbic Bank Uganda',
   account_number_encrypted BYTEA, -- encrypted with pgcrypto
   routing_number VARCHAR(20),
   wire_routing_number VARCHAR(20),
+  swift_code VARCHAR(20) DEFAULT 'SBICUGKX',
   account_type VARCHAR(50) DEFAULT 'checking',
   currency CHAR(3) DEFAULT 'USD',
   gl_account_id UUID, -- links to accounts table

@@ -10,8 +10,8 @@ export default function PaymentSuccessPage(props: any) {
       <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
         {/* Logo */}
         <img
-          src="/Sceneside_logo_name.png"
-          alt="Sceneside"
+          src="/assets/logo.jpg"
+          alt="Breco Safaris"
           className="h-8 mx-auto mb-6"
         />
 
@@ -40,7 +40,7 @@ export default function PaymentSuccessPage(props: any) {
             href="/"
             className="block w-full py-3 px-4 bg-[#1e3a5f] text-white rounded-lg font-medium hover:bg-[#1e3a5f]/90 transition-colors text-center"
           >
-            Return to Sceneside
+            Return to Breco Safaris
           </Link>
           
           <PrintButton className="block w-full py-3 px-4 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors">
@@ -51,7 +51,7 @@ export default function PaymentSuccessPage(props: any) {
         {/* Footer */}
         <p className="text-xs text-gray-500 mt-8">
           Questions about your payment?{' '}
-          <a href="tel:857-384-2899" className="text-[#1e3a5f] hover:underline">
+          <a href="tel:+256782884933" className="text-[#1e3a5f] hover:underline">
             Contact us
           </a>
         </p>
@@ -59,3 +59,4 @@ export default function PaymentSuccessPage(props: any) {
     </div>
   );
 }
+

@@ -252,9 +252,9 @@ export default function ProfitLossReportPage() {
       <body>
         <div class="header">
           <div class="logo-section">
-            <img src="/Sceneside assets/Sceneside_logo.png" alt="Sceneside L.L.C" class="logo">
+            <img src="/assets/logo.jpg" alt="Breco Safaris Ltd" class="logo">
             <div class="company-info">
-              <div class="company-name">Sceneside L.L.C</div>
+              <div class="company-name">Breco Safaris Ltd</div>
               <div class="company-address">121 Bedford Street, Waltham, MA 02453</div>
               <div class="company-contact">Phone: 857-384-2899</div>
               <div class="company-contact">Director: N.Maureen</div>
@@ -389,7 +389,7 @@ export default function ProfitLossReportPage() {
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="block w-full px-2 sm:px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                  className="block w-full px-2 sm:px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
                 />
               </div>
               <div className="flex-1 min-w-0">
@@ -398,24 +398,24 @@ export default function ProfitLossReportPage() {
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="block w-full px-2 sm:px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                  className="block w-full px-2 sm:px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
                 />
               </div>
             </div>
             <div className="flex gap-2 flex-wrap">
-              <button onClick={() => setPresetPeriod('thisMonth')} className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-sceneside-navy hover:bg-gray-100 rounded-md font-medium transition-colors">
+              <button onClick={() => setPresetPeriod('thisMonth')} className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-breco-navy hover:bg-gray-100 rounded-md font-medium transition-colors">
                 This Month
               </button>
-              <button onClick={() => setPresetPeriod('lastMonth')} className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-sceneside-navy hover:bg-gray-100 rounded-md font-medium transition-colors">
+              <button onClick={() => setPresetPeriod('lastMonth')} className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-breco-navy hover:bg-gray-100 rounded-md font-medium transition-colors">
                 Last Month
               </button>
-              <button onClick={() => setPresetPeriod('thisQuarter')} className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-sceneside-navy hover:bg-gray-100 rounded-md font-medium transition-colors">
+              <button onClick={() => setPresetPeriod('thisQuarter')} className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-breco-navy hover:bg-gray-100 rounded-md font-medium transition-colors">
                 This Quarter
               </button>
-              <button onClick={() => setPresetPeriod('thisYear')} className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-sceneside-navy hover:bg-gray-100 rounded-md font-medium transition-colors">
+              <button onClick={() => setPresetPeriod('thisYear')} className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-breco-navy hover:bg-gray-100 rounded-md font-medium transition-colors">
                 This Year
               </button>
-              <button onClick={() => setPresetPeriod('lastYear')} className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-sceneside-navy hover:bg-gray-100 rounded-md font-medium transition-colors">
+              <button onClick={() => setPresetPeriod('lastYear')} className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-breco-navy hover:bg-gray-100 rounded-md font-medium transition-colors">
                 Last Year
               </button>
             </div>
@@ -433,7 +433,7 @@ export default function ProfitLossReportPage() {
           <div className="p-4 sm:p-6">
             {/* Report Header */}
             <div className="text-center mb-6 sm:mb-8">
-              <h2 className="text-lg sm:text-xl font-bold text-gray-900">Sceneside L.L.C</h2>
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900">Breco Safaris Ltd</h2>
               <p className="text-sm sm:text-base text-gray-600">Profit & Loss Statement</p>
               <p className="text-xs sm:text-sm text-gray-500">
                 {formatDate(data.period.startDate)} - {formatDate(data.period.endDate)}
@@ -569,3 +569,4 @@ export default function ProfitLossReportPage() {
     </div>
   );
 }
+

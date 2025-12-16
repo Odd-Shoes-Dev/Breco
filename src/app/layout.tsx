@@ -6,27 +6,27 @@ import { Toaster } from 'react-hot-toast';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Sceneside L.L.C - Financial System',
-  description: 'Financial Management System for Sceneside L.L.C',
+  title: 'Breco Safaris - Financial Management System',
+  description: 'Internal Financial & Operations Management System for Breco Safaris Ltd',
   icons: {
     icon: [
-      { url: '/Sceneside%20assets/logo.png', sizes: '32x32', type: 'image/png' },
-      { url: '/Sceneside%20assets/logo.png', sizes: '16x16', type: 'image/png' },
-      { url: '/Sceneside%20assets/logo.png', sizes: '192x192', type: 'image/png' },
+      { url: '/assets/logo_no_text.jpg', sizes: '32x32', type: 'image/jpeg' },
+      { url: '/assets/logo_no_text.jpg', sizes: '16x16', type: 'image/jpeg' },
+      { url: '/assets/logo_no_text.jpg', sizes: '192x192', type: 'image/jpeg' },
     ],
-    apple: [{ url: '/Sceneside%20assets/logo.png', sizes: '180x180', type: 'image/png' }],
-    shortcut: '/Sceneside%20assets/logo.png',
+    apple: [{ url: '/assets/logo_no_text.jpg', sizes: '180x180', type: 'image/jpeg' }],
+    shortcut: '/assets/logo_no_text.jpg',
   },
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Sceneside Financial',
+    title: 'Breco Safaris',
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#52b53b',
+  themeColor: '#1e3a5f',
 };
 
 export default function RootLayout({
@@ -41,10 +41,10 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Sceneside Financial" />
-        <link rel="apple-touch-icon" href="/Sceneside%20assets/logo.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/Sceneside%20assets/logo.png" />
-        <link rel="apple-touch-startup-image" href="/Sceneside%20assets/logo.png" />
+        <meta name="apple-mobile-web-app-title" content="Breco Safaris" />
+        <link rel="apple-touch-icon" href="/assets/logo_no_text.jpg" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/assets/logo_no_text.jpg" />
+        <link rel="apple-touch-startup-image" href="/assets/logo.jpg" />
       </head>
       <body className={inter.className}>
         {children}
@@ -58,7 +58,7 @@ export default function RootLayout({
             },
             success: {
               style: {
-                background: '#059669',
+                background: '#0d9488',
               },
             },
             error: {
@@ -72,3 +72,4 @@ export default function RootLayout({
     </html>
   );
 }
+

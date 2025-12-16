@@ -1,5 +1,6 @@
 // Re-export all types
 export * from './database';
+export * from './breco';
 
 // Additional utility types for the application
 

@@ -397,3 +397,4 @@ export default function NewInventoryItemPage() {
     </div>
   );
 }
+

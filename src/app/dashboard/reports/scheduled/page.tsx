@@ -174,7 +174,7 @@ export default function ScheduledReportsPage() {
       <div className="card overflow-hidden">
         {isLoading ? (
           <div className="p-6 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sceneside-navy mx-auto"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-breco-navy mx-auto"></div>
             <p className="text-gray-500 mt-4">Loading scheduled reports...</p>
           </div>
         ) : schedules.length === 0 ? (

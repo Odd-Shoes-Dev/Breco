@@ -3,12 +3,12 @@
 @tailwind utilities;
 
 :root {
-  --sceneside-green: #52b53b;
-  --sceneside-green-light: #6bc956;
-  --sceneside-green-dark: #449932;
-  --sceneside-navy: #1e3a5f;
-  --sceneside-magenta: #c41e7f;
-  --sceneside-purple: #6b2d7b;
+  --breco-navy: #1e3a5f;
+  --breco-navy-light: #2a4a73;
+  --breco-navy-dark: #152a45;
+  --breco-gold: #d4a853;
+  --breco-teal: #0d9488;
+  --breco-safari: #8b7355;
 }
 
 @layer base {
@@ -23,7 +23,7 @@
   }
 
   .btn-primary {
-    @apply btn bg-sceneside-navy text-white hover:bg-sceneside-navy-dark focus:ring-sceneside-navy;
+    @apply btn bg-breco-navy text-white hover:bg-breco-navy-dark focus:ring-breco-navy;
   }
 
   .btn-secondary {
@@ -31,7 +31,11 @@
   }
 
   .btn-accent {
-    @apply btn bg-sceneside-magenta text-white hover:bg-sceneside-magenta-light focus:ring-sceneside-magenta;
+    @apply btn bg-breco-teal text-white hover:bg-breco-teal-dark focus:ring-breco-teal;
+  }
+
+  .btn-gold {
+    @apply btn bg-breco-gold text-white hover:bg-breco-gold-dark focus:ring-breco-gold;
   }
 
   .btn-danger {
@@ -51,7 +55,7 @@
   }
 
   .input {
-    @apply block w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy disabled:bg-gray-100 disabled:cursor-not-allowed;
+    @apply block w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy disabled:bg-gray-100 disabled:cursor-not-allowed;
   }
 
   .input-error {
@@ -122,6 +126,14 @@
     @apply badge bg-gray-100 text-gray-800;
   }
 
+  .badge-navy {
+    @apply badge bg-breco-navy text-white;
+  }
+
+  .badge-gold {
+    @apply badge bg-breco-gold text-white;
+  }
+
   .stat-card {
     @apply card p-6;
   }
@@ -151,7 +163,7 @@
   }
 
   .sidebar-link-active {
-    @apply sidebar-link bg-sceneside-navy text-white;
+    @apply sidebar-link bg-breco-navy text-white;
   }
 
   .sidebar-link-inactive {
@@ -235,11 +247,32 @@
   .status-void, .status-cancelled {
     @apply badge bg-gray-200 text-gray-600;
   }
+
+  /* Booking status colors */
+  .status-inquiry {
+    @apply badge bg-purple-100 text-purple-800;
+  }
+
+  .status-confirmed {
+    @apply badge bg-breco-navy text-white;
+  }
+
+  .status-deposit-paid {
+    @apply badge bg-breco-gold text-white;
+  }
+
+  .status-in-progress {
+    @apply badge bg-breco-teal text-white;
+  }
+
+  .status-completed {
+    @apply badge-success;
+  }
 }
 
 @layer utilities {
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-sceneside-gradient;
+    @apply bg-clip-text text-transparent bg-breco-gradient;
   }
 
   .animate-fade-in {

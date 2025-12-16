@@ -178,7 +178,7 @@ export default function StockMovementsPage() {
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
             />
           </div>
           <div>
@@ -189,7 +189,7 @@ export default function StockMovementsPage() {
                 setTypeFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
             >
               <option value="all">All Types</option>
               <option value="purchase">Purchase</option>
@@ -205,7 +205,7 @@ export default function StockMovementsPage() {
       {/* Movements List */}
       {loading ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sceneside-navy" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-breco-navy" />
         </div>
       ) : movements.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
@@ -325,3 +325,4 @@ export default function StockMovementsPage() {
     </div>
   );
 }
+

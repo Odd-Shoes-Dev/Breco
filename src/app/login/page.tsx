@@ -43,30 +43,30 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 flex flex-col justify-center p-4 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex flex-col justify-center p-4 py-8">
       <div className="w-full max-w-md mx-auto">
         {/* Logo */}
         <div className="text-center mb-6">
           <Link href="/" className="inline-block">
             <Image
-              src="/Sceneside assets/Sceneside_logo.png"
-              alt="Sceneside L.L.C"
+              src="/assets/logo.jpg"
+              alt="Breco Safaris Ltd"
               width={270}
               height={108}
               className="mx-auto -mb-4"
             />
           </Link>
-          <p className="text-emerald-800 font-semibold text-lg mt-6">
+          <p className="text-breco-navy font-semibold text-lg mt-6">
             Financial Management System
           </p>
         </div>
 
         {/* Login Card */}
-        <div className="card shadow-xl border border-emerald-100">
+        <div className="card shadow-xl border border-blue-100">
           <div className="card-header bg-[#fff]">
-            <h1 className="text-xl font-semibold text-emerald-800">Sign In</h1>
-            <p className="text-sm text-emerald-800 mt-1">
-              Access your financial dashboard
+            <h1 className="text-xl font-semibold text-breco-navy">Sign In</h1>
+            <p className="text-sm text-breco-navy mt-1">
+              Access your operations dashboard
             </p>
           </div>
 
@@ -81,7 +81,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="input"
-                placeholder="you@sceneside.com"
+                placeholder="you@brecosafaris.com"
                 required
               />
             </div>
@@ -105,7 +105,7 @@ export default function LoginPage() {
               <label className="flex items-center gap-2 text-sm text-gray-600">
                 <input
                   type="checkbox"
-                  className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                  className="w-4 h-4 rounded border-gray-300 text-breco-navy focus:ring-breco-navy"
                 />
                 Remember me
               </label>
@@ -146,7 +146,7 @@ export default function LoginPage() {
             <p className="text-sm text-gray-600">
               Need an account?{' '}
               {process.env.NEXT_PUBLIC_SIGNUPS_ENABLED === 'true' ? (
-                <Link href="/signup" className="text-emerald-600 hover:text-emerald-700 hover:underline font-medium">
+                <Link href="/signup" className="text-breco-navy hover:text-breco-navy-dark hover:underline font-medium">
                   Contact administrator
                 </Link>
               ) : (
@@ -158,9 +158,10 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="text-center text-gray-600 text-sm mt-8">
-          &copy; {new Date().getFullYear()} Sceneside L.L.C
+          &copy; {new Date().getFullYear()} Breco Safaris Ltd. All rights reserved.
         </p>
       </div>
     </div>
   );
 }
+

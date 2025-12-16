@@ -259,7 +259,7 @@ export default function EditJournalEntryPage() {
   if (isLoading || !formData) {
     return (
       <div className="p-8 text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sceneside-navy mx-auto"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-breco-navy mx-auto"></div>
         <p className="text-gray-500 mt-4">Loading journal entry...</p>
       </div>
     );
@@ -287,7 +287,7 @@ export default function EditJournalEntryPage() {
         {/* Entry Details */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
           <div className="flex items-center gap-2 sm:gap-3 mb-4">
-            <DocumentTextIcon className="w-4 h-4 sm:w-5 sm:h-5 text-sceneside-navy" />
+            <DocumentTextIcon className="w-4 h-4 sm:w-5 sm:h-5 text-breco-navy" />
             <h3 className="text-sm sm:text-base font-semibold text-gray-900">Entry Details</h3>
           </div>
 
@@ -308,7 +308,7 @@ export default function EditJournalEntryPage() {
                 type="date"
                 value={formData.date}
                 onChange={(e) => setFormData(prev => prev ? ({ ...prev, date: e.target.value }) : null)}
-                className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
                 required
               />
             </div>
@@ -321,7 +321,7 @@ export default function EditJournalEntryPage() {
                 onChange={(e) => setFormData(prev => prev ? ({ ...prev, reference: e.target.value }) : null)}
                 placeholder="Invoice #, Check #, etc."
                 className={cn(
-                  "block w-full px-3 py-2 text-sm border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy",
+                  "block w-full px-3 py-2 text-sm border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy",
                   errors.reference ? "border-red-300" : "border-gray-300"
                 )}
                 required
@@ -340,7 +340,7 @@ export default function EditJournalEntryPage() {
               placeholder="Describe the purpose of this journal entry..."
               rows={3}
               className={cn(
-                "block w-full px-3 py-2 text-sm border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy",
+                "block w-full px-3 py-2 text-sm border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy",
                 errors.description ? "border-red-300" : "border-gray-300"
               )}
               required
@@ -356,13 +356,13 @@ export default function EditJournalEntryPage() {
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 sm:gap-3">
-                <DocumentTextIcon className="w-4 h-4 sm:w-5 sm:h-5 text-sceneside-navy" />
+                <DocumentTextIcon className="w-4 h-4 sm:w-5 sm:h-5 text-breco-navy" />
                 <h3 className="text-sm sm:text-base font-semibold text-gray-900">Line Items</h3>
               </div>
               <button
                 type="button"
                 onClick={addLineItem}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-sceneside-navy hover:bg-sceneside-navy/10 rounded-md"
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-breco-navy hover:bg-breco-navy/10 rounded-md"
               >
                 <PlusIcon className="w-3 h-3" />
                 Add Line
@@ -399,7 +399,7 @@ export default function EditJournalEntryPage() {
                         value={item.accountId}
                         onChange={(e) => updateLineItem(item.id, 'accountId', e.target.value)}
                         className={cn(
-                          "block w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-sceneside-navy focus:border-sceneside-navy",
+                          "block w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-breco-navy focus:border-breco-navy",
                           errors[`lineItem_${index}_account`] ? "border-red-300" : "border-gray-300"
                         )}
                         required
@@ -422,7 +422,7 @@ export default function EditJournalEntryPage() {
                         onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
                         placeholder="Line item description..."
                         className={cn(
-                          "block w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-sceneside-navy focus:border-sceneside-navy",
+                          "block w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-breco-navy focus:border-breco-navy",
                           errors[`lineItem_${index}_description`] ? "border-red-300" : "border-gray-300"
                         )}
                         required
@@ -444,7 +444,7 @@ export default function EditJournalEntryPage() {
                         }}
                         placeholder="0.00"
                         className={cn(
-                          "block w-full px-2 py-1 text-xs text-right tabular-nums border rounded focus:outline-none focus:ring-1 focus:ring-sceneside-navy focus:border-sceneside-navy",
+                          "block w-full px-2 py-1 text-xs text-right tabular-nums border rounded focus:outline-none focus:ring-1 focus:ring-breco-navy focus:border-breco-navy",
                           errors[`lineItem_${index}_amount`] ? "border-red-300" : "border-gray-300"
                         )}
                       />
@@ -462,7 +462,7 @@ export default function EditJournalEntryPage() {
                         }}
                         placeholder="0.00"
                         className={cn(
-                          "block w-full px-2 py-1 text-xs text-right tabular-nums border rounded focus:outline-none focus:ring-1 focus:ring-sceneside-navy focus:border-sceneside-navy",
+                          "block w-full px-2 py-1 text-xs text-right tabular-nums border rounded focus:outline-none focus:ring-1 focus:ring-breco-navy focus:border-breco-navy",
                           errors[`lineItem_${index}_amount`] ? "border-red-300" : "border-gray-300"
                         )}
                       />
@@ -533,7 +533,7 @@ export default function EditJournalEntryPage() {
             type="button"
             onClick={(e) => handleSubmit(e, true)}
             disabled={isSubmitting || !isBalanced()}
-            className="inline-flex items-center justify-center px-4 py-2 bg-sceneside-navy text-white rounded-lg text-sm font-medium hover:bg-sceneside-navy/90 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center justify-center px-4 py-2 bg-breco-navy text-white rounded-lg text-sm font-medium hover:bg-breco-navy/90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? 'Saving...' : 'Save & Post'}
           </button>

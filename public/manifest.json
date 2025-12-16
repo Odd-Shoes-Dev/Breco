@@ -1,65 +1,65 @@
 {
-  "name": "Sceneside L.L.C - Financial System",
-  "short_name": "Sceneside Financial",
-  "version": "1.1.0",
-  "build": "2025.12.001",
-  "description": "Financial Management System for Sceneside L.L.C",
+  "name": "Breco Safaris - Financial Management System",
+  "short_name": "Breco Safaris",
+  "version": "1.0.0",
+  "build": "2024.12.001",
+  "description": "Internal Financial & Operations Management System for Breco Safaris Ltd - Tours, Hotels, Car Hire",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#52b53b",
+  "theme_color": "#1e3a5f",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/Sceneside%20assets/logo.png",
+      "src": "/assets/logo_no_text.jpg",
       "sizes": "72x72",
-      "type": "image/png",
+      "type": "image/jpeg",
       "purpose": "any"
     },
     {
-      "src": "/Sceneside%20assets/logo.png",
+      "src": "/assets/logo_no_text.jpg",
       "sizes": "96x96",
-      "type": "image/png",
+      "type": "image/jpeg",
       "purpose": "any"
     },
     {
-      "src": "/Sceneside%20assets/logo.png",
+      "src": "/assets/logo_no_text.jpg",
       "sizes": "128x128",
-      "type": "image/png",
+      "type": "image/jpeg",
       "purpose": "any"
     },
     {
-      "src": "/Sceneside%20assets/logo.png",
+      "src": "/assets/logo_no_text.jpg",
       "sizes": "144x144",
-      "type": "image/png",
+      "type": "image/jpeg",
       "purpose": "any"
     },
     {
-      "src": "/Sceneside%20assets/logo.png",
+      "src": "/assets/logo_no_text.jpg",
       "sizes": "152x152",
-      "type": "image/png",
+      "type": "image/jpeg",
       "purpose": "any"
     },
     {
-      "src": "/Sceneside%20assets/logo.png",
+      "src": "/assets/logo_no_text.jpg",
       "sizes": "192x192",
-      "type": "image/png",
+      "type": "image/jpeg",
       "purpose": "any maskable"
     },
     {
-      "src": "/Sceneside%20assets/logo.png",
+      "src": "/assets/logo.jpg",
       "sizes": "384x384",
-      "type": "image/png",
+      "type": "image/jpeg",
       "purpose": "any"
     },
     {
-      "src": "/Sceneside%20assets/logo.png",
+      "src": "/assets/logo.jpg",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/jpeg",
       "purpose": "any maskable"
     }
   ],
-  "categories": ["finance", "business", "productivity"],
+  "categories": ["finance", "business", "productivity", "travel"],
   "screenshots": [],
   "prefer_related_applications": false
 }

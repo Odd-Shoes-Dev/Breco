@@ -152,7 +152,7 @@ export default function DepreciationPage() {
               type="month"
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-breco-navy"
             />
           </div>
 
@@ -187,7 +187,7 @@ export default function DepreciationPage() {
 
         {loading ? (
           <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sceneside-navy"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-breco-navy"></div>
           </div>
         ) : assets.length === 0 ? (
           <div className="text-center py-12">
@@ -246,3 +246,4 @@ export default function DepreciationPage() {
     </div>
   );
 }
+

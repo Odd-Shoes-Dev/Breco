@@ -1,6 +1,6 @@
 -- =====================================================
 -- ROW LEVEL SECURITY POLICIES
--- Sceneside L.L.C Financial System
+-- Breco Safaris Ltd Financial & Operations System
 -- =====================================================
 
 -- Enable RLS on all tables
@@ -57,7 +57,7 @@ BEGIN
     WHERE id = auth.uid()
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- Check if user is admin
 CREATE OR REPLACE FUNCTION is_admin()
@@ -67,25 +67,36 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Check if user is accountant or higher
+-- Check if user is accountant or higher (admin, accountant)
 CREATE OR REPLACE FUNCTION is_accountant_or_above()
 RETURNS BOOLEAN AS $$
 DECLARE
   r user_role;
 BEGIN
   r := get_user_role();
-  RETURN r IN ('admin', 'accountant', 'manager');
+  RETURN r IN ('admin', 'accountant');
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Check if user can view financials
+-- Check if user is operations or higher (admin, accountant, operations)
+CREATE OR REPLACE FUNCTION is_operations_or_above()
+RETURNS BOOLEAN AS $$
+DECLARE
+  r user_role;
+BEGIN
+  r := get_user_role();
+  RETURN r IN ('admin', 'accountant', 'operations');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Check if user can view financials (admin, accountant only)
 CREATE OR REPLACE FUNCTION can_view_financials()
 RETURNS BOOLEAN AS $$
 DECLARE
   r user_role;
 BEGIN
   r := get_user_role();
-  RETURN r IN ('admin', 'accountant', 'manager', 'auditor');
+  RETURN r IN ('admin', 'accountant');
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

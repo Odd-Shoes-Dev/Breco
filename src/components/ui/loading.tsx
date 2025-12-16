@@ -170,3 +170,4 @@ export function ChartSkeleton() {
     </div>
   );
 }
+

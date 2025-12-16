@@ -234,3 +234,4 @@ toast.success = (title: string, message?: string) => toast('success', title, mes
 toast.error = (title: string, message?: string) => toast('error', title, message);
 toast.warning = (title: string, message?: string) => toast('warning', title, message);
 toast.info = (title: string, message?: string) => toast('info', title, message);
+

@@ -211,15 +211,15 @@ export default function PayClient({ invoiceId }: { invoiceId?: string }) {
         {/* Logo */}
         <div className="text-center mb-8">
           <img
-            src="/Sceneside_logo_name.png"
-            alt="Sceneside"
+            src="/assets/logo.jpg"
+            alt="Breco Safaris"
             className="h-10 mx-auto"
           />
         </div>
 
         {/* Invoice Details Card */}
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-          <div className="bg-gradient-to-r from-[#1e3a5f] to-[#6b2d7b] px-6 py-4">
+          <div className="bg-gradient-to-r from-[#1e3a5f] to-[#0d9488] px-6 py-4">
             <div className="flex items-center gap-3 text-white">
               <div>
                 <p className="text-sm opacity-80">Invoice Payment</p>
@@ -238,3 +238,4 @@ export default function PayClient({ invoiceId }: { invoiceId?: string }) {
     </div>
   );
 }
+

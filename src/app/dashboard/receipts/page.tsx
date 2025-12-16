@@ -114,7 +114,7 @@ export default function ReceiptsPage() {
       <div className="card">
         {loading ? (
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin h-8 w-8 border-4 border-sceneside-navy border-t-transparent rounded-full" />
+            <div className="animate-spin h-8 w-8 border-4 border-breco-navy border-t-transparent rounded-full" />
           </div>
         ) : filteredReceipts.length === 0 ? (
           <div className="text-center py-12">
@@ -147,7 +147,7 @@ export default function ReceiptsPage() {
                     <td>
                       <Link
                         href={`/dashboard/receipts/${receipt.id}`}
-                        className="text-sceneside-navy hover:underline font-medium"
+                        className="text-breco-navy hover:underline font-medium"
                       >
                         {receipt.receipt_number}
                       </Link>
@@ -219,3 +219,4 @@ export default function ReceiptsPage() {
     </div>
   );
 }
+

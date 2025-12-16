@@ -8,3 +8,4 @@ export default function PayInvoicePage(props: any) {
   return <PayClient invoiceId={invoiceId} />;
 }
 
+

@@ -25,22 +25,69 @@ import {
   Bars3Icon,
   XMarkIcon,
   ReceiptPercentIcon,
+  GlobeAltIcon,
+  CalendarDaysIcon,
+  BuildingStorefrontIcon,
+  UsersIcon,
+  CalculatorIcon,
 } from '@heroicons/react/24/outline';
 
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-  { name: 'Invoices', href: '/dashboard/invoices', icon: DocumentTextIcon },
-  { name: 'Receipts', href: '/dashboard/receipts', icon: ReceiptPercentIcon },
-  { name: 'Bills', href: '/dashboard/bills', icon: BanknotesIcon },
-  { name: 'Expenses', href: '/dashboard/expenses', icon: CurrencyDollarIcon },
-  { name: 'Inventory', href: '/dashboard/inventory', icon: CubeIcon },
-  { name: 'Fixed Assets', href: '/dashboard/assets', icon: BuildingOfficeIcon },
-  { name: 'Customers', href: '/dashboard/customers', icon: UserGroupIcon },
-  { name: 'Vendors', href: '/dashboard/vendors', icon: TruckIcon },
-  { name: 'Bank & Cash', href: '/dashboard/bank', icon: BuildingLibraryIcon },
-  { name: 'General Ledger', href: '/dashboard/general-ledger', icon: BookOpenIcon },
-  { name: 'Reports', href: '/dashboard/reports', icon: ChartBarIcon },
-  { name: 'Settings', href: '/dashboard/settings', icon: CogIcon },
+// Navigation grouped by category for a tour company
+const navigationGroups = [
+  {
+    name: 'Overview',
+    items: [
+      { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
+    ]
+  },
+  {
+    name: 'Tour Operations',
+    items: [
+      { name: 'Tour Packages', href: '/dashboard/tours', icon: GlobeAltIcon },
+      { name: 'Bookings', href: '/dashboard/bookings', icon: CalendarDaysIcon },
+      { name: 'Hotels', href: '/dashboard/hotels', icon: BuildingStorefrontIcon },
+      { name: 'Fleet', href: '/dashboard/fleet', icon: TruckIcon },
+    ]
+  },
+  {
+    name: 'Finance',
+    items: [
+      { name: 'Invoices', href: '/dashboard/invoices', icon: DocumentTextIcon },
+      { name: 'Receipts', href: '/dashboard/receipts', icon: ReceiptPercentIcon },
+      { name: 'Bills', href: '/dashboard/bills', icon: BanknotesIcon },
+      { name: 'Expenses', href: '/dashboard/expenses', icon: CurrencyDollarIcon },
+      { name: 'Bank & Cash', href: '/dashboard/bank', icon: BuildingLibraryIcon },
+    ]
+  },
+  {
+    name: 'HR & Payroll',
+    items: [
+      { name: 'Employees', href: '/dashboard/employees', icon: UsersIcon },
+      { name: 'Payroll', href: '/dashboard/payroll', icon: CalculatorIcon },
+    ]
+  },
+  {
+    name: 'Assets & Inventory',
+    items: [
+      { name: 'Inventory', href: '/dashboard/inventory', icon: CubeIcon },
+      { name: 'Fixed Assets', href: '/dashboard/assets', icon: BuildingOfficeIcon },
+    ]
+  },
+  {
+    name: 'Relationships',
+    items: [
+      { name: 'Customers', href: '/dashboard/customers', icon: UserGroupIcon },
+      { name: 'Vendors', href: '/dashboard/vendors', icon: TruckIcon },
+    ]
+  },
+  {
+    name: 'Accounting',
+    items: [
+      { name: 'General Ledger', href: '/dashboard/general-ledger', icon: BookOpenIcon },
+      { name: 'Reports', href: '/dashboard/reports', icon: ChartBarIcon },
+      { name: 'Settings', href: '/dashboard/settings', icon: CogIcon },
+    ]
+  },
 ];
 
 export default function DashboardLayout({
@@ -172,7 +219,7 @@ export default function DashboardLayout({
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sceneside-navy mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-breco-navy mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
@@ -204,13 +251,13 @@ export default function DashboardLayout({
         <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
           <Link href="/dashboard" className="flex items-center gap-2">
             <Image
-              src="/Sceneside%20assets/logo.png"
-              alt="Sceneside"
+              src="/assets/logo.jpg"
+              alt="Breco Safaris"
               width={36}
               height={36}
               className="rounded"
             />
-            <span className="font-semibold text-sceneside-navy">Sceneside L.L.C</span>
+            <span className="font-semibold text-breco-navy">Breco Safaris</span>
           </Link>
           <button
             className="lg:hidden p-1 rounded hover:bg-gray-100"
@@ -221,23 +268,32 @@ export default function DashboardLayout({
         </div>
 
         {/* Navigation */}
-        <nav className="p-4 space-y-1 overflow-y-auto h-[calc(100%-4rem)]">
-          {navigation.map((item) => {
-            const isActive = pathname === item.href || 
-              (item.href !== '/dashboard' && pathname.startsWith(item.href));
-            
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={isActive ? 'sidebar-link-active' : 'sidebar-link-inactive'}
-                onClick={() => setSidebarOpen(false)}
-              >
-                <item.icon className="w-5 h-5" />
-                {item.name}
-              </Link>
-            );
-          })}
+        <nav className="p-4 space-y-4 overflow-y-auto h-[calc(100%-4rem)] scrollbar-thin">
+          {navigationGroups.map((group) => (
+            <div key={group.name}>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">
+                {group.name}
+              </p>
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const isActive = pathname === item.href || 
+                    (item.href !== '/dashboard' && pathname.startsWith(item.href));
+                  
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={isActive ? 'sidebar-link-active' : 'sidebar-link-inactive'}
+                      onClick={() => setSidebarOpen(false)}
+                    >
+                      <item.icon className="w-5 h-5" />
+                      {item.name}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
       </aside>
 
@@ -253,7 +309,7 @@ export default function DashboardLayout({
               <Bars3Icon className="w-6 h-6" />
             </button>
             <h1 className="text-lg font-semibold text-gray-900 hidden sm:block">
-              Financial System
+              Breco Safaris - Operations
             </h1>
           </div>
 
@@ -266,7 +322,7 @@ export default function DashboardLayout({
               >
                 <BellIcon className="w-5 h-5 text-gray-600" />
                 {notifications.length > 0 && (
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-sceneside-navy rounded-full" />
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-breco-navy rounded-full" />
                 )}
               </button>
 
@@ -321,7 +377,7 @@ export default function DashboardLayout({
                             setNotificationsOpen(false);
                             router.push('/dashboard/reports');
                           }}
-                        className="text-sm text-sceneside-navy hover:text-sceneside-navy-dark hover:underline"
+                        className="text-sm text-breco-navy hover:text-breco-navy-dark hover:underline"
                         >
                           View all reports
                         </button>
@@ -338,7 +394,7 @@ export default function DashboardLayout({
                 className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100"
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
               >
-                <div className="w-8 h-8 bg-sceneside-navy rounded-full flex items-center justify-center">
+                <div className="w-8 h-8 bg-breco-navy rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-medium">
                     {user?.full_name?.[0] || user?.email?.[0]?.toUpperCase() || 'U'}
                   </span>
@@ -403,3 +459,4 @@ export default function DashboardLayout({
     </div>
   );
 }
+

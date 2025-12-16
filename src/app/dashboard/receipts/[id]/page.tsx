@@ -101,7 +101,7 @@ export default function ReceiptDetailPage() {
     const printHTML = `
       <html>
         <head>
-          <title>Receipt #${receipt.receipt_number} - Sceneside L.L.C</title>
+          <title>Receipt #${receipt.receipt_number} - Breco Safaris Ltd</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
@@ -310,9 +310,9 @@ export default function ReceiptDetailPage() {
           <!-- Header -->
           <div class="header">
             <div class="company-section">
-              <img src="/Sceneside assets/Sceneside_logo.png" alt="Sceneside Logo" class="logo" />
+              <img src="/assets/logo.jpg" alt="Breco Safaris Logo" class="logo" />
               <div class="company-info">
-                <h1>Sceneside L.L.C</h1>
+                <h1>Breco Safaris Ltd</h1>
                 <p class="address">121 Bedford Street</p>
                 <p class="address">Waltham, MA 02453</p>
                 <p class="address">Massachusetts, USA</p>
@@ -724,7 +724,7 @@ export default function ReceiptDetailPage() {
       {/* Company Info Footer */}
       <div className="card bg-gray-50">
         <div className="card-body text-center text-sm text-gray-600">
-          <p className="font-semibold text-gray-900">Sceneside L.L.C</p>
+          <p className="font-semibold text-gray-900">Breco Safaris Ltd</p>
           <p>121 Bedford Street, Waltham, MA 02453</p>
           <p>Phone: 857-384-2899 • EIN: 99-3334108</p>
           <p className="mt-2 text-xs">This is an official receipt for accounting purposes.</p>

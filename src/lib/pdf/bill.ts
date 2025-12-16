@@ -246,13 +246,13 @@ export function generateBillHTML(data: BillPDFData): string {
       <div class="bill">
         <div class="header">
           <div class="logo-section">
-            <img src="/Sceneside assets/Sceneside_logo.png" alt="Sceneside" class="logo">
+            <img src="/assets/logo.jpg" alt="Breco Safaris" class="logo">
             <div class="company-info">
-              <div class="company-name">Sceneside L.L.C</div>
+              <div class="company-name">Breco Safaris Ltd</div>
               <div class="company-details">
-                <p>121 Bedford Street, Waltham, MA 02453</p>
-                <p>Phone: 857-384-2899 • Email: info@sceneside.com</p>
-                <p>Director: N.Maureen</p>
+                <p>Buzzi Close Kajjansi, Entebbe Road, Kampala, Uganda</p>
+                <p>Phone: +256 782 884 933 • Email: brecosafaris@gmail.com</p>
+                <p>TIN: 1014756280 • Reg: 80020001634842</p>
               </div>
             </div>
           </div>
@@ -352,8 +352,8 @@ export function generateBillHTML(data: BillPDFData): string {
 
         <div class="footer">
           <p>Thank you for your business!</p>
-          <p style="margin-top: 8px;">Sceneside L.L.C • 121 Bedford Street, Waltham, MA 02453 • 857-384-2899</p>
-          <p>Director: N.Maureen</p>
+          <p style="margin-top: 8px;">Breco Safaris Ltd • Buzzi Close Kajjansi, Kampala, Uganda • +256 782 884 933</p>
+          <p>TIN: 1014756280 • www.brecosafaris.com</p>
         </div>
       </div>
     </body>

@@ -1,6 +1,6 @@
 // =====================================================
 // General Ledger & Posting Logic
-// Sceneside L.L.C Financial System
+// Breco Safaris Ltd Financial System
 // =====================================================
 
 import { supabase } from '@/lib/supabase/client';

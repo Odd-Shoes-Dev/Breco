@@ -125,7 +125,7 @@ export default function ExpenseDetailPage() {
     const printHTML = `
       <html>
         <head>
-          <title>Expense #${expense.expense_number} - Sceneside L.L.C</title>
+          <title>Expense #${expense.expense_number} - Breco Safaris Ltd</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
@@ -287,9 +287,9 @@ export default function ExpenseDetailPage() {
           <!-- Header -->
           <div class="header">
             <div class="company-section">
-              <img src="/Sceneside%20assets/Sceneside_logo.png" alt="Sceneside Logo" class="logo" />
+              <img src="/Breco Safaris%20assets/Breco Safaris_logo.png" alt="Breco Safaris Logo" class="logo" />
               <div class="company-info">
-                <h1>Sceneside L.L.C</h1>
+                <h1>Breco Safaris Ltd</h1>
                 <p class="address">121 Bedford Street</p>
                 <p class="address">Waltham, MA 02453</p>
                 <p class="address">Massachusetts, USA</p>
@@ -426,7 +426,7 @@ export default function ExpenseDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sceneside-navy"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-breco-navy"></div>
       </div>
     );
   }
@@ -490,7 +490,7 @@ export default function ExpenseDetailPage() {
           <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
             <div>
               <div className="flex items-center gap-2 md:gap-3 mb-2">
-                <ReceiptPercentIcon className="w-6 h-6 md:w-8 md:h-8 text-sceneside-navy" />
+                <ReceiptPercentIcon className="w-6 h-6 md:w-8 md:h-8 text-breco-navy" />
                 <h2 className="text-2xl md:text-3xl font-bold text-gray-900">EXPENSE</h2>
               </div>
               <p className="text-sm md:text-base text-gray-600">Expense #: {expense.expense_number}</p>
@@ -654,7 +654,7 @@ export default function ExpenseDetailPage() {
               href={expense.receipt_url} 
               target="_blank" 
               rel="noopener noreferrer"
-              className="text-sm md:text-base text-sceneside-navy hover:text-sceneside-navy/80 flex items-center gap-2"
+              className="text-sm md:text-base text-breco-navy hover:text-breco-navy/80 flex items-center gap-2"
             >
               <DocumentTextIcon className="w-5 h-5" />
               View Receipt

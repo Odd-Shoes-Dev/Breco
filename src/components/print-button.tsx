@@ -12,3 +12,4 @@ export default function PrintButton({ className, children }: { className?: strin
     </button>
   );
 }
+

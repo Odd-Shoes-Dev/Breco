@@ -36,29 +36,29 @@ export async function getCompanySettings(): Promise<CompanySettings> {
 }
 
 /**
- * Returns default company settings
+ * Returns default company settings for Breco Safaris Ltd
  */
 function getDefaultSettings(): CompanySettings {
   return {
     id: '',
-    name: 'Sceneside L.L.C',
-    legal_name: 'Sceneside L.L.C',
-    ein: '99-3334108',
-    address_line1: '121 Bedford Street',
-    address_line2: null,
-    city: 'Waltham',
-    state: 'MA',
-    zip_code: '02453',
-    country: 'USA',
-    phone: '857-384-2899',
-    email: null,
-    website: null,
-    logo_url: null,
-    base_currency: 'USD',
+    name: 'Breco Safaris Ltd',
+    legal_name: 'Breco Safaris Ltd',
+    ein: '1014756280', // TIN from invoice
+    address_line1: 'Buzzi Close Kajjansi',
+    address_line2: 'Entebbe Road',
+    city: 'Kampala',
+    state: null,
+    zip_code: 'P.O. Box 1440011',
+    country: 'Uganda',
+    phone: '+256 782 884 933',
+    email: 'brecosafaris@gmail.com',
+    website: 'www.brecosafaris.com',
+    logo_url: '/assets/logo.jpg',
+    base_currency: 'UGX',
     fiscal_year_start_month: 1,
     inventory_method: 'fifo',
     default_payment_terms: 30,
-    sales_tax_rate: 0.0625,
+    sales_tax_rate: 0.18, // 18% VAT in Uganda
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };

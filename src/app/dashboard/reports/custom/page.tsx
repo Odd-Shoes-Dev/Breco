@@ -315,7 +315,7 @@ export default function CustomReportsPage() {
             onClick={() => setActiveTab('config')}
             className={`py-2 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'config'
-                ? 'border-sceneside-navy text-sceneside-navy'
+                ? 'border-breco-navy text-breco-navy'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -326,7 +326,7 @@ export default function CustomReportsPage() {
             onClick={() => setActiveTab('preview')}
             className={`py-2 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'preview'
-                ? 'border-sceneside-navy text-sceneside-navy'
+                ? 'border-breco-navy text-breco-navy'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -348,7 +348,7 @@ export default function CustomReportsPage() {
                   type="text"
                   value={config.name}
                   onChange={(e) => setConfig(prev => ({ ...prev, name: e.target.value }))}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
                   placeholder="My Custom Report"
                 />
               </div>
@@ -358,7 +358,7 @@ export default function CustomReportsPage() {
                   type="text"
                   value={config.description}
                   onChange={(e) => setConfig(prev => ({ ...prev, description: e.target.value }))}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
                   placeholder="Report description"
                 />
               </div>
@@ -375,7 +375,7 @@ export default function CustomReportsPage() {
                   onClick={() => setConfig(prev => ({ ...prev, dataSource: source.id, selectedFields: [], filters: [], sorts: [] }))}
                   className={`p-4 border rounded-lg cursor-pointer transition-colors ${
                     config.dataSource === source.id
-                      ? 'border-sceneside-navy bg-blue-50'
+                      ? 'border-breco-navy bg-blue-50'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
@@ -437,7 +437,7 @@ export default function CustomReportsPage() {
                                 onClick={() => addSort(fieldId, 'asc')}
                                 className={`text-xs px-2 py-1 rounded ${
                                   config.sorts.find(s => s.fieldId === fieldId)?.direction === 'asc'
-                                    ? 'bg-sceneside-navy text-white'
+                                    ? 'bg-breco-navy text-white'
                                     : 'bg-gray-200 text-gray-600'
                                 }`}
                               >
@@ -447,7 +447,7 @@ export default function CustomReportsPage() {
                                 onClick={() => addSort(fieldId, 'desc')}
                                 className={`text-xs px-2 py-1 rounded ${
                                   config.sorts.find(s => s.fieldId === fieldId)?.direction === 'desc'
-                                    ? 'bg-sceneside-navy text-white'
+                                    ? 'bg-breco-navy text-white'
                                     : 'bg-gray-200 text-gray-600'
                                 }`}
                               >
@@ -548,7 +548,7 @@ export default function CustomReportsPage() {
                         ...prev,
                         dateRange: { ...prev.dateRange!, startDate: e.target.value }
                       }))}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
                     />
                   </div>
                   <div>
@@ -560,7 +560,7 @@ export default function CustomReportsPage() {
                         ...prev,
                         dateRange: { ...prev.dateRange!, endDate: e.target.value }
                       }))}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
                     />
                   </div>
                 </div>

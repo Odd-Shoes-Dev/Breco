@@ -105,3 +105,4 @@ function StatCard({ title, value, change, icon, trend, className }: StatCardProp
 }
 
 export { Card, CardHeader, CardTitle, CardDescription, CardBody, CardFooter, StatCard };
+

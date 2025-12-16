@@ -176,7 +176,7 @@ export default function DepreciationSchedulePage() {
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
             />
           </div>
           <div>
@@ -185,7 +185,7 @@ export default function DepreciationSchedulePage() {
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
             />
           </div>
           <div>
@@ -193,7 +193,7 @@ export default function DepreciationSchedulePage() {
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
             >
               <option value="all">All Categories</option>
               <option value="Equipment">Equipment</option>
@@ -208,7 +208,7 @@ export default function DepreciationSchedulePage() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
             >
               <option value="purchaseDate">Purchase Date</option>
               <option value="assetName">Asset Name</option>
@@ -222,7 +222,7 @@ export default function DepreciationSchedulePage() {
             <button
               onClick={fetchDepreciationData}
               disabled={isLoading}
-              className="w-full px-3 sm:px-4 py-1.5 sm:py-2 bg-sceneside-navy text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-sceneside-navy/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-3 sm:px-4 py-1.5 sm:py-2 bg-breco-navy text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-breco-navy/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Loading...' : 'Refresh Report'}
             </button>
@@ -232,7 +232,7 @@ export default function DepreciationSchedulePage() {
 
       {isLoading ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sm:p-8 text-center">
-          <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-sceneside-navy mx-auto"></div>
+          <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-breco-navy mx-auto"></div>
           <p className="text-gray-500 mt-4 text-sm sm:text-base">Loading depreciation data...</p>
         </div>
       ) : data ? (
@@ -330,7 +330,7 @@ export default function DepreciationSchedulePage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
               <div className="flex items-center gap-2 sm:gap-3">
-                <BuildingOfficeIcon className="w-4 h-4 sm:w-5 sm:h-5 text-sceneside-navy" />
+                <BuildingOfficeIcon className="w-4 h-4 sm:w-5 sm:h-5 text-breco-navy" />
                 <h3 className="text-sm sm:text-base font-semibold text-gray-900">Asset Depreciation Details</h3>
               </div>
             </div>
@@ -415,7 +415,7 @@ export default function DepreciationSchedulePage() {
                         <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
                           <button
                             onClick={() => setShowSchedule(showSchedule === asset.assetId ? null : asset.assetId)}
-                            className="text-sceneside-navy hover:text-sceneside-navy/80 text-xs font-medium"
+                            className="text-breco-navy hover:text-breco-navy/80 text-xs font-medium"
                           >
                             Schedule
                           </button>

@@ -56,8 +56,8 @@ export async function sendInvoiceEmail(params: SendInvoiceEmailParams) {
       <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
         <div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
           <!-- Header -->
-          <div style="background: linear-gradient(135deg, #1e3a5f 0%, #6b2d7b 100%); padding: 30px; text-align: center;">
-            <h1 style="color: white; margin: 0; font-size: 28px;">Sceneside L.L.C</h1>
+          <div style="background: linear-gradient(135deg, #1e3a5f 0%, #0d9488 100%); padding: 30px; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 28px;">Breco Safaris Ltd</h1>
             <p style="color: rgba(255,255,255,0.8); margin: 8px 0 0 0;">Invoice ${invoiceNumber}</p>
           </div>
           
@@ -102,7 +102,7 @@ export async function sendInvoiceEmail(params: SendInvoiceEmailParams) {
             <!-- Payment Button -->
             ${balanceDue > 0 ? `
             <div style="text-align: center; margin-bottom: 30px;">
-              <a href="${paymentLink}" style="display: inline-block; background: linear-gradient(135deg, #1e3a5f 0%, #c41e7f 100%); color: white; padding: 14px 40px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+              <a href="${paymentLink}" style="display: inline-block; background: linear-gradient(135deg, #1e3a5f 0%, #0d9488 100%); color: white; padding: 14px 40px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
                 Pay Now
               </a>
             </div>
@@ -117,19 +117,19 @@ export async function sendInvoiceEmail(params: SendInvoiceEmailParams) {
             </p>
             
             <p style="font-size: 16px; color: #333; margin-top: 30px;">
-              Thank you for your business!
+              Thank you for choosing Breco Safaris!
             </p>
             
             <p style="font-size: 14px; color: #666; margin-top: 10px;">
               Best regards,<br>
-              <strong>Sceneside L.L.C</strong>
+              <strong>Breco Safaris Ltd</strong>
             </p>
           </div>
           
           <!-- Footer -->
           <div style="background: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
             <p style="margin: 0; font-size: 12px; color: #999;">
-              Sceneside L.L.C • 121 Bedford Street, Waltham, MA 02453 • 857-384-2899
+              Breco Safaris Ltd • Buzzi Close Kajjansi, Kampala, Uganda • +256 782 884 933
             </p>
           </div>
         </div>
@@ -141,9 +141,9 @@ export async function sendInvoiceEmail(params: SendInvoiceEmailParams) {
   try {
     const resend = await getResendClient();
     const { data, error } = await resend.emails.send({
-      from: 'Sceneside L.L.C <invoices@sceneside.com>',
+      from: 'Breco Safaris Ltd <invoices@brecosafaris.com>',
       to: [to],
-      subject: `Invoice ${invoiceNumber} from Sceneside L.L.C`,
+      subject: `Invoice ${invoiceNumber} from Breco Safaris Ltd`,
       html,
     });
 
@@ -260,19 +260,19 @@ export async function sendPaymentReceiptEmail(params: SendPaymentReceiptParams) 
             </p>
             
             <p style="font-size: 16px; color: #333; margin-top: 30px;">
-              Thank you for your business!
+              Thank you for choosing Breco Safaris!
             </p>
             
             <p style="font-size: 14px; color: #666; margin-top: 10px;">
               Best regards,<br>
-              <strong>Sceneside L.L.C</strong>
+              <strong>Breco Safaris Ltd</strong>
             </p>
           </div>
           
           <!-- Footer -->
           <div style="background: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
             <p style="margin: 0; font-size: 12px; color: #999;">
-              Sceneside L.L.C • 121 Bedford Street, Waltham, MA 02453 • 857-384-2899
+              Breco Safaris Ltd • Buzzi Close Kajjansi, Kampala, Uganda • +256 782 884 933
             </p>
           </div>
         </div>
@@ -284,7 +284,7 @@ export async function sendPaymentReceiptEmail(params: SendPaymentReceiptParams) 
   try {
     const resend = await getResendClient();
     const { data, error } = await resend.emails.send({
-      from: 'Sceneside L.L.C <receipts@sceneside.com>',
+      from: 'Breco Safaris Ltd <receipts@brecosafaris.com>',
       to: [to],
       subject: `Payment Receipt - Invoice ${invoiceNumber}`,
       html,

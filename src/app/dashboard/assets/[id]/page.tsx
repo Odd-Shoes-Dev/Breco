@@ -149,7 +149,7 @@ export default function AssetDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sceneside-navy"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-breco-navy"></div>
       </div>
     );
   }
@@ -224,7 +224,7 @@ export default function AssetDetailPage() {
           <div className="flex justify-between items-start">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <BuildingLibraryIcon className="w-8 h-8 text-sceneside-navy" />
+                <BuildingLibraryIcon className="w-8 h-8 text-breco-navy" />
                 <h2 className="text-3xl font-bold text-gray-900">{asset.name}</h2>
               </div>
               <p className="text-gray-600">Asset #: {asset.asset_number}</p>

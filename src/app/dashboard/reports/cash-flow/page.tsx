@@ -69,7 +69,7 @@ export default function CashFlowPage() {
     const printHTML = `
       <html>
         <head>
-          <title>Cash Flow Statement - Sceneside L.L.C</title>
+          <title>Cash Flow Statement - Breco Safaris Ltd</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
@@ -174,9 +174,9 @@ export default function CashFlowPage() {
         </head>
         <body>
           <div class="header">
-            <img src="/Sceneside assets/Sceneside_logo.png" alt="Sceneside Logo" class="logo" />
+            <img src="/assets/logo.jpg" alt="Breco Safaris Logo" class="logo" />
             <div class="company-info">
-              <h1>Sceneside L.L.C</h1>
+              <h1>Breco Safaris Ltd</h1>
               <div class="address">121 Bedford Street, Waltham, MA 02453</div>
               <div class="address">Phone: (857) 384-2899</div>
               <div class="address">Director: N.Maureen</div>
@@ -317,7 +317,7 @@ export default function CashFlowPage() {
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="block w-full px-2 sm:px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                className="block w-full px-2 sm:px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
               />
             </div>
             <div className="flex-1 min-w-0">
@@ -326,7 +326,7 @@ export default function CashFlowPage() {
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="block w-full px-2 sm:px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                className="block w-full px-2 sm:px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
               />
             </div>
           </div>
@@ -343,9 +343,9 @@ export default function CashFlowPage() {
           {/* Report Header */}
           <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50">
             <div className="flex items-center gap-2 sm:gap-3">
-              <BanknotesIcon className="w-5 h-5 sm:w-6 sm:h-6 text-sceneside-navy" />
+              <BanknotesIcon className="w-5 h-5 sm:w-6 sm:h-6 text-breco-navy" />
               <div>
-                <h2 className="text-sm sm:text-base font-semibold text-gray-900">Sceneside L.L.C</h2>
+                <h2 className="text-sm sm:text-base font-semibold text-gray-900">Breco Safaris Ltd</h2>
                 <p className="text-xs sm:text-sm text-gray-600">
                   Statement of Cash Flow for the period{' '}
                   {new Date(data.period.startDate).toLocaleDateString()} to{' '}
@@ -459,8 +459,8 @@ export default function CashFlowPage() {
                 <span className="tabular-nums text-right">{formatCurrency(data.beginningCash)}</span>
               </div>
               <div className="flex justify-between items-center text-sm sm:text-lg font-bold pt-2 sm:pt-3 border-t border-gray-200">
-                <span className="text-sceneside-navy pr-2">Ending Cash Balance</span>
-                <span className="text-sceneside-navy tabular-nums text-right">
+                <span className="text-breco-navy pr-2">Ending Cash Balance</span>
+                <span className="text-breco-navy tabular-nums text-right">
                   {formatCurrency(data.endingCash)}
                 </span>
               </div>
@@ -475,3 +475,4 @@ export default function CashFlowPage() {
     </div>
   );
 }
+

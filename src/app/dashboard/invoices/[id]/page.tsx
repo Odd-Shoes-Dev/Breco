@@ -188,7 +188,7 @@ export default function InvoiceDetailPage() {
     const printHTML = `
       <html>
         <head>
-          <title>Invoice #${invoice.invoice_number} - Sceneside L.L.C</title>
+          <title>Invoice #${invoice.invoice_number} - Breco Safaris Ltd</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
@@ -385,9 +385,9 @@ export default function InvoiceDetailPage() {
           <!-- Header -->
           <div class="header">
             <div class="company-section">
-              <img src="/Sceneside assets/Sceneside_logo.png" alt="Sceneside Logo" class="logo" />
+              <img src="/assets/logo.jpg" alt="Breco Safaris Logo" class="logo" />
               <div class="company-info">
-                <h1>Sceneside L.L.C</h1>
+                <h1>Breco Safaris Ltd</h1>
                 <p class="address">121 Bedford Street</p>
                 <p class="address">Waltham, MA 02453</p>
                 <p class="address">Massachusetts, USA</p>

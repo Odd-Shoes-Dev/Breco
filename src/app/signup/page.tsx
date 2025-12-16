@@ -82,8 +82,8 @@ export default function SignUpPage() {
         <div className="text-center mb-8">
           <Link href="/" className="inline-block">
             <Image
-              src="/Sceneside assets/Sceneside_logo_name.png"
-              alt="Sceneside L.L.C"
+              src="/assets/logo.jpg"
+              alt="Breco Safaris Ltd"
               width={180}
               height={72}
               className="mx-auto"
@@ -96,7 +96,7 @@ export default function SignUpPage() {
           <div className="card-header">
             <h1 className="text-xl font-semibold text-gray-900">Create Account</h1>
             <p className="text-sm text-gray-500 mt-1">
-              Get started with Sceneside Financial System
+              Get started with Breco Safaris Operations System
             </p>
           </div>
 
@@ -197,7 +197,7 @@ export default function SignUpPage() {
           <div className="card-footer text-center">
             <p className="text-sm text-gray-600">
               Already have an account?{' '}
-              <Link href="/login" className="text-sceneside-green hover:text-sceneside-green-dark hover:underline font-medium">
+              <Link href="/login" className="text-breco-teal hover:text-breco-teal/80 hover:underline font-medium">
                 Sign in
               </Link>
             </p>
@@ -214,3 +214,4 @@ export default function SignUpPage() {
     </div>
   );
 }
+

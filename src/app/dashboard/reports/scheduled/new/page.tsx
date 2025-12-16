@@ -179,7 +179,7 @@ export default function NewScheduledReportPage() {
               <select
                 value={formData.reportType}
                 onChange={(e) => handleReportTypeChange(e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
                 required
               >
                 <option value="">Select a report...</option>
@@ -207,7 +207,7 @@ export default function NewScheduledReportPage() {
                 type="text"
                 value={formData.reportName}
                 onChange={(e) => setFormData(prev => ({ ...prev, reportName: e.target.value }))}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
                 placeholder="Enter a name for this scheduled report"
                 required
               />
@@ -225,7 +225,7 @@ export default function NewScheduledReportPage() {
               <select
                 value={formData.frequency}
                 onChange={(e) => handleFrequencyChange(e.target.value as any)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
               >
                 {frequencies.map(freq => (
                   <option key={freq.value} value={freq.value}>
@@ -241,7 +241,7 @@ export default function NewScheduledReportPage() {
                 type="time"
                 value={formData.time}
                 onChange={(e) => setFormData(prev => ({ ...prev, time: e.target.value }))}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
               />
             </div>
 
@@ -251,7 +251,7 @@ export default function NewScheduledReportPage() {
                 <select
                   value={formData.dayOfWeek || 1}
                   onChange={(e) => setFormData(prev => ({ ...prev, dayOfWeek: parseInt(e.target.value) }))}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
                 >
                   {weekdays.map((day, index) => (
                     <option key={index} value={index}>{day}</option>
@@ -266,7 +266,7 @@ export default function NewScheduledReportPage() {
                 <select
                   value={formData.dayOfMonth || 1}
                   onChange={(e) => setFormData(prev => ({ ...prev, dayOfMonth: parseInt(e.target.value) }))}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
                 >
                   {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
                     <option key={day} value={day}>{day}</option>
@@ -290,7 +290,7 @@ export default function NewScheduledReportPage() {
                     type="email"
                     value={recipient}
                     onChange={(e) => updateRecipient(index, e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
                     placeholder="Enter email address"
                     required={index === 0}
                   />
@@ -308,7 +308,7 @@ export default function NewScheduledReportPage() {
               <button
                 type="button"
                 onClick={addRecipient}
-                className="text-sm text-sceneside-navy font-medium hover:underline"
+                className="text-sm text-breco-navy font-medium hover:underline"
               >
                 + Add another recipient
               </button>
@@ -319,7 +319,7 @@ export default function NewScheduledReportPage() {
               <select
                 value={formData.format}
                 onChange={(e) => setFormData(prev => ({ ...prev, format: e.target.value as any }))}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
               >
                 <option value="pdf">PDF</option>
                 <option value="excel">Excel</option>

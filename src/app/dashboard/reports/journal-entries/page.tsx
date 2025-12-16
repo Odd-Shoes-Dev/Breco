@@ -96,7 +96,7 @@ export default function JournalEntriesPage() {
     const printHTML = `
       <html>
         <head>
-          <title>Journal Entries Report - ${formatDate(data.reportPeriod.startDate)} to ${formatDate(data.reportPeriod.endDate)} - Sceneside L.L.C</title>
+          <title>Journal Entries Report - ${formatDate(data.reportPeriod.startDate)} to ${formatDate(data.reportPeriod.endDate)} - Breco Safaris Ltd</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
@@ -245,9 +245,9 @@ export default function JournalEntriesPage() {
         </head>
         <body>
           <div class="header">
-            <img src="/Sceneside assets/Sceneside_logo.png" alt="Sceneside Logo" class="logo" />
+            <img src="/assets/logo.jpg" alt="Breco Safaris Logo" class="logo" />
             <div class="company-info">
-              <h1>Sceneside L.L.C</h1>
+              <h1>Breco Safaris Ltd</h1>
               <div class="address">121 Bedford Street, Waltham, MA 02453</div>
               <div class="address">Phone: (857) 384-2899</div>
               <div class="address">Director: N.Maureen</div>
@@ -396,7 +396,7 @@ export default function JournalEntriesPage() {
           </button>
           <Link
             href="/dashboard/journal-entries/new"
-            className="inline-flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 bg-sceneside-navy text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-sceneside-navy/90"
+            className="inline-flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 bg-breco-navy text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-breco-navy/90"
           >
             <PlusIcon className="w-3 h-3 sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">New Entry</span>
@@ -414,7 +414,7 @@ export default function JournalEntriesPage() {
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
             />
           </div>
           <div>
@@ -423,7 +423,7 @@ export default function JournalEntriesPage() {
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
             />
           </div>
           <div>
@@ -431,7 +431,7 @@ export default function JournalEntriesPage() {
             <select
               value={entryType}
               onChange={(e) => setEntryType(e.target.value)}
-              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
             >
               <option value="all">All Types</option>
               <option value="Manual">Manual</option>
@@ -445,7 +445,7 @@ export default function JournalEntriesPage() {
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
             >
               <option value="all">All Status</option>
               <option value="Posted">Posted</option>
@@ -461,7 +461,7 @@ export default function JournalEntriesPage() {
                 placeholder="Entry #, reference..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 pl-8 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+                className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 pl-8 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
               />
               <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 absolute left-2 top-2" />
             </div>
@@ -470,7 +470,7 @@ export default function JournalEntriesPage() {
             <button
               onClick={fetchJournalEntries}
               disabled={isLoading}
-              className="w-full px-3 sm:px-4 py-1.5 sm:py-2 bg-sceneside-navy text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-sceneside-navy/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-3 sm:px-4 py-1.5 sm:py-2 bg-breco-navy text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-breco-navy/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Loading...' : 'Refresh'}
             </button>
@@ -480,7 +480,7 @@ export default function JournalEntriesPage() {
 
       {isLoading ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sm:p-8 text-center">
-          <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-sceneside-navy mx-auto"></div>
+          <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-breco-navy mx-auto"></div>
           <p className="text-gray-500 mt-4 text-sm sm:text-base">Loading journal entries...</p>
         </div>
       ) : data ? (
@@ -552,7 +552,7 @@ export default function JournalEntriesPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
               <div className="flex items-center gap-2 sm:gap-3">
-                <DocumentTextIcon className="w-4 h-4 sm:w-5 sm:h-5 text-sceneside-navy" />
+                <DocumentTextIcon className="w-4 h-4 sm:w-5 sm:h-5 text-breco-navy" />
                 <h3 className="text-sm sm:text-base font-semibold text-gray-900">Journal Entries</h3>
               </div>
             </div>
@@ -588,7 +588,7 @@ export default function JournalEntriesPage() {
                         <span>{formatDate(entry.date)}</span>
                         <button
                           onClick={() => setShowDetails(showDetails === entry.id ? null : entry.id)}
-                          className="text-sceneside-navy hover:text-sceneside-navy/80"
+                          className="text-breco-navy hover:text-breco-navy/80"
                         >
                           <EyeIcon className="w-4 h-4" />
                         </button>

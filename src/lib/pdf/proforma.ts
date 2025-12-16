@@ -237,13 +237,13 @@ export function generateProformaHTML(data: ProformaPDFData): string {
       <div class="proforma">
         <div class="header">
           <div class="logo-section">
-            <img src="/Sceneside assets/Sceneside_logo.png" alt="Sceneside" class="logo">
+            <img src="/assets/logo.jpg" alt="Breco Safaris" class="logo">
             <div class="company-info">
-              <div class="company-name">Sceneside L.L.C</div>
+              <div class="company-name">Breco Safaris Ltd</div>
               <div class="company-details">
-                <p>121 Bedford Street, Waltham, MA 02453</p>
-                <p>Phone: 857-384-2899 • Email: info@sceneside.com</p>
-                <p>Director: N.Maureen</p>
+                <p>Buzzi Close Kajjansi, Entebbe Road, Kampala, Uganda</p>
+                <p>Phone: +256 782 884 933 • Email: brecosafaris@gmail.com</p>
+                <p>TIN: 1014756280 • Reg: 80020001634842</p>
               </div>
             </div>
           </div>
@@ -289,10 +289,10 @@ export function generateProformaHTML(data: ProformaPDFData): string {
 
         <div class="info-block" style="margin-bottom: 20px;">
           <h3>From</h3>
-          <p><strong>Sceneside L.L.C</strong></p>
-          <p>121 Bedford Street</p>
-          <p>Waltham, MA 02453</p>
-          <p>Phone: 857-384-2899</p>
+          <p><strong>Breco Safaris Ltd</strong></p>
+          <p>Buzzi Close Kajjansi</p>
+          <p>Entebbe Road, Kampala, Uganda</p>
+          <p>Phone: +256 782 884 933</p>
         </div>
 
         <table class="items-table">
@@ -343,11 +343,11 @@ export function generateProformaHTML(data: ProformaPDFData): string {
           <h3>Payment Information</h3>
           <div class="payment-details">
             <span class="label">Bank:</span>
-            <span>Bank of America</span>
-            <span class="label">Account:</span>
-            <span>466021944682</span>
-            <span class="label">EIN:</span>
-            <span>99-3334108</span>
+            <span>Stanbic Bank Uganda</span>
+            <span class="label">USD Account:</span>
+            <span>9030021119316</span>
+            <span class="label">UGX Account:</span>
+            <span>9030021119303</span>
           </div>
           <p style="margin-top: 12px; color: #dc2626; font-size: 12px;">
             <strong>Note:</strong> A formal tax invoice will be issued upon payment confirmation.
@@ -363,8 +363,8 @@ export function generateProformaHTML(data: ProformaPDFData): string {
 
         <div class="footer">
           <p>This proforma invoice is for informational purposes only.</p>
-          <p style="margin-top: 8px;">Sceneside L.L.C • 121 Bedford Street, Waltham, MA 02453 • 857-384-2899</p>
-          <p>Director: N.Maureen</p>
+          <p style="margin-top: 8px;">Breco Safaris Ltd • Buzzi Close Kajjansi, Kampala, Uganda • +256 782 884 933</p>
+          <p>TIN: 1014756280 • www.brecosafaris.com</p>
         </div>
       </div>
     </body>

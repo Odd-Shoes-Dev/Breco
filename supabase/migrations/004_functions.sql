@@ -1,4 +1,4 @@
--- Database functions for Sceneside Financial System
+-- Database functions for Breco Safaris Financial & Operations System
 -- Run this after 003_seed_data.sql
 
 -- =====================================================

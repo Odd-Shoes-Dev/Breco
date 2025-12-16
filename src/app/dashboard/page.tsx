@@ -107,7 +107,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin h-8 w-8 border-4 border-sceneside-navy border-t-transparent rounded-full" />
+        <div className="animate-spin h-8 w-8 border-4 border-breco-navy border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -118,7 +118,7 @@ export default function DashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-500 mt-1">Welcome to Sceneside Financial System</p>
+          <p className="text-gray-500 mt-1">Welcome to Breco Safaris Operations</p>
         </div>
         <div className="flex gap-3">
           <Link href="/dashboard/invoices/new" className="btn-primary">
@@ -186,7 +186,7 @@ export default function DashboardPage() {
             <h2 className="font-semibold text-gray-900">Recent Invoices</h2>
             <Link
               href="/dashboard/invoices"
-              className="text-sm text-sceneside-green hover:text-sceneside-green-dark hover:underline"
+              className="text-sm text-breco-teal hover:text-breco-teal-dark hover:underline"
             >
               View all
             </Link>
@@ -195,7 +195,7 @@ export default function DashboardPage() {
             {recentInvoices.length === 0 ? (
               <div className="p-6 text-center text-gray-500">
                 No invoices yet.{' '}
-                <Link href="/dashboard/invoices/new" className="text-sceneside-green hover:text-sceneside-green-dark hover:underline">
+                <Link href="/dashboard/invoices/new" className="text-breco-teal hover:text-breco-teal-dark hover:underline">
                   Create your first invoice
                 </Link>
               </div>
@@ -236,7 +236,7 @@ export default function DashboardPage() {
             <h2 className="font-semibold text-gray-900">Recent Bills</h2>
             <Link
               href="/dashboard/bills"
-              className="text-sm text-sceneside-green hover:text-sceneside-green-dark hover:underline"
+              className="text-sm text-breco-teal hover:text-breco-teal-dark hover:underline"
             >
               View all
             </Link>
@@ -245,7 +245,7 @@ export default function DashboardPage() {
             {recentBills.length === 0 ? (
               <div className="p-6 text-center text-gray-500">
                 No bills yet.{' '}
-                <Link href="/dashboard/bills/new" className="text-sceneside-green hover:text-sceneside-green-dark hover:underline">
+                <Link href="/dashboard/bills/new" className="text-breco-teal hover:text-breco-teal-dark hover:underline">
                   Create your first bill
                 </Link>
               </div>
@@ -356,10 +356,10 @@ function StatCard({
   color: 'navy' | 'magenta' | 'purple' | 'green';
 }) {
   const colorClasses = {
-    navy: 'bg-sceneside-navy',
-    magenta: 'bg-sceneside-magenta',
-    purple: 'bg-sceneside-purple',
-    green: 'bg-sceneside-green',
+    navy: 'bg-breco-navy',
+    magenta: 'bg-Breco Safaris-magenta',
+    purple: 'bg-Breco Safaris-purple',
+    green: 'bg-breco-teal',
   };
 
   return (
@@ -396,3 +396,4 @@ function StatCard({
     </div>
   );
 }
+

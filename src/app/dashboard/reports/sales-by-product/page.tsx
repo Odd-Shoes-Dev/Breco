@@ -95,7 +95,7 @@ export default function SalesByProductPage() {
     const printHTML = `
       <html>
         <head>
-          <title>Sales by Product Report - ${formatDate(data.reportPeriod.startDate)} to ${formatDate(data.reportPeriod.endDate)} - Sceneside L.L.C</title>
+          <title>Sales by Product Report - ${formatDate(data.reportPeriod.startDate)} to ${formatDate(data.reportPeriod.endDate)} - Breco Safaris Ltd</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
@@ -221,9 +221,9 @@ export default function SalesByProductPage() {
         </head>
         <body>
           <div class="header">
-            <img src="/Sceneside assets/Sceneside_logo.png" alt="Sceneside Logo" class="logo" />
+            <img src="/assets/logo.jpg" alt="Breco Safaris Logo" class="logo" />
             <div class="company-info">
-              <h1>Sceneside L.L.C</h1>
+              <h1>Breco Safaris Ltd</h1>
               <div class="address">121 Bedford Street, Waltham, MA 02453</div>
               <div class="address">Phone: (857) 384-2899</div>
               <div class="address">Director: N.Maureen</div>
@@ -375,7 +375,7 @@ export default function SalesByProductPage() {
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
             />
           </div>
           <div>
@@ -384,7 +384,7 @@ export default function SalesByProductPage() {
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
             />
           </div>
           <div>
@@ -392,7 +392,7 @@ export default function SalesByProductPage() {
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
             >
               <option value="all">All Categories</option>
               <option value="Software">Software</option>
@@ -407,7 +407,7 @@ export default function SalesByProductPage() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sceneside-navy focus:border-sceneside-navy"
+              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
             >
               <option value="totalRevenue">Total Revenue</option>
               <option value="productName">Product Name</option>
@@ -421,7 +421,7 @@ export default function SalesByProductPage() {
             <button
               onClick={fetchSalesByProduct}
               disabled={isLoading}
-              className="w-full px-3 sm:px-4 py-1.5 sm:py-2 bg-sceneside-navy text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-sceneside-navy/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-3 sm:px-4 py-1.5 sm:py-2 bg-breco-navy text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-breco-navy/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Loading...' : 'Refresh Report'}
             </button>
@@ -431,7 +431,7 @@ export default function SalesByProductPage() {
 
       {isLoading ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sm:p-8 text-center">
-          <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-sceneside-navy mx-auto"></div>
+          <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-breco-navy mx-auto"></div>
           <p className="text-gray-500 mt-4 text-sm sm:text-base">Loading product sales data...</p>
         </div>
       ) : data ? (
@@ -517,7 +517,7 @@ export default function SalesByProductPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
               <div className="flex items-center gap-2 sm:gap-3">
-                <CubeIcon className="w-4 h-4 sm:w-5 sm:h-5 text-sceneside-navy" />
+                <CubeIcon className="w-4 h-4 sm:w-5 sm:h-5 text-breco-navy" />
                 <h3 className="text-sm sm:text-base font-semibold text-gray-900">Product Sales Performance</h3>
               </div>
             </div>

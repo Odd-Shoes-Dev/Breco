@@ -289,3 +289,4 @@ export default function NewBankTransactionClient({ initialType = 'deposit' }: { 
     </div>
   );
 }
+

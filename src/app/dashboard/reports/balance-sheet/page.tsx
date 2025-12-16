@@ -184,9 +184,9 @@ export default function BalanceSheetPage() {
       <body>
         <div class="header">
           <div class="logo-section">
-            <img src="/Sceneside assets/Sceneside_logo.png" alt="Sceneside L.L.C" class="logo">
+            <img src="/assets/logo.jpg" alt="Breco Safaris Ltd" class="logo">
             <div class="company-info">
-              <div class="company-name">Sceneside L.L.C</div>
+              <div class="company-name">Breco Safaris Ltd</div>
               <div class="company-address">121 Bedford Street, Waltham, MA 02453</div>
               <div class="company-contact">Phone: 857-384-2899</div>
               <div class="company-contact">Director: N.Maureen</div>
@@ -368,7 +368,7 @@ export default function BalanceSheetPage() {
             <div className="flex items-center gap-3">
               <ScaleIcon className="w-6 h-6 text-[#52b53b]" />
               <div>
-                <h2 className="font-semibold text-gray-900">Sceneside L.L.C</h2>
+                <h2 className="font-semibold text-gray-900">Breco Safaris Ltd</h2>
                 <p className="text-sm text-gray-600">Balance Sheet as of {formatDate(data.asOfDate)}</p>
               </div>
             </div>
@@ -542,3 +542,4 @@ export default function BalanceSheetPage() {
     </div>
   );
 }
+

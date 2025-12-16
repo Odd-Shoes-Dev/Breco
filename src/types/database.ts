@@ -1,6 +1,6 @@
 // =====================================================
-// Sceneside L.L.C Financial System - Database Types
-// Auto-generated types for Supabase tables
+// Breco Safaris Ltd - Financial & Operations System
+// Database Types for Supabase tables
 // =====================================================
 
 export type AccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
@@ -19,7 +19,7 @@ export type PeriodLevel = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual
 export type DocumentType = 'invoice' | 'receipt' | 'quotation' | 'proforma';
 export type InvoiceStatus = 'draft' | 'sent' | 'partial' | 'paid' | 'overdue' | 'void' | 'cancelled';
 export type BillStatus = 'draft' | 'pending_approval' | 'approved' | 'partial' | 'paid' | 'overdue' | 'void';
-export type PaymentMethod = 'cash' | 'check' | 'bank_transfer' | 'credit_card' | 'stripe' | 'other';
+export type PaymentMethod = 'cash' | 'check' | 'bank_transfer' | 'credit_card' | 'stripe' | 'mobile_money' | 'petty_cash' | 'other';
 
 export type InventoryMethod = 'fifo' | 'lifo' | 'weighted_average';
 export type StockMovementType = 'purchase' | 'sale' | 'adjustment' | 'transfer' | 'return' | 'write_off';
@@ -27,7 +27,7 @@ export type StockMovementType = 'purchase' | 'sale' | 'adjustment' | 'transfer' 
 export type AssetStatus = 'active' | 'disposed' | 'fully_depreciated';
 export type DepreciationMethod = 'straight_line' | 'reducing_balance' | 'units_of_production';
 
-export type UserRole = 'admin' | 'accountant' | 'manager' | 'sales' | 'auditor';
+export type UserRole = 'admin' | 'accountant' | 'operations' | 'guide';
 export type RecurringFrequency = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'annually';
 
 // =====================================================

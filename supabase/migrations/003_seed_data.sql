@@ -1,6 +1,6 @@
 -- =====================================================
 -- SEED DATA - Chart of Accounts & Initial Setup
--- Sceneside L.L.C Financial System
+-- Breco Safaris Ltd Financial & Operations System
 -- =====================================================
 
 -- Insert company settings
@@ -9,9 +9,9 @@ INSERT INTO company_settings (
   address_line1, city, state, zip_code, country, phone,
   base_currency, fiscal_year_start_month, sales_tax_rate, inventory_method
 ) VALUES (
-  'Sceneside L.L.C', 'Sceneside L.L.C', '99-3334108',
-  '121 Bedford Street', 'Waltham', 'MA', '02453', 'USA', '857-384-2899',
-  'USD', 1, 0.0625, 'fifo'
+  'Breco Safaris Ltd', 'Breco Safaris Ltd', '1014756280',
+  'Plot 22 Bombo Road', 'Kampala', '', '', 'Uganda', '+256 700 123456',
+  'USD', 1, 0.18, 'fifo'
 );
 
 -- =====================================================
@@ -22,18 +22,19 @@ INSERT INTO company_settings (
 INSERT INTO accounts (code, name, account_type, account_subtype, normal_balance, is_system) VALUES
 -- Current Assets
 ('1000', 'Cash and Cash Equivalents', 'asset', 'cash', 'debit', true),
-('1010', 'Petty Cash', 'asset', 'cash', 'debit', false),
-('1020', 'Cash Drawer', 'asset', 'cash', 'debit', false),
-('1100', 'Checking Account - Bank of America', 'asset', 'bank', 'debit', true),
-('1110', 'Savings Account', 'asset', 'bank', 'debit', false),
+('1010', 'Petty Cash - UGX', 'asset', 'cash', 'debit', false),
+('1020', 'Petty Cash - USD', 'asset', 'cash', 'debit', false),
+('1100', 'Stanbic Bank - USD Account', 'asset', 'bank', 'debit', true),
+('1110', 'Stanbic Bank - UGX Account', 'asset', 'bank', 'debit', false),
+('1120', 'Stanbic Bank - EUR Account', 'asset', 'bank', 'debit', false),
 ('1200', 'Accounts Receivable', 'asset', 'receivable', 'debit', true),
 ('1210', 'Allowance for Doubtful Accounts', 'asset', 'receivable', 'credit', false),
 ('1300', 'Inventory', 'asset', 'inventory', 'debit', true),
-('1310', 'Inventory - Raw Materials', 'asset', 'inventory', 'debit', false),
-('1320', 'Inventory - Finished Goods', 'asset', 'inventory', 'debit', false),
+('1310', 'Inventory - Camping Equipment', 'asset', 'inventory', 'debit', false),
+('1320', 'Inventory - Safari Supplies', 'asset', 'inventory', 'debit', false),
 ('1400', 'Prepaid Expenses', 'asset', 'other_asset', 'debit', false),
 ('1410', 'Prepaid Insurance', 'asset', 'other_asset', 'debit', false),
-('1420', 'Prepaid Rent', 'asset', 'other_asset', 'debit', false),
+('1420', 'Prepaid Permits & Licenses', 'asset', 'other_asset', 'debit', false),
 -- Fixed Assets
 ('1500', 'Fixed Assets', 'asset', 'fixed_asset', 'debit', true),
 ('1510', 'Furniture & Fixtures', 'asset', 'fixed_asset', 'debit', false),
@@ -57,22 +58,24 @@ INSERT INTO accounts (code, name, account_type, account_subtype, normal_balance,
 -- Current Liabilities
 ('2000', 'Accounts Payable', 'liability', 'payable', 'credit', true),
 ('2100', 'Accrued Expenses', 'liability', 'accrued', 'credit', false),
-('2110', 'Accrued Wages', 'liability', 'accrued', 'credit', false),
+('2110', 'Accrued Salaries', 'liability', 'accrued', 'credit', false),
 ('2120', 'Accrued Interest', 'liability', 'accrued', 'credit', false),
-('2200', 'Sales Tax Payable', 'liability', 'payable', 'credit', true),
-('2210', 'MA Sales Tax Payable', 'liability', 'payable', 'credit', false),
+('2200', 'VAT Payable', 'liability', 'payable', 'credit', true),
+('2210', 'VAT Output', 'liability', 'payable', 'credit', false),
+('2220', 'VAT Input (Contra)', 'liability', 'payable', 'debit', false),
 ('2300', 'Payroll Liabilities', 'liability', 'payable', 'credit', false),
-('2310', 'Federal Withholding Payable', 'liability', 'payable', 'credit', false),
-('2320', 'State Withholding Payable', 'liability', 'payable', 'credit', false),
-('2330', 'FICA Payable', 'liability', 'payable', 'credit', false),
-('2340', 'Medicare Payable', 'liability', 'payable', 'credit', false),
-('2400', 'Deferred Revenue', 'liability', 'other_liability', 'credit', false),
+('2310', 'PAYE Payable', 'liability', 'payable', 'credit', false),
+('2320', 'NSSF Payable - Employee', 'liability', 'payable', 'credit', false),
+('2330', 'NSSF Payable - Employer', 'liability', 'payable', 'credit', false),
+('2340', 'Local Service Tax Payable', 'liability', 'payable', 'credit', false),
+('2400', 'Deferred Revenue (Deposits)', 'liability', 'other_liability', 'credit', false),
+('2410', 'Tour Deposits Received', 'liability', 'other_liability', 'credit', false),
 ('2500', 'Credit Card Payable', 'liability', 'payable', 'credit', false),
 ('2600', 'Current Portion of Long-Term Debt', 'liability', 'loan', 'credit', false),
 -- Long-Term Liabilities
 ('2700', 'Notes Payable', 'liability', 'loan', 'credit', false),
-('2710', 'Bank Loans', 'liability', 'loan', 'credit', false),
-('2720', 'Equipment Loans', 'liability', 'loan', 'credit', false),
+('2710', 'Bank Loans - Stanbic', 'liability', 'loan', 'credit', false),
+('2720', 'Vehicle Loans', 'liability', 'loan', 'credit', false),
 ('2800', 'Other Long-Term Liabilities', 'liability', 'other_liability', 'credit', false);
 
 -- EQUITY (3000-3999)
@@ -87,38 +90,51 @@ INSERT INTO accounts (code, name, account_type, account_subtype, normal_balance,
 -- REVENUE (4000-4999)
 INSERT INTO accounts (code, name, account_type, account_subtype, normal_balance, is_system) VALUES
 ('4000', 'Revenue', 'revenue', 'sales', 'credit', true),
-('4100', 'Sales Revenue', 'revenue', 'sales', 'credit', true),
-('4110', 'Product Sales', 'revenue', 'sales', 'credit', false),
-('4120', 'Service Revenue', 'revenue', 'service', 'credit', false),
-('4200', 'Sales Discounts', 'revenue', 'sales', 'debit', false),
-('4300', 'Sales Returns & Allowances', 'revenue', 'sales', 'debit', false),
-('4400', 'Shipping & Handling Revenue', 'revenue', 'other_income', 'credit', false),
+('4100', 'Tour Revenue', 'revenue', 'sales', 'credit', true),
+('4110', 'Safari Packages', 'revenue', 'sales', 'credit', false),
+('4120', 'Day Trips & Excursions', 'revenue', 'service', 'credit', false),
+('4130', 'Gorilla Trekking Permits', 'revenue', 'sales', 'credit', false),
+('4140', 'Park Entry Fees (Passthrough)', 'revenue', 'sales', 'credit', false),
+('4200', 'Car Hire Revenue', 'revenue', 'service', 'credit', false),
+('4210', 'Vehicle Rental - Self Drive', 'revenue', 'service', 'credit', false),
+('4220', 'Vehicle Rental - With Driver', 'revenue', 'service', 'credit', false),
+('4300', 'Accommodation Commissions', 'revenue', 'other_income', 'credit', false),
+('4400', 'Airport Transfers', 'revenue', 'service', 'credit', false),
+('4500', 'Travel Discounts Given', 'revenue', 'sales', 'debit', false),
 ('4800', 'Interest Income', 'revenue', 'other_income', 'credit', false),
+('4810', 'Foreign Exchange Gains', 'revenue', 'other_income', 'credit', false),
 ('4900', 'Other Income', 'revenue', 'other_income', 'credit', false);
 
 -- EXPENSES (5000-5999 for COGS, 6000-6999 for Operating)
 INSERT INTO accounts (code, name, account_type, account_subtype, normal_balance, is_system) VALUES
--- Cost of Goods Sold
-('5000', 'Cost of Goods Sold', 'expense', 'cost_of_goods', 'debit', true),
-('5100', 'Purchases', 'expense', 'cost_of_goods', 'debit', false),
-('5110', 'Purchase Discounts', 'expense', 'cost_of_goods', 'credit', false),
-('5120', 'Purchase Returns', 'expense', 'cost_of_goods', 'credit', false),
-('5200', 'Freight In', 'expense', 'cost_of_goods', 'debit', false),
-('5300', 'Direct Labor', 'expense', 'cost_of_goods', 'debit', false),
-('5400', 'Manufacturing Overhead', 'expense', 'cost_of_goods', 'debit', false),
+-- Cost of Services / Direct Costs
+('5000', 'Cost of Services', 'expense', 'cost_of_goods', 'debit', true),
+('5100', 'Park Entry Fees', 'expense', 'cost_of_goods', 'debit', false),
+('5110', 'Gorilla Permits Cost', 'expense', 'cost_of_goods', 'debit', false),
+('5120', 'Chimpanzee Permits Cost', 'expense', 'cost_of_goods', 'debit', false),
+('5200', 'Accommodation Costs', 'expense', 'cost_of_goods', 'debit', false),
+('5210', 'Hotel Bookings', 'expense', 'cost_of_goods', 'debit', false),
+('5220', 'Lodge Bookings', 'expense', 'cost_of_goods', 'debit', false),
+('5230', 'Camp Site Fees', 'expense', 'cost_of_goods', 'debit', false),
+('5300', 'Guide & Porter Fees', 'expense', 'cost_of_goods', 'debit', false),
+('5400', 'Meals for Clients', 'expense', 'cost_of_goods', 'debit', false),
+('5500', 'Activity Costs', 'expense', 'cost_of_goods', 'debit', false),
+('5510', 'Boat Hire', 'expense', 'cost_of_goods', 'debit', false),
+('5520', 'Equipment Rental', 'expense', 'cost_of_goods', 'debit', false),
 
 -- Operating Expenses
 ('6000', 'Operating Expenses', 'expense', 'operating', 'debit', true),
-('6100', 'Wages & Salaries', 'expense', 'operating', 'debit', false),
-('6110', 'Employee Benefits', 'expense', 'operating', 'debit', false),
-('6120', 'Payroll Taxes', 'expense', 'operating', 'debit', false),
-('6130', 'Contract Labor', 'expense', 'operating', 'debit', false),
-('6200', 'Rent Expense', 'expense', 'operating', 'debit', false),
+('6100', 'Salaries & Wages', 'expense', 'operating', 'debit', false),
+('6110', 'Employee Allowances', 'expense', 'operating', 'debit', false),
+('6120', 'NSSF Employer Contribution', 'expense', 'operating', 'debit', false),
+('6130', 'Guide & Driver Wages', 'expense', 'operating', 'debit', false),
+('6140', 'Casual Labor', 'expense', 'operating', 'debit', false),
+('6200', 'Office Rent', 'expense', 'operating', 'debit', false),
 ('6210', 'Utilities', 'expense', 'operating', 'debit', false),
 ('6220', 'Telephone & Internet', 'expense', 'operating', 'debit', false),
 ('6300', 'Insurance', 'expense', 'operating', 'debit', false),
-('6310', 'General Liability Insurance', 'expense', 'operating', 'debit', false),
-('6320', 'Workers Comp Insurance', 'expense', 'operating', 'debit', false),
+('6310', 'Vehicle Insurance', 'expense', 'operating', 'debit', false),
+('6320', 'Public Liability Insurance', 'expense', 'operating', 'debit', false),
 ('6400', 'Office Supplies', 'expense', 'administrative', 'debit', false),
 ('6410', 'Postage & Shipping', 'expense', 'administrative', 'debit', false),
 ('6420', 'Printing', 'expense', 'administrative', 'debit', false),
@@ -139,29 +155,32 @@ INSERT INTO accounts (code, name, account_type, account_subtype, normal_balance,
 ('7200', 'Website & Hosting', 'expense', 'marketing', 'debit', false),
 ('7300', 'Promotional Materials', 'expense', 'marketing', 'debit', false),
 
--- Vehicle Expenses
-('7500', 'Vehicle Expenses', 'expense', 'operating', 'debit', false),
-('7510', 'Fuel', 'expense', 'operating', 'debit', false),
-('7520', 'Vehicle Maintenance', 'expense', 'operating', 'debit', false),
-('7530', 'Vehicle Insurance', 'expense', 'operating', 'debit', false),
+-- Vehicle Expenses (Fleet)
+('7500', 'Fleet Expenses', 'expense', 'operating', 'debit', false),
+('7510', 'Fuel & Diesel', 'expense', 'operating', 'debit', false),
+('7520', 'Vehicle Servicing', 'expense', 'operating', 'debit', false),
+('7530', 'Tyres & Parts', 'expense', 'operating', 'debit', false),
+('7540', 'Road Licenses', 'expense', 'operating', 'debit', false),
+('7550', 'Third Party Insurance', 'expense', 'operating', 'debit', false),
 
 -- Travel & Entertainment
 ('7600', 'Travel & Entertainment', 'expense', 'operating', 'debit', false),
-('7610', 'Travel', 'expense', 'operating', 'debit', false),
+('7610', 'Staff Travel', 'expense', 'operating', 'debit', false),
 ('7620', 'Meals & Entertainment', 'expense', 'operating', 'debit', false),
-('7630', 'Lodging', 'expense', 'operating', 'debit', false),
+('7630', 'Staff Accommodation', 'expense', 'operating', 'debit', false),
 
 -- Repairs & Maintenance
 ('7700', 'Repairs & Maintenance', 'expense', 'operating', 'debit', false),
 ('7710', 'Equipment Repairs', 'expense', 'operating', 'debit', false),
-('7720', 'Building Maintenance', 'expense', 'operating', 'debit', false),
+('7720', 'Office Maintenance', 'expense', 'operating', 'debit', false),
 
--- Taxes
-('8000', 'Taxes', 'expense', 'tax', 'debit', false),
-('8100', 'Federal Income Tax', 'expense', 'tax', 'debit', false),
-('8200', 'State Income Tax', 'expense', 'tax', 'debit', false),
-('8300', 'Property Tax', 'expense', 'tax', 'debit', false),
-('8400', 'Other Taxes', 'expense', 'tax', 'debit', false),
+-- Taxes (Uganda)
+('8000', 'Taxes & Levies', 'expense', 'tax', 'debit', false),
+('8100', 'PAYE (Withheld)', 'expense', 'tax', 'debit', false),
+('8200', 'VAT Expense', 'expense', 'tax', 'debit', false),
+('8300', 'Withholding Tax', 'expense', 'tax', 'debit', false),
+('8400', 'Local Service Tax', 'expense', 'tax', 'debit', false),
+('8500', 'Trading License', 'expense', 'tax', 'debit', false),
 
 -- Other Expenses
 ('8800', 'Interest Expense', 'expense', 'other_expense', 'debit', false),

@@ -193,7 +193,7 @@ INSERT INTO scheduled_reports (
   1, -- 1st of month
   NULL,
   '09:00:00',
-  ARRAY['admin@sceneside.com', 'accounting@sceneside.com'],
+  ARRAY['admin@brecosafaris.com', 'accounts@brecosafaris.com'],
   'pdf',
   '{}',
   calculate_next_run('monthly', NULL, 1, NULL, '09:00:00')
@@ -205,7 +205,7 @@ INSERT INTO scheduled_reports (
   NULL,
   1, -- Monday (0=Sunday, 1=Monday)
   '08:30:00',
-  ARRAY['sales@sceneside.com'],
+  ARRAY['operations@brecosafaris.com'],
   'excel',
   '{"sortBy": "totalSales", "customerType": "all"}',
   calculate_next_run('weekly', 1, NULL, NULL, '08:30:00')
