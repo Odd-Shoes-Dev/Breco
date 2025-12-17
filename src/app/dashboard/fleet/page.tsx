@@ -29,24 +29,6 @@ export default function FleetPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
-  const [showCreateModal, setShowCreateModal] = useState(false);
-
-  // Form state
-  const [formData, setFormData] = useState({
-    registration_number: '',
-    make: '',
-    model: '',
-    year: new Date().getFullYear(),
-    vehicle_type: 'Safari Van',
-    seating_capacity: 7,
-    fuel_type: 'Diesel',
-    current_mileage: 0,
-    status: 'available' as VehicleStatus,
-    insurance_expiry: '',
-    inspection_expiry: '',
-    daily_rate_usd: 0,
-    notes: '',
-  });
 
   useEffect(() => {
     fetchVehicles();
@@ -66,44 +48,6 @@ export default function FleetPage() {
       toast.error('Failed to load vehicles');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleCreateVehicle = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      const { error } = await supabase
-        .from('vehicles')
-        .insert([{
-          ...formData,
-          insurance_expiry: formData.insurance_expiry || null,
-          inspection_expiry: formData.inspection_expiry || null,
-        }]);
-
-      if (error) throw error;
-      
-      toast.success('Vehicle added successfully');
-      setShowCreateModal(false);
-      setFormData({
-        registration_number: '',
-        make: '',
-        model: '',
-        year: new Date().getFullYear(),
-        vehicle_type: 'Safari Van',
-        seating_capacity: 7,
-        fuel_type: 'Diesel',
-        current_mileage: 0,
-        status: 'available',
-        insurance_expiry: '',
-        inspection_expiry: '',
-        daily_rate_usd: 0,
-        notes: '',
-      });
-      fetchVehicles();
-    } catch (error) {
-      console.error('Error creating vehicle:', error);
-      toast.error('Failed to add vehicle');
     }
   };
 
@@ -222,13 +166,13 @@ export default function FleetPage() {
           <h1 className="text-2xl font-bold text-gray-900">Fleet Management</h1>
           <p className="text-gray-500 mt-1">Manage safari vehicles and car hire fleet</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
+        <Link
+          href="/dashboard/fleet/new"
           className="btn-primary inline-flex items-center gap-2"
         >
           <PlusIcon className="w-5 h-5" />
           Add Vehicle
-        </button>
+        </Link>
       </div>
 
       {/* Stats */}
@@ -257,9 +201,9 @@ export default function FleetPage() {
         </div>
         <div className="card p-4">
           <p className="text-2xl font-bold text-red-600">
-            {vehicles.filter(v => isExpiringSoon(v.insurance_expiry) || isExpiringSoon(v.inspection_expiry)).length}
+            {vehicles.filter(v => isExpiringSoon(v.insurance_expiry)).length}
           </p>
-          <p className="text-sm text-gray-500">Expiring Soon</p>
+          <p className="text-sm text-gray-500">Insurance Expiring Soon</p>
         </div>
       </div>
 
@@ -306,13 +250,13 @@ export default function FleetPage() {
           <TruckIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No vehicles found</h3>
           <p className="text-gray-500 mb-4">Add your first vehicle to the fleet</p>
-          <button
-            onClick={() => setShowCreateModal(true)}
+          <Link
+            href="/dashboard/fleet/new"
             className="btn-primary inline-flex items-center gap-2"
           >
             <PlusIcon className="w-5 h-5" />
             Add Vehicle
-          </button>
+          </Link>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -368,15 +312,6 @@ export default function FleetPage() {
                       {formatDate(vehicle.insurance_expiry)}
                     </span>
                   </div>
-                  <div className={`flex items-center justify-between text-sm ${isExpired(vehicle.inspection_expiry) ? 'text-red-600' : isExpiringSoon(vehicle.inspection_expiry) ? 'text-yellow-600' : 'text-gray-500'}`}>
-                    <span>Inspection:</span>
-                    <span className="flex items-center gap-1">
-                      {(isExpired(vehicle.inspection_expiry) || isExpiringSoon(vehicle.inspection_expiry)) && (
-                        <ExclamationTriangleIcon className="w-4 h-4" />
-                      )}
-                      {formatDate(vehicle.inspection_expiry)}
-                    </span>
-                  </div>
                 </div>
 
                 {/* Status Dropdown */}
@@ -418,184 +353,6 @@ export default function FleetPage() {
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Create Modal */}
-      {showCreateModal && (
-        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-          <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="card-header">
-              <h2 className="text-lg font-semibold">Add Vehicle</h2>
-            </div>
-            <form onSubmit={handleCreateVehicle} className="card-body space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="form-group">
-                  <label className="label">Registration Number *</label>
-                  <input
-                    type="text"
-                    value={formData.registration_number}
-                    onChange={(e) => setFormData({ ...formData, registration_number: e.target.value })}
-                    className="input"
-                    placeholder="UAX 123A"
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Vehicle Type</label>
-                  <select
-                    value={formData.vehicle_type}
-                    onChange={(e) => setFormData({ ...formData, vehicle_type: e.target.value })}
-                    className="input"
-                  >
-                    {vehicleTypes.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Make</label>
-                  <input
-                    type="text"
-                    value={formData.make}
-                    onChange={(e) => setFormData({ ...formData, make: e.target.value })}
-                    className="input"
-                    placeholder="Toyota"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Model</label>
-                  <input
-                    type="text"
-                    value={formData.model}
-                    onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                    className="input"
-                    placeholder="Land Cruiser"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Year</label>
-                  <input
-                    type="number"
-                    value={formData.year}
-                    onChange={(e) => setFormData({ ...formData, year: parseInt(e.target.value) })}
-                    className="input"
-                    min="1990"
-                    max={new Date().getFullYear() + 1}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Seating Capacity</label>
-                  <input
-                    type="number"
-                    value={formData.seating_capacity}
-                    onChange={(e) => setFormData({ ...formData, seating_capacity: parseInt(e.target.value) })}
-                    className="input"
-                    min="1"
-                    max="50"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Fuel Type</label>
-                  <select
-                    value={formData.fuel_type}
-                    onChange={(e) => setFormData({ ...formData, fuel_type: e.target.value })}
-                    className="input"
-                  >
-                    {fuelTypes.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Status</label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value as VehicleStatus })}
-                    className="input"
-                  >
-                    {statuses.map(status => (
-                      <option key={status} value={status}>
-                        {status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Current Mileage (km)</label>
-                  <input
-                    type="number"
-                    value={formData.current_mileage}
-                    onChange={(e) => setFormData({ ...formData, current_mileage: parseInt(e.target.value) })}
-                    className="input"
-                    min="0"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Daily Rate (USD)</label>
-                  <input
-                    type="number"
-                    value={formData.daily_rate_usd}
-                    onChange={(e) => setFormData({ ...formData, daily_rate_usd: parseFloat(e.target.value) })}
-                    className="input"
-                    min="0"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Insurance Expiry</label>
-                  <input
-                    type="date"
-                    value={formData.insurance_expiry}
-                    onChange={(e) => setFormData({ ...formData, insurance_expiry: e.target.value })}
-                    className="input"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Inspection Expiry</label>
-                  <input
-                    type="date"
-                    value={formData.inspection_expiry}
-                    onChange={(e) => setFormData({ ...formData, inspection_expiry: e.target.value })}
-                    className="input"
-                  />
-                </div>
-
-                <div className="form-group md:col-span-2">
-                  <label className="label">Notes</label>
-                  <textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    className="input"
-                    rows={2}
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 pt-4 border-t">
-                <button type="submit" className="btn-primary">
-                  Add Vehicle
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="btn-secondary"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
     </div>

@@ -85,9 +85,10 @@ export default function PayrollPage() {
   // Form state
   const [formData, setFormData] = useState({
     period_name: '',
+    period_type: 'monthly' as 'weekly' | 'bi_weekly' | 'monthly',
     start_date: '',
     end_date: '',
-    pay_date: '',
+    payment_date: '',
   });
 
   useEffect(() => {
@@ -120,7 +121,7 @@ export default function PayrollPage() {
       const { data, error } = await supabase
         .from('employees')
         .select('*')
-        .in('employment_status', ['active', 'probation'])
+        .eq('is_active', true)
         .order('first_name');
 
       if (error) throw error;
@@ -146,9 +147,10 @@ export default function PayrollPage() {
       setShowCreateModal(false);
       setFormData({
         period_name: '',
+        period_type: 'monthly',
         start_date: '',
         end_date: '',
-        pay_date: '',
+        payment_date: '',
       });
       fetchPayrollPeriods();
     } catch (error) {
@@ -161,6 +163,20 @@ export default function PayrollPage() {
     setProcessing(true);
     
     try {
+      // Check if payslips already exist for this period
+      const { data: existingPayslips } = await supabase
+        .from('payslips')
+        .select('id')
+        .eq('payroll_period_id', period.id)
+        .limit(1);
+
+      if (existingPayslips && existingPayslips.length > 0) {
+        toast.error('Payslips already exist for this period');
+        setProcessing(false);
+        setShowProcessModal(false);
+        return;
+      }
+
       // Update period status to processing
       await supabase
         .from('payroll_periods')
@@ -169,21 +185,21 @@ export default function PayrollPage() {
 
       // Generate payslips for all active employees
       const payslips = employees.map(emp => {
-        const grossSalary = emp.base_salary || 0;
+        const grossSalary = emp.basic_salary || 0;
         const nssf = calculateNSSF(grossSalary);
         const paye = calculatePAYE(grossSalary - nssf.employee); // PAYE on taxable income after NSSF
         
         return {
           payroll_period_id: period.id,
           employee_id: emp.id,
+          payslip_number: `PS-${period.id.substring(0,8)}-${emp.employee_number}`,
           basic_salary: grossSalary,
-          gross_earnings: grossSalary,
+          gross_salary: grossSalary,
           nssf_employee: nssf.employee,
           nssf_employer: nssf.employer,
           paye: paye,
           total_deductions: nssf.employee + paye,
-          net_pay: grossSalary - nssf.employee - paye,
-          status: 'pending',
+          net_salary: grossSalary - nssf.employee - paye,
         };
       });
 
@@ -195,9 +211,9 @@ export default function PayrollPage() {
       if (payslipError) throw payslipError;
 
       // Calculate totals and update period
-      const totalGross = payslips.reduce((sum, p) => sum + p.gross_earnings, 0);
+      const totalGross = payslips.reduce((sum, p) => sum + p.gross_salary, 0);
       const totalDeductions = payslips.reduce((sum, p) => sum + p.total_deductions, 0);
-      const totalNet = payslips.reduce((sum, p) => sum + p.net_pay, 0);
+      const totalNet = payslips.reduce((sum, p) => sum + p.net_salary, 0);
       const totalPaye = payslips.reduce((sum, p) => sum + p.paye, 0);
       const totalNssf = payslips.reduce((sum, p) => sum + p.nssf_employee + p.nssf_employer, 0);
 
@@ -208,9 +224,6 @@ export default function PayrollPage() {
           total_gross: totalGross,
           total_deductions: totalDeductions,
           total_net: totalNet,
-          total_paye: totalPaye,
-          total_nssf: totalNssf,
-          employee_count: payslips.length,
         })
         .eq('id', period.id);
 
@@ -244,6 +257,182 @@ export default function PayrollPage() {
     } catch (error) {
       toast.error('Failed to update status');
     }
+  };
+
+  const handlePrint = (period: PayrollPeriod) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const formatCurrency = (amount: number) => {
+      return new Intl.NumberFormat('en-UG', {
+        style: 'currency',
+        currency: 'UGX',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(amount);
+    };
+
+    const formatDate = (date: string | null) => {
+      if (!date) return '-';
+      return new Date(date).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+    };
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Payroll Period - ${period.period_name}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 20px;
+              color: #000;
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 30px;
+              padding-bottom: 20px;
+              border-bottom: 2px solid #000;
+            }
+            .logo {
+              max-height: 80px;
+            }
+            .company-info {
+              text-align: right;
+            }
+            .company-name {
+              font-size: 24px;
+              font-weight: bold;
+              margin-bottom: 5px;
+            }
+            h1 {
+              text-align: center;
+              margin: 20px 0;
+              font-size: 22px;
+            }
+            .period-info {
+              background: #f5f5f5;
+              padding: 15px;
+              margin-bottom: 20px;
+              border-radius: 5px;
+            }
+            .info-row {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 8px;
+            }
+            .info-label {
+              font-weight: bold;
+              width: 150px;
+            }
+            .summary-grid {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 20px;
+              margin: 20px 0;
+            }
+            .summary-box {
+              border: 1px solid #ddd;
+              padding: 15px;
+              border-radius: 5px;
+              text-align: center;
+            }
+            .summary-label {
+              font-size: 12px;
+              color: #666;
+              margin-bottom: 5px;
+            }
+            .summary-value {
+              font-size: 20px;
+              font-weight: bold;
+            }
+            .footer {
+              margin-top: 40px;
+              padding-top: 20px;
+              border-top: 1px solid #ddd;
+              text-align: center;
+              font-size: 12px;
+              color: #666;
+            }
+            @media print {
+              body { margin: 0; }
+              .header { page-break-after: avoid; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <img src="/assets/logo_bg.png" alt="Company Logo" class="logo" />
+            <div class="company-info">
+              <div class="company-name">Breco Safaris</div>
+              <div>Operations Department</div>
+            </div>
+          </div>
+
+          <h1>Payroll Period Summary</h1>
+
+          <div class="period-info">
+            <div class="info-row">
+              <span class="info-label">Period Name:</span>
+              <span>${period.period_name}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Period Type:</span>
+              <span>${period.period_type || '-'}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Start Date:</span>
+              <span>${formatDate(period.start_date)}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">End Date:</span>
+              <span>${formatDate(period.end_date)}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Payment Date:</span>
+              <span>${formatDate(period.payment_date)}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Status:</span>
+              <span style="text-transform: capitalize;">${period.status}</span>
+            </div>
+          </div>
+
+          <div class="summary-grid">
+            <div class="summary-box">
+              <div class="summary-label">Gross Pay</div>
+              <div class="summary-value">${formatCurrency(period.total_gross || 0)}</div>
+            </div>
+            <div class="summary-box">
+              <div class="summary-label">Total Deductions</div>
+              <div class="summary-value">${formatCurrency(period.total_deductions || 0)}</div>
+            </div>
+            <div class="summary-box">
+              <div class="summary-label">Net Pay</div>
+              <div class="summary-value">${formatCurrency(period.total_net || 0)}</div>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>Generated on ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })} at ${new Date().toLocaleTimeString('en-GB')}</p>
+            <p>Breco Safaris - Operations Department</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
   };
 
   const deletePeriod = async (id: string) => {
@@ -337,21 +526,15 @@ export default function PayrollPage() {
         </div>
         <div className="card p-4">
           <p className="text-2xl font-bold text-breco-navy">
-            {formatCurrency(currentPeriod?.total_net || employees.reduce((sum, e) => sum + (e.base_salary || 0), 0))}
+            {formatCurrency(currentPeriod?.total_net || employees.reduce((sum, e) => sum + (e.basic_salary || 0), 0))}
           </p>
           <p className="text-sm text-gray-500">This Month Payroll</p>
         </div>
         <div className="card p-4">
           <p className="text-2xl font-bold text-red-600">
-            {formatCurrency(currentPeriod?.total_paye || 0)}
+            {formatCurrency(currentPeriod?.total_deductions || 0)}
           </p>
-          <p className="text-sm text-gray-500">PAYE Due</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-2xl font-bold text-blue-600">
-            {formatCurrency(currentPeriod?.total_nssf || 0)}
-          </p>
-          <p className="text-sm text-gray-500">NSSF Due</p>
+          <p className="text-sm text-gray-500">Total Deductions</p>
         </div>
       </div>
 
@@ -409,16 +592,8 @@ export default function PayrollPage() {
                     <p className="font-semibold">{formatCurrency(period.total_gross)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-400">PAYE</p>
-                    <p className="font-semibold text-red-600">{formatCurrency(period.total_paye)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400">NSSF</p>
-                    <p className="font-semibold text-blue-600">{formatCurrency(period.total_nssf)}</p>
-                  </div>
-                  <div>
                     <p className="text-xs text-gray-400">Deductions</p>
-                    <p className="font-semibold">{formatCurrency(period.total_deductions)}</p>
+                    <p className="font-semibold text-red-600">{formatCurrency(period.total_deductions)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-400">Net Pay</p>
@@ -469,6 +644,7 @@ export default function PayrollPage() {
                   </Link>
 
                   <button
+                    onClick={() => handlePrint(period)}
                     className="btn-secondary btn-sm flex items-center gap-1"
                   >
                     <PrinterIcon className="w-4 h-4" />
@@ -509,7 +685,19 @@ export default function PayrollPage() {
                   required
                 />
               </div>
-
+              <div className="form-group">
+                <label className="label">Period Type *</label>
+                <select
+                  value={formData.period_type}
+                  onChange={(e) => setFormData({ ...formData, period_type: e.target.value as any })}
+                  className="input"
+                  required
+                >
+                  <option value="weekly">Weekly</option>
+                  <option value="bi_weekly">Bi-Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="form-group">
                   <label className="label">Start Date *</label>
@@ -537,8 +725,8 @@ export default function PayrollPage() {
                 <label className="label">Pay Date *</label>
                 <input
                   type="date"
-                  value={formData.pay_date}
-                  onChange={(e) => setFormData({ ...formData, pay_date: e.target.value })}
+                  value={formData.payment_date}
+                  onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
                   className="input"
                   required
                 />

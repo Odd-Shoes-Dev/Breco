@@ -41,15 +41,14 @@ export default function EmployeesPage() {
     phone: '',
     national_id: '',
     nssf_number: '',
-    tin_number: '',
+    tin: '',
     date_of_birth: '',
     hire_date: '',
     job_title: '',
     department: 'Operations',
     employment_type: 'full_time' as 'full_time' | 'part_time' | 'contract' | 'casual',
-    employment_status: 'probation' as EmploymentStatus,
     pay_frequency: 'monthly' as 'weekly' | 'bi_weekly' | 'monthly',
-    base_salary: 0,
+    basic_salary: 0,
     salary_currency: 'UGX',
     bank_name: '',
     bank_account_number: '',
@@ -89,7 +88,7 @@ export default function EmployeesPage() {
         .insert([{
           ...formData,
           date_of_birth: formData.date_of_birth || null,
-          hire_date: formData.hire_date || null,
+          is_active: true, // New employees are active by default
         }]);
 
       if (error) throw error;
@@ -104,15 +103,14 @@ export default function EmployeesPage() {
         phone: '',
         national_id: '',
         nssf_number: '',
-        tin_number: '',
+        tin: '',
         date_of_birth: '',
         hire_date: '',
         job_title: '',
         department: 'Operations',
         employment_type: 'full_time',
-        employment_status: 'probation',
         pay_frequency: 'monthly',
-        base_salary: 0,
+        basic_salary: 0,
         salary_currency: 'UGX',
         bank_name: '',
         bank_account_number: '',
@@ -122,9 +120,10 @@ export default function EmployeesPage() {
         address: '',
       });
       fetchEmployees();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating employee:', error);
-      toast.error('Failed to add employee');
+      const errorMessage = error?.message || 'Failed to add employee';
+      toast.error(errorMessage);
     }
   };
 
@@ -275,8 +274,8 @@ export default function EmployeesPage() {
           <p className="text-2xl font-bold text-breco-navy">
             {formatCurrency(
               employees
-                .filter(e => e.employment_status === 'active' || e.employment_status === 'probation')
-                .reduce((sum, e) => sum + (e.base_salary || 0), 0),
+                .filter(e => e.is_active)
+                .reduce((sum, e) => sum + (e.basic_salary || 0), 0),
               'UGX'
             )}
           </p>
@@ -378,7 +377,7 @@ export default function EmployeesPage() {
                     <td>{formatDate(employee.hire_date)}</td>
                     <td>
                       <p className="font-medium">
-                        {formatCurrency(employee.base_salary, employee.salary_currency)}
+                        {formatCurrency(employee.basic_salary, employee.salary_currency)}
                       </p>
                       <p className="text-xs text-gray-400">{employee.pay_frequency}</p>
                     </td>
@@ -511,8 +510,8 @@ export default function EmployeesPage() {
                     <label className="label">TIN Number</label>
                     <input
                       type="text"
-                      value={formData.tin_number}
-                      onChange={(e) => setFormData({ ...formData, tin_number: e.target.value })}
+                      value={formData.tin}
+                      onChange={(e) => setFormData({ ...formData, tin: e.target.value })}
                       className="input"
                     />
                   </div>
@@ -557,26 +556,13 @@ export default function EmployeesPage() {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="label">Status</label>
-                    <select
-                      value={formData.employment_status}
-                      onChange={(e) => setFormData({ ...formData, employment_status: e.target.value as EmploymentStatus })}
-                      className="input"
-                    >
-                      {statuses.map(status => (
-                        <option key={status} value={status}>
-                          {status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="label">Hire Date</label>
+                    <label className="label">Hire Date *</label>
                     <input
                       type="date"
                       value={formData.hire_date}
                       onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
                       className="input"
+                      required
                     />
                   </div>
                 </div>
@@ -587,11 +573,11 @@ export default function EmployeesPage() {
                 <h3 className="font-medium text-gray-900 mb-3">Salary Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="form-group">
-                    <label className="label">Base Salary</label>
+                    <label className="label">Basic Salary</label>
                     <input
                       type="number"
-                      value={formData.base_salary}
-                      onChange={(e) => setFormData({ ...formData, base_salary: parseFloat(e.target.value) })}
+                      value={formData.basic_salary}
+                      onChange={(e) => setFormData({ ...formData, basic_salary: parseFloat(e.target.value) })}
                       className="input"
                       min="0"
                     />

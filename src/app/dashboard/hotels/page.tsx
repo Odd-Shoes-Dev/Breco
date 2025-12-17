@@ -30,27 +30,6 @@ export default function HotelsPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [destinationFilter, setDestinationFilter] = useState<string>('all');
-  const [showCreateModal, setShowCreateModal] = useState(false);
-
-  // Form state for new hotel
-  const [formData, setFormData] = useState({
-    name: '',
-    destination_id: '',
-    address: '',
-    phone: '',
-    email: '',
-    website: '',
-    star_rating: 3,
-    hotel_type: 'Lodge',
-    standard_rate_usd: 0,
-    deluxe_rate_usd: 0,
-    suite_rate_usd: 0,
-    contact_person: '',
-    contact_phone: '',
-    commission_rate: 10,
-    notes: '',
-    is_partner: true,
-  });
 
   useEffect(() => {
     fetchHotels();
@@ -89,46 +68,6 @@ export default function HotelsPage() {
       setDestinations(data || []);
     } catch (error) {
       console.error('Error fetching destinations:', error);
-    }
-  };
-
-  const handleCreateHotel = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      const { error } = await supabase
-        .from('hotels')
-        .insert([{
-          ...formData,
-          destination_id: formData.destination_id || null,
-        }]);
-
-      if (error) throw error;
-      
-      toast.success('Hotel added successfully');
-      setShowCreateModal(false);
-      setFormData({
-        name: '',
-        destination_id: '',
-        address: '',
-        phone: '',
-        email: '',
-        website: '',
-        star_rating: 3,
-        hotel_type: 'Lodge',
-        standard_rate_usd: 0,
-        deluxe_rate_usd: 0,
-        suite_rate_usd: 0,
-        contact_person: '',
-        contact_phone: '',
-        commission_rate: 10,
-        notes: '',
-        is_partner: true,
-      });
-      fetchHotels();
-    } catch (error) {
-      console.error('Error creating hotel:', error);
-      toast.error('Failed to create hotel');
     }
   };
 
@@ -204,8 +143,6 @@ export default function HotelsPage() {
     );
   };
 
-  const hotelTypes = ['Lodge', 'Hotel', 'Camp', 'Guesthouse', 'Resort', 'Boutique Hotel', 'Eco-Lodge'];
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -222,13 +159,13 @@ export default function HotelsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Partner Hotels</h1>
           <p className="text-gray-500 mt-1">Manage accommodation partners for tour bookings</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
+        <Link
+          href="/dashboard/hotels/new"
           className="btn-primary inline-flex items-center gap-2"
         >
           <PlusIcon className="w-5 h-5" />
           Add Hotel
-        </button>
+        </Link>
       </div>
 
       {/* Stats */}
@@ -289,13 +226,13 @@ export default function HotelsPage() {
           <BuildingStorefrontIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No hotels found</h3>
           <p className="text-gray-500 mb-4">Add your first partner hotel</p>
-          <button
-            onClick={() => setShowCreateModal(true)}
+          <Link
+            href="/dashboard/hotels/new"
             className="btn-primary inline-flex items-center gap-2"
           >
             <PlusIcon className="w-5 h-5" />
             Add Hotel
-          </button>
+          </Link>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -371,179 +308,6 @@ export default function HotelsPage() {
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Create Modal */}
-      {showCreateModal && (
-        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-          <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="card-header">
-              <h2 className="text-lg font-semibold">Add Partner Hotel</h2>
-            </div>
-            <form onSubmit={handleCreateHotel} className="card-body space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="form-group md:col-span-2">
-                  <label className="label">Hotel Name *</label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="input"
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Destination</label>
-                  <select
-                    value={formData.destination_id}
-                    onChange={(e) => setFormData({ ...formData, destination_id: e.target.value })}
-                    className="input"
-                  >
-                    <option value="">Select destination</option>
-                    {destinations.map(dest => (
-                      <option key={dest.id} value={dest.id}>{dest.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Hotel Type</label>
-                  <select
-                    value={formData.hotel_type}
-                    onChange={(e) => setFormData({ ...formData, hotel_type: e.target.value })}
-                    className="input"
-                  >
-                    {hotelTypes.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Star Rating</label>
-                  <select
-                    value={formData.star_rating}
-                    onChange={(e) => setFormData({ ...formData, star_rating: parseInt(e.target.value) })}
-                    className="input"
-                  >
-                    {[1, 2, 3, 4, 5].map(n => (
-                      <option key={n} value={n}>{n} Star{n > 1 ? 's' : ''}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Commission Rate (%)</label>
-                  <input
-                    type="number"
-                    value={formData.commission_rate}
-                    onChange={(e) => setFormData({ ...formData, commission_rate: parseFloat(e.target.value) })}
-                    className="input"
-                    min="0"
-                    max="100"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Standard Rate (USD)</label>
-                  <input
-                    type="number"
-                    value={formData.standard_rate_usd}
-                    onChange={(e) => setFormData({ ...formData, standard_rate_usd: parseFloat(e.target.value) })}
-                    className="input"
-                    min="0"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Deluxe Rate (USD)</label>
-                  <input
-                    type="number"
-                    value={formData.deluxe_rate_usd}
-                    onChange={(e) => setFormData({ ...formData, deluxe_rate_usd: parseFloat(e.target.value) })}
-                    className="input"
-                    min="0"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Suite Rate (USD)</label>
-                  <input
-                    type="number"
-                    value={formData.suite_rate_usd}
-                    onChange={(e) => setFormData({ ...formData, suite_rate_usd: parseFloat(e.target.value) })}
-                    className="input"
-                    min="0"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Phone</label>
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="input"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Email</label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="input"
-                  />
-                </div>
-
-                <div className="form-group md:col-span-2">
-                  <label className="label">Address</label>
-                  <textarea
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="input"
-                    rows={2}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Contact Person</label>
-                  <input
-                    type="text"
-                    value={formData.contact_person}
-                    onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
-                    className="input"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="label">Contact Phone</label>
-                  <input
-                    type="tel"
-                    value={formData.contact_phone}
-                    onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
-                    className="input"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 pt-4 border-t">
-                <button type="submit" className="btn-primary">
-                  Add Hotel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="btn-secondary"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
     </div>
