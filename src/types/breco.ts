@@ -135,11 +135,23 @@ export interface TourSeasonalPricing {
   created_at: string;
 }
 
+export interface TourPackageImage {
+  id: string;
+  tour_package_id: string;
+  image_url: string;
+  caption: string | null;
+  display_order: number;
+  is_primary: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface TourPackageWithDetails extends TourPackage {
   destinations?: TourPackageDestination[];
   itineraries?: TourItinerary[];
   seasonal_pricing?: TourSeasonalPricing[];
   primary_destination?: Destination;
+  images?: TourPackageImage[];
 }
 
 // =====================================================
