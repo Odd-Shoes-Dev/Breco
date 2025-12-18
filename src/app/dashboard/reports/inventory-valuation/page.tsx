@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { supabase } from '@/lib/supabase/client';
 import {
   CubeIcon,
   ArrowDownTrayIcon,
@@ -75,21 +76,41 @@ interface InventoryValuationData {
   };
 }
 
+interface Category {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
 export default function InventoryValuationPage() {
   const [data, setData] = useState<InventoryValuationData | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().split('T')[0]);
   const [category, setCategory] = useState('all');
-  const [location, setLocation] = useState('all');
   const [valuationMethod, setValuationMethod] = useState('fifo');
   const [sortBy, setSortBy] = useState('totalValue');
   const [isLoading, setIsLoading] = useState(false);
   const [showLotDetails, setShowLotDetails] = useState<string | null>(null);
 
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('product_categories')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
   const fetchInventoryData = async () => {
     setIsLoading(true);
     try {
       const response = await fetch(
-        `/api/reports/inventory-valuation?asOfDate=${asOfDate}&category=${category}&location=${location}&valuationMethod=${valuationMethod}&sortBy=${sortBy}`
+        `/api/reports/inventory-valuation?asOfDate=${asOfDate}&category=${category}&valuationMethod=${valuationMethod}&sortBy=${sortBy}`
       );
       const result = await response.json();
       setData(result);
@@ -101,8 +122,12 @@ export default function InventoryValuationPage() {
   };
 
   useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
     fetchInventoryData();
-  }, [asOfDate, category, location, valuationMethod, sortBy]);
+  }, [asOfDate, category, valuationMethod, sortBy]);
 
   const exportToPDF = () => {
     if (!data) return;
@@ -407,7 +432,7 @@ export default function InventoryValuationPage() {
 
       {/* Filters */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 sm:p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
           <div>
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">As of Date</label>
             <input
@@ -425,26 +450,9 @@ export default function InventoryValuationPage() {
               className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
             >
               <option value="all">All Categories</option>
-              <option value="Medical Equipment">Medical Equipment</option>
-              <option value="Surgical Instruments">Surgical Instruments</option>
-              <option value="Disposables">Disposables</option>
-              <option value="Pharmaceuticals">Pharmaceuticals</option>
-              <option value="Laboratory Supplies">Laboratory Supplies</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Location</label>
-            <select
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className="block w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-breco-navy focus:border-breco-navy"
-            >
-              <option value="all">All Locations</option>
-              <option value="Main Warehouse">Main Warehouse</option>
-              <option value="Surgery Suite">Surgery Suite</option>
-              <option value="Emergency Room">Emergency Room</option>
-              <option value="Laboratory">Laboratory</option>
-              <option value="Pharmacy">Pharmacy</option>
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.name}>{cat.name}</option>
+              ))}
             </select>
           </div>
           <div>

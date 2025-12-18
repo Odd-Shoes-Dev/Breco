@@ -53,6 +53,10 @@ interface Product {
     name: string;
     code: string;
   };
+  product_category?: {
+    id: string;
+    name: string;
+  };
 }
 
 export default function InventoryDetailPage() {
@@ -72,10 +76,14 @@ export default function InventoryDetailPage() {
     try {
       setLoading(true);
 
-      const { data, error } = await supabase
+      const { data, error} = await supabase
         .from('products')
         .select(`
           *,
+          product_category:category_id (
+            id,
+            name
+          ),
           revenue_account:revenue_account_id (
             name,
             code
@@ -276,6 +284,12 @@ export default function InventoryDetailPage() {
                 <p className="text-sm text-gray-500">SKU</p>
                 <p className="font-mono text-gray-900">{item.sku || 'N/A'}</p>
               </div>
+              {item.product_category && (
+                <div>
+                  <p className="text-sm text-gray-500">Category</p>
+                  <p className="text-gray-900">{item.product_category.name}</p>
+                </div>
+              )}
               <div>
                 <p className="text-sm text-gray-500">Unit of Measure</p>
                 <p className="text-gray-900 capitalize">{item.unit_of_measure}</p>

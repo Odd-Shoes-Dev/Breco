@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter, type SupportedCurrency } from '@/lib/currency';
 import { CurrencySelect } from '@/components/ui/currency-select';
 import {
@@ -10,16 +11,23 @@ import {
   CubeIcon,
 } from '@heroicons/react/24/outline';
 
+interface Category {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
 export default function NewInventoryItemPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
 
   const [formData, setFormData] = useState({
     sku: '',
     name: '',
     description: '',
-    category: '',
+    category_id: '',
     unit_of_measure: 'each',
     unit_cost: 0,
     selling_price: 0,
@@ -31,6 +39,24 @@ export default function NewInventoryItemPage() {
     is_active: true,
     notes: '',
   });
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('product_categories')
+        .select('id, name, description')
+        .order('name');
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -73,20 +99,6 @@ export default function NewInventoryItemPage() {
       setIsSubmitting(false);
     }
   };
-
-  const categories = [
-    'Electronics',
-    'Clothing',
-    'Home & Garden',
-    'Sports & Outdoors',
-    'Books & Media',
-    'Health & Beauty',
-    'Food & Beverages',
-    'Office Supplies',
-    'Tools & Hardware',
-    'Automotive',
-    'Other',
-  ];
 
   const unitsOfMeasure = [
     { value: 'each', label: 'Each' },
@@ -162,16 +174,21 @@ export default function NewInventoryItemPage() {
                 Category
               </label>
               <select
-                name="category"
-                value={formData.category}
+                name="category_id"
+                value={formData.category_id}
                 onChange={handleChange}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
               >
                 <option value="">Select category...</option>
                 {categories.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
+              <p className="text-xs text-gray-500 mt-1">
+                <Link href="/dashboard/settings/categories" className="text-breco-navy hover:underline">
+                  Manage categories
+                </Link>
+              </p>
             </div>
 
             <div className="md:col-span-2">

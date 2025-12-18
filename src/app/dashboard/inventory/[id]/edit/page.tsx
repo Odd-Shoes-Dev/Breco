@@ -11,11 +11,18 @@ import { supabase } from '@/lib/supabase/client';
 import { type SupportedCurrency } from '@/lib/currency';
 import { CurrencySelect } from '@/components/ui/currency-select';
 
+interface Category {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
 interface Product {
   id: string;
   sku: string | null;
   name: string;
   description: string | null;
+  category_id: string | null;
   product_type: string;
   unit_of_measure: string;
   cost_price: number;
@@ -35,11 +42,13 @@ export default function EditInventoryItemPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [item, setItem] = useState<Product | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
 
   const [formData, setFormData] = useState({
     sku: '',
     name: '',
     description: '',
+    category_id: '',
     unit_of_measure: 'each',
     unit_cost: 0,
     selling_price: 0,
@@ -52,10 +61,25 @@ export default function EditInventoryItemPage() {
   });
 
   useEffect(() => {
+    fetchCategories();
     if (params.id) {
       loadItem();
     }
   }, [params.id]);
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('product_categories')
+        .select('id, name, description')
+        .order('name');
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
 
   const loadItem = async () => {
     try {
@@ -74,6 +98,7 @@ export default function EditInventoryItemPage() {
         sku: data.sku || '',
         name: data.name,
         description: data.description || '',
+        category_id: data.category_id || '',
         unit_of_measure: data.unit_of_measure,
         unit_cost: parseFloat(data.cost_price),
         selling_price: parseFloat(data.unit_price),
@@ -114,6 +139,7 @@ export default function EditInventoryItemPage() {
         sku: formData.sku,
         name: formData.name,
         description: formData.description || null,
+        category_id: formData.category_id || null,
         unit_of_measure: formData.unit_of_measure,
         cost_price: formData.unit_cost,
         unit_price: formData.selling_price,
@@ -220,6 +246,28 @@ export default function EditInventoryItemPage() {
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
                 placeholder="PROD-001"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Category
+              </label>
+              <select
+                name="category_id"
+                value={formData.category_id}
+                onChange={handleChange}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+              >
+                <option value="">Select category...</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                <Link href="/dashboard/settings/categories" className="text-breco-navy hover:underline">
+                  Manage categories
+                </Link>
+              </p>
             </div>
 
             <div>

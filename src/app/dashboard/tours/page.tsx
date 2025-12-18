@@ -19,8 +19,23 @@ import {
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
 import toast from 'react-hot-toast';
 
+interface TourPackageImage {
+  id: string;
+  tour_package_id: string;
+  image_url: string;
+  is_primary: boolean;
+  display_order: number;
+  caption?: string;
+}
+
+interface TourPackageWithImages extends TourPackage {
+  primary_destination?: Destination;
+  images?: TourPackageImage[];
+  primary_image?: TourPackageImage;
+}
+
 export default function TourPackagesPage() {
-  const [packages, setPackages] = useState<(TourPackage & { primary_destination?: Destination })[]>([]);
+  const [packages, setPackages] = useState<TourPackageWithImages[]>([]);
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -34,7 +49,8 @@ export default function TourPackagesPage() {
 
   const fetchPackages = async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch tour packages with destinations
+      const { data: packagesData, error: packagesError } = await supabase
         .from('tour_packages')
         .select(`
           *,
@@ -42,8 +58,26 @@ export default function TourPackagesPage() {
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setPackages(data || []);
+      if (packagesError) throw packagesError;
+
+      // Fetch images for all tour packages
+      const { data: imagesData, error: imagesError } = await supabase
+        .from('tour_package_images')
+        .select('*')
+        .order('display_order');
+
+      if (imagesError) {
+        console.error('Error fetching images:', imagesError);
+      }
+
+      // Attach images to tour packages
+      const packagesWithImages = (packagesData || []).map(pkg => ({
+        ...pkg,
+        images: (imagesData || []).filter(img => img.tour_package_id === pkg.id),
+        primary_image: (imagesData || []).find(img => img.tour_package_id === pkg.id && img.is_primary),
+      }));
+
+      setPackages(packagesWithImages);
     } catch (error) {
       console.error('Error fetching packages:', error);
       toast.error('Failed to load tour packages');
@@ -246,10 +280,10 @@ export default function TourPackagesPage() {
           {filteredPackages.map((pkg) => (
             <div key={pkg.id} className="card overflow-hidden hover:shadow-lg transition-shadow">
               {/* Image placeholder */}
-              <div className="h-48 bg-gradient-to-br from-breco-navy to-breco-navy-light flex items-center justify-center relative">
-                {pkg.image_url ? (
+              <div className="h-48 bg-gradient-to-br from-breco-navy to-breco-navy-light flex items-center justify-center relative overflow-hidden">
+                {pkg.image_url || pkg.primary_image?.image_url || pkg.images?.[0]?.image_url ? (
                   <img
-                    src={pkg.image_url}
+                    src={pkg.image_url || pkg.primary_image?.image_url || pkg.images?.[0]?.image_url}
                     alt={pkg.name}
                     className="w-full h-full object-cover"
                   />

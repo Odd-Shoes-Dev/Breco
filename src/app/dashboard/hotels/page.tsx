@@ -20,8 +20,19 @@ import {
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
 import toast from 'react-hot-toast';
 
+interface HotelImage {
+  id: string;
+  hotel_id: string;
+  image_url: string;
+  is_primary: boolean;
+  display_order: number;
+  caption?: string;
+}
+
 interface HotelWithDestination extends Hotel {
   destination?: Destination;
+  images?: HotelImage[];
+  primary_image?: HotelImage;
 }
 
 export default function HotelsPage() {
@@ -38,7 +49,8 @@ export default function HotelsPage() {
 
   const fetchHotels = async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch hotels with destinations and images
+      const { data: hotelsData, error: hotelsError } = await supabase
         .from('hotels')
         .select(`
           *,
@@ -46,8 +58,26 @@ export default function HotelsPage() {
         `)
         .order('name');
 
-      if (error) throw error;
-      setHotels(data || []);
+      if (hotelsError) throw hotelsError;
+
+      // Fetch images for all hotels
+      const { data: imagesData, error: imagesError } = await supabase
+        .from('hotel_images')
+        .select('*')
+        .order('display_order');
+
+      if (imagesError) {
+        console.error('Error fetching images:', imagesError);
+      }
+
+      // Attach images to hotels
+      const hotelsWithImages = (hotelsData || []).map(hotel => ({
+        ...hotel,
+        images: (imagesData || []).filter(img => img.hotel_id === hotel.id),
+        primary_image: (imagesData || []).find(img => img.hotel_id === hotel.id && img.is_primary),
+      }));
+
+      setHotels(hotelsWithImages);
     } catch (error) {
       console.error('Error fetching hotels:', error);
       toast.error('Failed to load hotels');
@@ -238,8 +268,16 @@ export default function HotelsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredHotels.map((hotel) => (
             <div key={hotel.id} className={`card overflow-hidden ${!hotel.is_active ? 'opacity-60' : ''}`}>
-              <div className="h-32 bg-gradient-to-br from-breco-navy to-breco-navy-light flex items-center justify-center">
-                <BuildingStorefrontIcon className="w-12 h-12 text-white/50" />
+              <div className="h-32 bg-gradient-to-br from-breco-navy to-breco-navy-light flex items-center justify-center overflow-hidden">
+                {hotel.primary_image?.image_url || hotel.images?.[0]?.image_url ? (
+                  <img 
+                    src={hotel.primary_image?.image_url || hotel.images?.[0]?.image_url} 
+                    alt={hotel.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <BuildingStorefrontIcon className="w-12 h-12 text-white/50" />
+                )}
               </div>
               
               <div className="p-4">

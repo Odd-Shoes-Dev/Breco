@@ -23,8 +23,22 @@ import toast from 'react-hot-toast';
 
 type VehicleStatus = 'available' | 'in_use' | 'maintenance' | 'out_of_service';
 
+interface VehicleImage {
+  id: string;
+  vehicle_id: string;
+  image_url: string;
+  is_primary: boolean;
+  display_order: number;
+  caption?: string;
+}
+
+interface VehicleWithImages extends Vehicle {
+  images?: VehicleImage[];
+  primary_image?: VehicleImage;
+}
+
 export default function FleetPage() {
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehicles, setVehicles] = useState<VehicleWithImages[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -36,13 +50,32 @@ export default function FleetPage() {
 
   const fetchVehicles = async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch vehicles
+      const { data: vehiclesData, error: vehiclesError } = await supabase
         .from('vehicles')
         .select('*')
         .order('registration_number');
 
-      if (error) throw error;
-      setVehicles(data || []);
+      if (vehiclesError) throw vehiclesError;
+
+      // Fetch images for all vehicles
+      const { data: imagesData, error: imagesError } = await supabase
+        .from('vehicle_images')
+        .select('*')
+        .order('display_order');
+
+      if (imagesError) {
+        console.error('Error fetching images:', imagesError);
+      }
+
+      // Attach images to vehicles
+      const vehiclesWithImages = (vehiclesData || []).map(vehicle => ({
+        ...vehicle,
+        images: (imagesData || []).filter(img => img.vehicle_id === vehicle.id),
+        primary_image: (imagesData || []).find(img => img.vehicle_id === vehicle.id && img.is_primary),
+      }));
+
+      setVehicles(vehiclesWithImages);
     } catch (error) {
       console.error('Error fetching vehicles:', error);
       toast.error('Failed to load vehicles');
@@ -262,8 +295,16 @@ export default function FleetPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredVehicles.map((vehicle) => (
             <div key={vehicle.id} className={`card overflow-hidden ${vehicle.status === 'out_of_service' ? 'opacity-60' : ''}`}>
-              <div className="h-24 bg-gradient-to-br from-breco-navy to-breco-navy-light flex items-center justify-center">
-                <TruckIcon className="w-12 h-12 text-white/50" />
+              <div className="h-24 bg-gradient-to-br from-breco-navy to-breco-navy-light flex items-center justify-center overflow-hidden">
+                {vehicle.primary_image?.image_url || vehicle.images?.[0]?.image_url ? (
+                  <img 
+                    src={vehicle.primary_image?.image_url || vehicle.images?.[0]?.image_url} 
+                    alt={vehicle.registration_number}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <TruckIcon className="w-12 h-12 text-white/50" />
+                )}
               </div>
               
               <div className="p-4">

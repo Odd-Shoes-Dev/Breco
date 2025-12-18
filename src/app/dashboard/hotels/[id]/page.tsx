@@ -54,6 +54,12 @@ export default function HotelDetailPage() {
 
       if (hotelRes.error) throw hotelRes.error;
       setHotel(hotelRes.data);
+      
+      console.log('Fetched images:', imagesRes.data);
+      if (imagesRes.error) {
+        console.error('Images fetch error:', imagesRes.error);
+      }
+      
       setImages(imagesRes.data || []);
     } catch (error) {
       console.error('Failed to fetch hotel:', error);
