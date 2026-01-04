@@ -7,12 +7,12 @@
 -- 1. MULTI-LOCATION INVENTORY SUPPORT
 -- =====================================================
 
--- Create locations table
-CREATE TABLE IF NOT EXISTS locations (
+-- Create inventory_locations table
+CREATE TABLE IF NOT EXISTS inventory_locations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   location_code VARCHAR(50) NOT NULL UNIQUE,
   name VARCHAR(255) NOT NULL,
-  location_type VARCHAR(50) DEFAULT 'warehouse', -- warehouse, store, office, vehicle
+  type VARCHAR(50) DEFAULT 'warehouse', -- warehouse, store, office, vehicle
   address_line1 VARCHAR(255),
   address_line2 VARCHAR(255),
   city VARCHAR(100),
@@ -27,14 +27,14 @@ CREATE TABLE IF NOT EXISTS locations (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_locations_code ON locations(location_code);
-CREATE INDEX idx_locations_active ON locations(is_active);
+CREATE INDEX IF NOT EXISTS idx_inventory_locations_code ON inventory_locations(location_code);
+CREATE INDEX IF NOT EXISTS idx_inventory_locations_active ON inventory_locations(is_active);
 
 -- Inventory by location
 CREATE TABLE IF NOT EXISTS inventory_by_location (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-  location_id UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  location_id UUID NOT NULL REFERENCES inventory_locations(id) ON DELETE CASCADE,
   quantity_on_hand DECIMAL(15,4) DEFAULT 0,
   quantity_reserved DECIMAL(15,4) DEFAULT 0,
   quantity_available DECIMAL(15,4) GENERATED ALWAYS AS (quantity_on_hand - quantity_reserved) STORED,
@@ -46,31 +46,32 @@ CREATE TABLE IF NOT EXISTS inventory_by_location (
   UNIQUE(product_id, location_id)
 );
 
-CREATE INDEX idx_inventory_location_product ON inventory_by_location(product_id);
-CREATE INDEX idx_inventory_location_location ON inventory_by_location(location_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_location_product ON inventory_by_location(product_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_location_location ON inventory_by_location(location_id);
 
 -- Inventory transfers between locations
 CREATE TABLE IF NOT EXISTS inventory_transfers (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   transfer_number VARCHAR(50) NOT NULL UNIQUE,
   product_id UUID NOT NULL REFERENCES products(id),
-  from_location_id UUID NOT NULL REFERENCES locations(id),
-  to_location_id UUID NOT NULL REFERENCES locations(id),
+  from_location_id UUID NOT NULL REFERENCES inventory_locations(id),
+  to_location_id UUID NOT NULL REFERENCES inventory_locations(id),
   quantity DECIMAL(15,4) NOT NULL,
   transfer_date DATE NOT NULL DEFAULT CURRENT_DATE,
-  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'in_transit', 'completed', 'cancelled')),
+  status VARCHAR(20) DEFAULT 'pending',
   requested_by UUID REFERENCES user_profiles(id),
   approved_by UUID REFERENCES user_profiles(id),
   approved_at TIMESTAMPTZ,
   completed_by UUID REFERENCES user_profiles(id),
   completed_at TIMESTAMPTZ,
   notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT chk_transfer_status CHECK (status IN ('pending', 'in_transit', 'completed', 'cancelled'))
 );
 
-CREATE INDEX idx_transfers_from ON inventory_transfers(from_location_id);
-CREATE INDEX idx_transfers_to ON inventory_transfers(to_location_id);
-CREATE INDEX idx_transfers_status ON inventory_transfers(status);
+CREATE INDEX IF NOT EXISTS idx_transfers_from ON inventory_transfers(from_location_id);
+CREATE INDEX IF NOT EXISTS idx_transfers_to ON inventory_transfers(to_location_id);
+CREATE INDEX IF NOT EXISTS idx_transfers_status ON inventory_transfers(status);
 
 -- =====================================================
 -- 2. PRODUCT BUNDLING / KITS
@@ -85,8 +86,8 @@ CREATE TABLE IF NOT EXISTS product_bundles (
   UNIQUE(bundle_product_id, component_product_id)
 );
 
-CREATE INDEX idx_bundles_bundle ON product_bundles(bundle_product_id);
-CREATE INDEX idx_bundles_component ON product_bundles(component_product_id);
+CREATE INDEX IF NOT EXISTS idx_bundles_bundle ON product_bundles(bundle_product_id);
+CREATE INDEX IF NOT EXISTS idx_bundles_component ON product_bundles(component_product_id);
 
 COMMENT ON TABLE product_bundles IS 'Product kits/bundles - define which components make up a bundle product';
 
@@ -97,7 +98,7 @@ COMMENT ON TABLE product_bundles IS 'Product kits/bundles - define which compone
 CREATE TABLE IF NOT EXISTS inventory_alerts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-  location_id UUID REFERENCES locations(id),
+  location_id UUID REFERENCES inventory_locations(id),
   alert_type VARCHAR(50) NOT NULL, -- low_stock, out_of_stock, overstock, expiring
   alert_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   quantity_on_hand DECIMAL(15,4),
@@ -109,9 +110,9 @@ CREATE TABLE IF NOT EXISTS inventory_alerts (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_alerts_product ON inventory_alerts(product_id);
-CREATE INDEX idx_alerts_resolved ON inventory_alerts(is_resolved);
-CREATE INDEX idx_alerts_date ON inventory_alerts(alert_date);
+CREATE INDEX IF NOT EXISTS idx_alerts_product ON inventory_alerts(product_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_resolved ON inventory_alerts(is_resolved);
+CREATE INDEX IF NOT EXISTS idx_alerts_date ON inventory_alerts(alert_date);
 
 -- =====================================================
 -- 4. STOCK TAKES / CYCLE COUNTS
@@ -119,35 +120,36 @@ CREATE INDEX idx_alerts_date ON inventory_alerts(alert_date);
 
 CREATE TABLE IF NOT EXISTS stock_takes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  stock_take_number VARCHAR(50) NOT NULL UNIQUE,
-  location_id UUID REFERENCES locations(id),
+  reference_number VARCHAR(50) NOT NULL UNIQUE,
+  location_id UUID REFERENCES inventory_locations(id),
   stock_take_date DATE NOT NULL DEFAULT CURRENT_DATE,
-  status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'in_progress', 'completed', 'cancelled')),
-  type VARCHAR(20) DEFAULT 'full' CHECK (type IN ('full', 'cycle', 'spot')),
+  status VARCHAR(20) DEFAULT 'draft',
+  type VARCHAR(20) DEFAULT 'full',
   counted_by UUID REFERENCES user_profiles(id),
   approved_by UUID REFERENCES user_profiles(id),
   approved_at TIMESTAMPTZ,
   notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT chk_stock_take_status CHECK (status IN ('draft', 'in_progress', 'completed', 'cancelled')),
+  CONSTRAINT chk_stock_take_type CHECK (type IN ('full', 'cycle', 'spot'))
 );
 
-CREATE INDEX idx_stock_takes_location ON stock_takes(location_id);
-CREATE INDEX idx_stock_takes_status ON stock_takes(status);
+CREATE INDEX IF NOT EXISTS idx_stock_takes_location ON stock_takes(location_id);
+CREATE INDEX IF NOT EXISTS idx_stock_takes_status ON stock_takes(status);
 
 CREATE TABLE IF NOT EXISTS stock_take_lines (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   stock_take_id UUID NOT NULL REFERENCES stock_takes(id) ON DELETE CASCADE,
   product_id UUID NOT NULL REFERENCES products(id),
-  system_quantity DECIMAL(15,4) NOT NULL, -- What system shows
-  counted_quantity DECIMAL(15,4), -- What was physically counted
-  variance DECIMAL(15,4) GENERATED ALWAYS AS (counted_quantity - system_quantity) STORED,
-  variance_value DECIMAL(15,2), -- Financial impact
-  reason VARCHAR(255), -- Reason for variance
+  expected_quantity DECIMAL(15,4) NOT NULL DEFAULT 0,
+  counted_quantity DECIMAL(15,4) NOT NULL DEFAULT 0,
+  variance DECIMAL(15,4) GENERATED ALWAYS AS (counted_quantity - expected_quantity) STORED,
+  notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_stock_take_lines_take ON stock_take_lines(stock_take_id);
-CREATE INDEX idx_stock_take_lines_product ON stock_take_lines(product_id);
+CREATE INDEX IF NOT EXISTS idx_stock_take_lines_take ON stock_take_lines(stock_take_id);
+CREATE INDEX IF NOT EXISTS idx_stock_take_lines_product ON stock_take_lines(product_id);
 
 -- =====================================================
 -- 5. ASSET ASSIGNMENTS / CUSTODY
@@ -156,21 +158,22 @@ CREATE INDEX idx_stock_take_lines_product ON stock_take_lines(product_id);
 CREATE TABLE IF NOT EXISTS asset_assignments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   asset_id UUID NOT NULL REFERENCES fixed_assets(id) ON DELETE CASCADE,
-  assigned_to_user_id UUID REFERENCES user_profiles(id),
-  assigned_to_department VARCHAR(100),
+  employee_id UUID REFERENCES employees(id),
   assignment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  expected_return_date DATE,
   return_date DATE,
-  status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'returned', 'transferred')),
-  condition_at_assignment VARCHAR(50), -- excellent, good, fair, poor
+  status VARCHAR(20) DEFAULT 'assigned',
+  condition_at_assignment VARCHAR(50),
   condition_at_return VARCHAR(50),
   notes TEXT,
-  assigned_by UUID REFERENCES user_profiles(id),
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  return_notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT chk_assignment_status CHECK (status IN ('assigned', 'returned'))
 );
 
-CREATE INDEX idx_assignments_asset ON asset_assignments(asset_id);
-CREATE INDEX idx_assignments_user ON asset_assignments(assigned_to_user_id);
-CREATE INDEX idx_assignments_status ON asset_assignments(status);
+CREATE INDEX IF NOT EXISTS idx_assignments_asset ON asset_assignments(asset_id);
+CREATE INDEX IF NOT EXISTS idx_assignments_employee ON asset_assignments(employee_id);
+CREATE INDEX IF NOT EXISTS idx_assignments_status ON asset_assignments(status);
 
 -- =====================================================
 -- 6. ASSET MAINTENANCE TRACKING
@@ -178,25 +181,25 @@ CREATE INDEX idx_assignments_status ON asset_assignments(status);
 
 CREATE TABLE IF NOT EXISTS asset_maintenance (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  maintenance_number VARCHAR(50) NOT NULL UNIQUE,
   asset_id UUID NOT NULL REFERENCES fixed_assets(id) ON DELETE CASCADE,
-  maintenance_type VARCHAR(50) NOT NULL, -- preventive, corrective, inspection, calibration
-  maintenance_date DATE NOT NULL,
-  next_maintenance_date DATE,
-  performed_by VARCHAR(255), -- Internal staff or vendor
-  vendor_id UUID REFERENCES vendors(id),
-  cost DECIMAL(15,2) DEFAULT 0,
-  currency CHAR(3) DEFAULT 'USD',
-  description TEXT,
+  maintenance_type VARCHAR(50) NOT NULL,
+  scheduled_date DATE NOT NULL,
+  performed_date DATE,
+  performed_by_employee_id UUID REFERENCES employees(id),
+  performed_by_vendor VARCHAR(255),
+  cost DECIMAL(15,2),
+  description TEXT NOT NULL,
   notes TEXT,
-  status VARCHAR(20) DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'in_progress', 'completed', 'cancelled')),
-  created_by UUID REFERENCES user_profiles(id),
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  status VARCHAR(20) DEFAULT 'scheduled',
+  next_maintenance_date DATE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT chk_maintenance_status CHECK (status IN ('scheduled', 'in_progress', 'completed', 'cancelled')),
+  CONSTRAINT chk_maintenance_type CHECK (maintenance_type IN ('preventive', 'corrective', 'inspection', 'calibration'))
 );
 
-CREATE INDEX idx_maintenance_asset ON asset_maintenance(asset_id);
-CREATE INDEX idx_maintenance_date ON asset_maintenance(maintenance_date);
-CREATE INDEX idx_maintenance_status ON asset_maintenance(status);
+CREATE INDEX IF NOT EXISTS idx_maintenance_asset ON asset_maintenance(asset_id);
+CREATE INDEX IF NOT EXISTS idx_maintenance_date ON asset_maintenance(scheduled_date);
+CREATE INDEX IF NOT EXISTS idx_maintenance_status ON asset_maintenance(status);
 
 -- Service contracts for assets
 CREATE TABLE IF NOT EXISTS asset_service_contracts (
@@ -216,9 +219,9 @@ CREATE TABLE IF NOT EXISTS asset_service_contracts (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_contracts_asset ON asset_service_contracts(asset_id);
-CREATE INDEX idx_contracts_vendor ON asset_service_contracts(vendor_id);
-CREATE INDEX idx_contracts_active ON asset_service_contracts(is_active);
+CREATE INDEX IF NOT EXISTS idx_contracts_asset ON asset_service_contracts(asset_id);
+CREATE INDEX IF NOT EXISTS idx_contracts_vendor ON asset_service_contracts(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_contracts_active ON asset_service_contracts(is_active);
 
 -- =====================================================
 -- 7. ASSET INSURANCE TRACKING
@@ -247,9 +250,9 @@ CREATE TABLE IF NOT EXISTS asset_insurance (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_insurance_asset ON asset_insurance(asset_id);
-CREATE INDEX idx_insurance_policy ON asset_insurance(policy_number);
-CREATE INDEX idx_insurance_active ON asset_insurance(is_active);
+CREATE INDEX IF NOT EXISTS idx_insurance_asset ON asset_insurance(asset_id);
+CREATE INDEX IF NOT EXISTS idx_insurance_policy ON asset_insurance(policy_number);
+CREATE INDEX IF NOT EXISTS idx_insurance_active ON asset_insurance(is_active);
 
 -- =====================================================
 -- 8. ASSET IMPAIRMENT TRACKING
@@ -270,8 +273,8 @@ CREATE TABLE IF NOT EXISTS asset_impairments (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_impairments_asset ON asset_impairments(asset_id);
-CREATE INDEX idx_impairments_date ON asset_impairments(impairment_date);
+CREATE INDEX IF NOT EXISTS idx_impairments_asset ON asset_impairments(asset_id);
+CREATE INDEX IF NOT EXISTS idx_impairments_date ON asset_impairments(impairment_date);
 
 -- =====================================================
 -- 9. ASSET REVALUATION
@@ -292,8 +295,8 @@ CREATE TABLE IF NOT EXISTS asset_revaluations (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_revaluations_asset ON asset_revaluations(asset_id);
-CREATE INDEX idx_revaluations_date ON asset_revaluations(revaluation_date);
+CREATE INDEX IF NOT EXISTS idx_revaluations_asset ON asset_revaluations(asset_id);
+CREATE INDEX IF NOT EXISTS idx_revaluations_date ON asset_revaluations(revaluation_date);
 
 -- =====================================================
 -- 10. PRODUCT IMAGES & ATTACHMENTS
@@ -309,7 +312,7 @@ CREATE TABLE IF NOT EXISTS product_images (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_product_images_product ON product_images(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_images_product ON product_images(product_id);
 
 CREATE TABLE IF NOT EXISTS asset_attachments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -322,7 +325,7 @@ CREATE TABLE IF NOT EXISTS asset_attachments (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_asset_attachments_asset ON asset_attachments(asset_id);
+CREATE INDEX IF NOT EXISTS idx_asset_attachments_asset ON asset_attachments(asset_id);
 
 -- =====================================================
 -- 11. BARCODE GENERATION
@@ -435,7 +438,7 @@ BEGIN
   -- Add current location field
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                  WHERE table_name = 'fixed_assets' AND column_name = 'current_location_id') THEN
-    ALTER TABLE fixed_assets ADD COLUMN current_location_id UUID REFERENCES locations(id);
+    ALTER TABLE fixed_assets ADD COLUMN current_location_id UUID REFERENCES inventory_locations(id);
   END IF;
 END $$;
 
@@ -459,15 +462,15 @@ CREATE TABLE IF NOT EXISTS depreciation_schedules (
   UNIQUE(asset_id, period_date)
 );
 
-CREATE INDEX idx_depreciation_schedules_asset ON depreciation_schedules(asset_id);
-CREATE INDEX idx_depreciation_schedules_date ON depreciation_schedules(period_date);
-CREATE INDEX idx_depreciation_schedules_posted ON depreciation_schedules(is_posted);
+CREATE INDEX IF NOT EXISTS idx_depreciation_schedules_asset ON depreciation_schedules(asset_id);
+CREATE INDEX IF NOT EXISTS idx_depreciation_schedules_date ON depreciation_schedules(period_date);
+CREATE INDEX IF NOT EXISTS idx_depreciation_schedules_posted ON depreciation_schedules(is_posted);
 
 -- =====================================================
 -- 15. SEED DEFAULT LOCATION
 -- =====================================================
 
-INSERT INTO locations (location_code, name, location_type, city, country)
+INSERT INTO inventory_locations (location_code, name, type, city, country)
 VALUES ('MAIN', 'Main Warehouse', 'warehouse', 'Kampala', 'Uganda')
 ON CONFLICT (location_code) DO NOTHING;
 
@@ -479,12 +482,12 @@ DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                  WHERE table_name = 'inventory_movements' AND column_name = 'from_location_id') THEN
-    ALTER TABLE inventory_movements ADD COLUMN from_location_id UUID REFERENCES locations(id);
+    ALTER TABLE inventory_movements ADD COLUMN from_location_id UUID REFERENCES inventory_locations(id);
   END IF;
   
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                  WHERE table_name = 'inventory_movements' AND column_name = 'to_location_id') THEN
-    ALTER TABLE inventory_movements ADD COLUMN to_location_id UUID REFERENCES locations(id);
+    ALTER TABLE inventory_movements ADD COLUMN to_location_id UUID REFERENCES inventory_locations(id);
   END IF;
 END $$;
 
@@ -495,7 +498,7 @@ CREATE INDEX IF NOT EXISTS idx_movements_to_location ON inventory_movements(to_l
 -- COMMENTS FOR DOCUMENTATION
 -- =====================================================
 
-COMMENT ON TABLE locations IS 'Physical locations for inventory tracking (warehouses, stores, offices)';
+COMMENT ON TABLE inventory_locations IS 'Physical locations for inventory tracking (warehouses, stores, offices)';
 COMMENT ON TABLE inventory_by_location IS 'Track inventory quantities at each location';
 COMMENT ON TABLE inventory_transfers IS 'Track movement of inventory between locations';
 COMMENT ON TABLE product_bundles IS 'Product kits - define components that make up bundle products';
