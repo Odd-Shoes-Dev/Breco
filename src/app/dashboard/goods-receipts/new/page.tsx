@@ -15,10 +15,10 @@ interface PurchaseOrder {
   id: string;
   po_number: string;
   order_date: string;
-  vendors?: {
+  vendors: {
     name: string;
     company_name: string | null;
-  };
+  } | null;
 }
 
 interface POLine {
@@ -78,7 +78,7 @@ export default function NewGoodsReceiptPage() {
           id,
           po_number,
           order_date,
-          vendors (
+          vendors!inner (
             name,
             company_name
           )
@@ -87,7 +87,7 @@ export default function NewGoodsReceiptPage() {
         .order('order_date', { ascending: false });
 
       if (error) throw error;
-      setPurchaseOrders(data || []);
+      setPurchaseOrders((data || []) as PurchaseOrder[]);
     } catch (error) {
       console.error('Failed to load POs:', error);
       toast.error('Failed to load purchase orders');
@@ -239,7 +239,7 @@ export default function NewGoodsReceiptPage() {
                   <option value="">Select purchase order...</option>
                   {purchaseOrders.map((po) => (
                     <option key={po.id} value={po.id}>
-                      {po.po_number} - {po.vendors?.company_name || po.vendors?.name}
+                      {po.po_number} - {po.vendors?.company_name || po.vendors?.name || 'Unknown Vendor'}
                     </option>
                   ))}
                 </select>
