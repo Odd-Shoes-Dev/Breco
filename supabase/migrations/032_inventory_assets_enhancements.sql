@@ -118,7 +118,11 @@ CREATE INDEX IF NOT EXISTS idx_alerts_date ON inventory_alerts(alert_date);
 -- 4. STOCK TAKES / CYCLE COUNTS
 -- =====================================================
 
-CREATE TABLE IF NOT EXISTS stock_takes (
+-- Drop and recreate stock_takes with correct schema
+DROP TABLE IF EXISTS stock_take_lines CASCADE;
+DROP TABLE IF EXISTS stock_takes CASCADE;
+
+CREATE TABLE stock_takes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   reference_number VARCHAR(50) NOT NULL UNIQUE,
   location_id UUID REFERENCES inventory_locations(id),
@@ -134,10 +138,10 @@ CREATE TABLE IF NOT EXISTS stock_takes (
   CONSTRAINT chk_stock_take_type CHECK (type IN ('full', 'cycle', 'spot'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_stock_takes_location ON stock_takes(location_id);
-CREATE INDEX IF NOT EXISTS idx_stock_takes_status ON stock_takes(status);
+CREATE INDEX idx_stock_takes_location ON stock_takes(location_id);
+CREATE INDEX idx_stock_takes_status ON stock_takes(status);
 
-CREATE TABLE IF NOT EXISTS stock_take_lines (
+CREATE TABLE stock_take_lines (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   stock_take_id UUID NOT NULL REFERENCES stock_takes(id) ON DELETE CASCADE,
   product_id UUID NOT NULL REFERENCES products(id),
@@ -148,14 +152,17 @@ CREATE TABLE IF NOT EXISTS stock_take_lines (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_stock_take_lines_take ON stock_take_lines(stock_take_id);
-CREATE INDEX IF NOT EXISTS idx_stock_take_lines_product ON stock_take_lines(product_id);
+CREATE INDEX idx_stock_take_lines_take ON stock_take_lines(stock_take_id);
+CREATE INDEX idx_stock_take_lines_product ON stock_take_lines(product_id);
 
 -- =====================================================
 -- 5. ASSET ASSIGNMENTS / CUSTODY
 -- =====================================================
 
-CREATE TABLE IF NOT EXISTS asset_assignments (
+-- Drop and recreate asset_assignments with correct schema
+DROP TABLE IF EXISTS asset_assignments CASCADE;
+
+CREATE TABLE asset_assignments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   asset_id UUID NOT NULL REFERENCES fixed_assets(id) ON DELETE CASCADE,
   employee_id UUID REFERENCES employees(id),
@@ -171,15 +178,18 @@ CREATE TABLE IF NOT EXISTS asset_assignments (
   CONSTRAINT chk_assignment_status CHECK (status IN ('assigned', 'returned'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_assignments_asset ON asset_assignments(asset_id);
-CREATE INDEX IF NOT EXISTS idx_assignments_employee ON asset_assignments(employee_id);
-CREATE INDEX IF NOT EXISTS idx_assignments_status ON asset_assignments(status);
+CREATE INDEX idx_assignments_asset ON asset_assignments(asset_id);
+CREATE INDEX idx_assignments_employee ON asset_assignments(employee_id);
+CREATE INDEX idx_assignments_status ON asset_assignments(status);
 
 -- =====================================================
 -- 6. ASSET MAINTENANCE TRACKING
 -- =====================================================
 
-CREATE TABLE IF NOT EXISTS asset_maintenance (
+-- Drop and recreate asset_maintenance table with correct schema
+DROP TABLE IF EXISTS asset_maintenance CASCADE;
+
+CREATE TABLE asset_maintenance (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   asset_id UUID NOT NULL REFERENCES fixed_assets(id) ON DELETE CASCADE,
   maintenance_type VARCHAR(50) NOT NULL,
@@ -197,9 +207,9 @@ CREATE TABLE IF NOT EXISTS asset_maintenance (
   CONSTRAINT chk_maintenance_type CHECK (maintenance_type IN ('preventive', 'corrective', 'inspection', 'calibration'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_maintenance_asset ON asset_maintenance(asset_id);
-CREATE INDEX IF NOT EXISTS idx_maintenance_date ON asset_maintenance(scheduled_date);
-CREATE INDEX IF NOT EXISTS idx_maintenance_status ON asset_maintenance(status);
+CREATE INDEX idx_maintenance_asset ON asset_maintenance(asset_id);
+CREATE INDEX idx_maintenance_date ON asset_maintenance(scheduled_date);
+CREATE INDEX idx_maintenance_status ON asset_maintenance(status);
 
 -- Service contracts for assets
 CREATE TABLE IF NOT EXISTS asset_service_contracts (
