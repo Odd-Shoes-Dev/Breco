@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import type { TourPackage, Destination } from '@/types/breco';
+import { formatCurrency, type SupportedCurrency } from '@/lib/currency';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -49,34 +49,29 @@ export default function TourPackagesPage() {
 
   const fetchPackages = async () => {
     try {
-      // Fetch tour packages with destinations
-      const { data: packagesData, error: packagesError } = await supabase
-        .from('tour_packages')
-        .select(`
-          *,
-          primary_destination:destinations(*)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (packagesError) throw packagesError;
-
-      // Fetch images for all tour packages
-      const { data: imagesData, error: imagesError } = await supabase
-        .from('tour_package_images')
-        .select('*')
-        .order('display_order');
-
-      if (imagesError) {
-        console.error('Error fetching images:', imagesError);
+      const response = await fetch('/api/tours');
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch tour packages');
       }
-
-      // Attach images to tour packages
-      const packagesWithImages = (packagesData || []).map(pkg => ({
-        ...pkg,
-        images: (imagesData || []).filter(img => img.tour_package_id === pkg.id),
-        primary_image: (imagesData || []).find(img => img.tour_package_id === pkg.id && img.is_primary),
-      }));
-
+      
+      // Fetch images for all tour packages
+      const packagesPromises = (result.data || []).map(async (pkg: TourPackage) => {
+        try {
+          const detailResponse = await fetch(`/api/tours/${pkg.id}`);
+          const detailResult = await detailResponse.json();
+          return {
+            ...pkg,
+            images: detailResult.data?.images || [],
+            primary_image: detailResult.data?.images?.find((img: any) => img.is_primary),
+          };
+        } catch {
+          return pkg;
+        }
+      });
+      
+      const packagesWithImages = await Promise.all(packagesPromises);
       setPackages(packagesWithImages);
     } catch (error) {
       console.error('Error fetching packages:', error);
@@ -88,14 +83,8 @@ export default function TourPackagesPage() {
 
   const fetchDestinations = async () => {
     try {
-      const { data, error } = await supabase
-        .from('destinations')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-
-      if (error) throw error;
-      setDestinations(data || []);
+      // TODO: Create dedicated destinations API endpoint
+      setDestinations([]);
     } catch (error) {
       console.error('Error fetching destinations:', error);
     }
@@ -103,20 +92,25 @@ export default function TourPackagesPage() {
 
   const toggleFeatured = async (pkg: TourPackage) => {
     try {
-      const { error } = await supabase
-        .from('tour_packages')
-        .update({ is_featured: !pkg.is_featured })
-        .eq('id', pkg.id);
-
-      if (error) throw error;
+      const response = await fetch(`/api/tours/${pkg.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_featured: !pkg.is_featured }),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update');
+      }
       
       setPackages(prev => 
         prev.map(p => p.id === pkg.id ? { ...p, is_featured: !p.is_featured } : p)
       );
       
       toast.success(pkg.is_featured ? 'Removed from featured' : 'Marked as featured');
-    } catch (error) {
-      toast.error('Failed to update');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update');
     }
   };
 
@@ -124,17 +118,20 @@ export default function TourPackagesPage() {
     if (!confirm('Are you sure you want to delete this tour package?')) return;
 
     try {
-      const { error } = await supabase
-        .from('tour_packages')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const response = await fetch(`/api/tours/${id}`, {
+        method: 'DELETE',
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete');
+      }
       
       setPackages(prev => prev.filter(p => p.id !== id));
       toast.success('Tour package deleted');
-    } catch (error) {
-      toast.error('Failed to delete');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete');
     }
   };
 
@@ -151,12 +148,8 @@ export default function TourPackagesPage() {
 
   const tourTypes = [...new Set(packages.map(p => p.tour_type).filter(Boolean))];
 
-  const formatPrice = (price: number, currency: string = 'USD') => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: 0,
-    }).format(price);
+  const formatPrice = (price: number, currency: SupportedCurrency = 'USD') => {
+    return formatCurrency(price, currency);
   };
 
   if (loading) {

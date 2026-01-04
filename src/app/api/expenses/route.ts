@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { createExpenseJournalEntry, getAccountByCode } from '@/lib/accounting/journal-entry-helpers';
 
 // GET /api/expenses - List expenses
 export async function GET(request: NextRequest) {
@@ -119,47 +120,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: expenseError.message }, { status: 400 });
     }
 
-    // If paid, post to GL
-    if (body.status === 'paid' && body.bank_account_id) {
-      const { data: bankAccount } = await supabase
-        .from('bank_accounts')
-        .select('gl_account_id')
-        .eq('id', body.bank_account_id)
+    // Create journal entry if expense is paid
+    if (body.status === 'paid') {
+      // Get account code for the expense account
+      const { data: expenseAccount } = await supabase
+        .from('accounts')
+        .select('code')
+        .eq('id', body.expense_account_id)
         .single();
 
-      if (bankAccount?.gl_account_id) {
-        // Create journal entry
-        const { data: journalEntry, error: jeError } = await supabase
-          .from('journal_entries')
-          .insert({
-            entry_date: body.expense_date,
-            reference: expense.reference,
-            description: body.description || 'Expense payment',
-            source_type: 'expense',
-            source_id: expense.id,
-            status: 'posted',
-            created_by: user.id,
-          })
-          .select()
-          .single();
+      if (expenseAccount) {
+        const journalResult = await createExpenseJournalEntry(
+          supabase,
+          {
+            id: expense.id,
+            expense_number: expense.expense_number,
+            expense_date: expense.expense_date,
+            amount: expense.total,
+            account_code: expenseAccount.code,
+            description: expense.description || 'Expense',
+            bank_account_id: body.bank_account_id,
+          },
+          user.id
+        );
 
-        if (!jeError && journalEntry) {
-          await supabase.from('journal_entry_lines').insert([
-            {
-              entry_id: journalEntry.id,
-              account_id: body.expense_account_id,
-              debit: body.amount,
-              credit: 0,
-              description: body.description || 'Expense',
-            },
-            {
-              entry_id: journalEntry.id,
-              account_id: bankAccount.gl_account_id,
-              debit: 0,
-              credit: body.amount,
-              description: 'Payment',
-            },
-          ]);
+        if (!journalResult.success) {
+          console.error('Failed to create journal entry for expense:', journalResult.error);
+          // Don't fail expense creation, just log the error
         }
       }
     }

@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { increaseInventoryForBill } from '@/lib/accounting/inventory-server';
+import { createBillJournalEntry } from '@/lib/accounting/journal-entry-helpers';
 
 // GET /api/bills/[id] - Get single bill
 export async function GET(request: NextRequest, context: any) {
@@ -33,16 +35,18 @@ export async function PATCH(request: NextRequest, context: any) {
     const supabase = await createClient();
     const body = await request.json();
 
-    // Get existing bill
+    // Get existing bill with lines
     const { data: existing, error: fetchError } = await supabase
       .from('bills')
-      .select('status')
+      .select('*, bill_lines(*)')
       .eq('id', params.id)
       .single();
 
     if (fetchError) {
       return NextResponse.json({ error: 'Bill not found' }, { status: 404 });
     }
+
+    const oldStatus = existing.status;
 
     // Prevent editing paid/void bills
     if (['paid', 'void'].includes(existing.status)) {
@@ -51,6 +55,9 @@ export async function PATCH(request: NextRequest, context: any) {
         { status: 400 }
       );
     }
+
+    // Get current user for journal entries
+    const { data: { user } } = await supabase.auth.getUser();
 
     // Get account IDs from codes if needed
     const lines = body.line_items || body.lines || [];
@@ -112,6 +119,84 @@ export async function PATCH(request: NextRequest, context: any) {
 
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 400 });
+    }
+
+    const newStatus = bill.status;
+
+    // Handle inventory when bill is approved/posted
+    if ((newStatus === 'approved' || newStatus === 'posted') && oldStatus === 'draft' && user) {
+      const billLinesToProcess = lines.length > 0 ? lines : existing.bill_lines;
+      
+      const inventoryResult = await increaseInventoryForBill(
+        supabase,
+        bill.id,
+        bill.bill_date,
+        billLinesToProcess.map((line: any) => ({
+          product_id: line.product_id,
+          quantity: line.quantity,
+          unit_cost: line.unit_cost || line.unit_price || 0,
+          line_total: line.line_total || (line.quantity * (line.unit_cost || line.unit_price || 0)),
+          description: line.description,
+        })),
+        user.id
+      );
+
+      if (!inventoryResult.success) {
+        console.error('Failed to update inventory for bill:', inventoryResult.error);
+        // Don't fail bill update for inventory errors, just log
+      }
+    }
+
+    // Create journal entry when bill is marked as 'approved' or 'posted'
+    if ((newStatus === 'approved' || newStatus === 'posted') && oldStatus !== 'approved' && 
+        oldStatus !== 'posted' && !bill.journal_entry_id && user) {
+      // Get bill lines for journal entry
+      const { data: billLines } = await supabase
+        .from('bill_lines')
+        .select('*, accounts(code)')
+        .eq('bill_id', params.id);
+
+      if (billLines && billLines.length > 0) {
+        const journalBillLines = billLines.map((line: any) => ({
+          account_code: line.accounts?.code || '5000',
+          amount: line.line_total + line.tax_amount,
+          description: line.description,
+        }));
+
+        const journalResult = await createBillJournalEntry(
+          supabase,
+          {
+            id: bill.id,
+            bill_number: bill.bill_number,
+            bill_date: bill.bill_date,
+            total: bill.total,
+          },
+          journalBillLines,
+          user.id
+        );
+
+        if (journalResult.success && journalResult.journalEntryId) {
+          await supabase
+            .from('bills')
+            .update({ journal_entry_id: journalResult.journalEntryId })
+            .eq('id', params.id);
+        }
+      }
+    }
+            base_debit: 0,
+            base_credit: bill.total,
+          });
+
+          // Insert journal lines
+          await supabase.from('journal_lines').insert(journalLines);
+
+          // Update bill with journal entry ID
+          await supabase
+            .from('bills')
+            .update({ journal_entry_id: journalEntry.id })
+            .eq('id', params.id);
+        }
+      }
     }
 
     // If lines are provided, update them

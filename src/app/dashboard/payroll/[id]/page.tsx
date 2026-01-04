@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
-import { ArrowLeftIcon, PrinterIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+import { supabase } from '@/lib/supabase/client';import { formatCurrency as currencyFormatter, type SupportedCurrency } from '@/lib/currency';import { ArrowLeftIcon, PrinterIcon, CheckCircleIcon, EnvelopeIcon, EyeIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
 interface PayrollPeriod {
@@ -42,6 +41,7 @@ export default function PayrollPeriodDetailPage({ params }: { params: Promise<{ 
   const [payslips, setPayslips] = useState<Payslip[]>([]);
   const [loading, setLoading] = useState(true);
   const [periodId, setPeriodId] = useState<string>('');
+  const [emailingSlugs, setEmailingSlugs] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     params.then(({ id }) => {
@@ -82,11 +82,7 @@ export default function PayrollPeriodDetailPage({ params }: { params: Promise<{ 
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-UG', {
-      style: 'currency',
-      currency: 'UGX',
-      minimumFractionDigits: 0,
-    }).format(amount);
+    return currencyFormatter(amount, 'UGX');
   };
 
   const formatDate = (date: string) => {
@@ -218,6 +214,33 @@ export default function PayrollPeriodDetailPage({ params }: { params: Promise<{ 
       setTimeout(() => {
         printWindow.print();
       }, 250);
+    }
+  };
+
+  const handleEmailPayslip = async (payslipId: string, employeeName: string) => {
+    setEmailingSlugs(prev => new Set(prev).add(payslipId));
+    
+    try {
+      const response = await fetch(`/api/payslips/${payslipId}/email`, {
+        method: 'POST',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to send email');
+      }
+
+      toast.success(`Payslip emailed to ${employeeName}!`);
+    } catch (error: any) {
+      console.error('Error emailing payslip:', error);
+      toast.error(error.message || 'Failed to send payslip email');
+    } finally {
+      setEmailingSlugs(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(payslipId);
+        return newSet;
+      });
     }
   };
 
@@ -362,9 +385,23 @@ export default function PayrollPeriodDetailPage({ params }: { params: Promise<{ 
                     <span className="text-gray-400">-</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <button className="text-breco-navy hover:text-breco-navy/80 text-sm font-medium">
-                      View
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <Link
+                        href={`/dashboard/payroll/${periodId}/payslips/${payslip.id}`}
+                        className="text-breco-navy hover:text-breco-navy/80 text-sm font-medium inline-flex items-center gap-1"
+                      >
+                        <EyeIcon className="w-4 h-4" />
+                        View
+                      </Link>
+                      <button
+                        onClick={() => handleEmailPayslip(payslip.id, `${payslip.employee.first_name} ${payslip.employee.last_name}`)}
+                        disabled={emailingSlugs.has(payslip.id) || !payslip.employee.first_name}
+                        className="text-gray-600 hover:text-gray-900 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={!payslip.employee.first_name ? 'No email on file' : 'Email payslip'}
+                      >
+                        <EnvelopeIcon className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

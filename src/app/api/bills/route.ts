@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { createBillJournalEntry } from '@/lib/accounting/journal-entry-helpers';
+import { increaseInventoryForBill } from '@/lib/accounting/inventory-server';
 
 // GET /api/bills - List bills
 export async function GET(request: NextRequest) {
@@ -185,6 +187,60 @@ export async function POST(request: NextRequest) {
       if (linesError) {
         await supabase.from('bills').delete().eq('id', bill.id);
         return NextResponse.json({ error: linesError.message }, { status: 400 });
+      }
+
+      // Create journal entry and update inventory for the bill
+      if (bill.status === 'posted' || bill.status === 'approved') {
+        // Update inventory for posted/approved bills
+        const inventoryResult = await increaseInventoryForBill(
+          supabase,
+          bill.id,
+          bill.bill_date,
+          billLines.map((line: any) => ({
+            product_id: line.product_id,
+            quantity: line.quantity,
+            unit_cost: line.unit_cost,
+            line_total: line.line_total,
+            description: line.description,
+          })),
+          user.id
+        );
+
+        if (!inventoryResult.success) {
+          console.error('Failed to update inventory for bill:', inventoryResult.error);
+          // Don't fail bill creation for inventory errors, just log
+        }
+
+        // Prepare bill lines for journal entry
+        const journalBillLines = billLines.map((line: any) => {
+          // Get account code from the line
+          const accountCode = Object.keys(accountMap).find(
+            key => accountMap[key] === line.expense_account_id
+          ) || '5000'; // Default to general expense
+          
+          return {
+            account_code: accountCode,
+            amount: line.line_total + line.tax_amount,
+            description: line.description,
+          };
+        });
+
+        const journalResult = await createBillJournalEntry(
+          supabase,
+          {
+            id: bill.id,
+            bill_number: bill.bill_number,
+            bill_date: bill.bill_date,
+            total: bill.total,
+          },
+          journalBillLines,
+          user.id
+        );
+
+        if (!journalResult.success) {
+          console.error('Failed to create journal entry for bill:', journalResult.error);
+          // Don't fail the bill creation, just log the error
+        }
       }
     }
 

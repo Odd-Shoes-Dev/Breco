@@ -1,5 +1,12 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  reduceInventoryForInvoice,
+  reserveInventoryForQuotation,
+  releaseReservedInventory,
+  restoreInventoryForInvoice,
+} from '@/lib/accounting/inventory-server';
+import { createInvoiceJournalEntry } from '@/lib/accounting/journal-entry-helpers';
 
 // GET /api/invoices/[id] - Get single invoice with lines
 export async function GET(request: NextRequest, context: any) {
@@ -56,10 +63,10 @@ export async function PATCH(request: NextRequest, context: any) {
     const supabase = await createClient();
     const body = await request.json();
 
-    // Get existing invoice
+    // Get existing invoice with lines
     const { data: existing, error: fetchError } = await supabase
       .from('invoices')
-      .select('status')
+      .select('*, invoice_lines(*)')
       .eq('id', params.id)
       .single();
 
@@ -74,6 +81,14 @@ export async function PATCH(request: NextRequest, context: any) {
         { status: 400 }
       );
     }
+
+    // Get current user for journal entries
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // Handle status change inventory implications
+    const oldStatus = existing.status;
+    const newStatus = body.status || existing.status;
+    const documentType = existing.document_type || 'invoice';
 
     // Update invoice
     const updateData: any = {};
@@ -97,6 +112,68 @@ export async function PATCH(request: NextRequest, context: any) {
 
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 400 });
+    }
+
+    // Handle inventory for status changes
+    if (user) {
+      // Quotation/Proforma -> Invoice conversion
+      if ((documentType === 'quotation' || documentType === 'proforma') && newStatus === 'posted' && oldStatus === 'draft') {
+        // Release reservation
+        await releaseReservedInventory(supabase, params.id, existing.invoice_lines);
+        
+        // Reduce actual inventory
+        const inventoryResult = await reduceInventoryForInvoice(
+          supabase,
+          params.id,
+          existing.invoice_lines,
+          user.id
+        );
+
+        if (!inventoryResult.success) {
+          return NextResponse.json(
+            { error: inventoryResult.error || 'Insufficient inventory' },
+            { status: 400 }
+          );
+        }
+      }
+      // Regular invoice: Draft -> Sent/Posted
+      else if (documentType === 'invoice' && (newStatus === 'sent' || newStatus === 'posted') && oldStatus === 'draft') {
+        const inventoryResult = await reduceInventoryForInvoice(
+          supabase,
+          params.id,
+          existing.invoice_lines,
+          user.id
+        );
+
+        if (!inventoryResult.success) {
+          return NextResponse.json(
+            { error: inventoryResult.error || 'Insufficient inventory' },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    // Create journal entry when invoice is marked as 'posted' (accrual accounting)
+    if (newStatus === 'posted' && oldStatus !== 'posted' && !invoice.journal_entry_id && documentType === 'invoice') {
+      const journalResult = await createInvoiceJournalEntry(
+        supabase,
+        {
+          id: invoice.id,
+          invoice_number: invoice.invoice_number,
+          invoice_date: invoice.invoice_date,
+          total: invoice.total,
+          customer_id: invoice.customer_id,
+        },
+        user?.id || ''
+      );
+
+      if (journalResult.success && journalResult.journalEntryId) {
+        await supabase
+          .from('invoices')
+          .update({ journal_entry_id: journalResult.journalEntryId })
+          .eq('id', params.id);
+      }
     }
 
     // If lines are provided, update them
@@ -164,10 +241,10 @@ export async function DELETE(request: NextRequest, context: any) {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action') || 'void';
 
-    // Get existing invoice
+    // Get existing invoice with lines
     const { data: existing, error: fetchError } = await supabase
       .from('invoices')
-      .select('status, amount_paid')
+      .select('*, invoice_lines(*)')
       .eq('id', params.id)
       .single();
 
@@ -179,6 +256,9 @@ export async function DELETE(request: NextRequest, context: any) {
       return NextResponse.json({ error: 'Invoice is already voided' }, { status: 400 });
     }
 
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+
     if (action === 'delete') {
       // Only allow delete for drafts with no payments
       if (existing.status !== 'draft' || existing.amount_paid > 0) {
@@ -186,6 +266,11 @@ export async function DELETE(request: NextRequest, context: any) {
           { error: 'Can only delete draft invoices with no payments' },
           { status: 400 }
         );
+      }
+
+      // Release inventory reservation if quotation/proforma
+      if ((existing.document_type === 'quotation' || existing.document_type === 'proforma') && user) {
+        await releaseReservedInventory(supabase, params.id, existing.invoice_lines);
       }
 
       // Delete lines first
@@ -200,6 +285,12 @@ export async function DELETE(request: NextRequest, context: any) {
 
       return NextResponse.json({ message: 'Invoice deleted' });
     } else {
+      // Restore inventory if invoice was posted/sent
+      if ((existing.status === 'posted' || existing.status === 'sent') && 
+          existing.document_type === 'invoice' && user) {
+        await restoreInventoryForInvoice(supabase, params.id, existing.invoice_lines, user.id);
+      }
+
       // Void the invoice
       const { data, error } = await supabase
         .from('invoices')

@@ -1,5 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { createInvoiceJournalEntry } from '@/lib/accounting/journal-entry-helpers';
+import {
+  reduceInventoryForInvoice,
+  reserveInventoryForQuotation,
+  releaseReservedInventory,
+} from '@/lib/accounting/inventory-server';
 
 // GET /api/invoices - List invoices
 export async function GET(request: NextRequest) {
@@ -220,6 +226,63 @@ export async function POST(request: NextRequest) {
         // Rollback invoice if lines fail
         await supabase.from('invoices').delete().eq('id', invoice.id);
         return NextResponse.json({ error: linesError.message }, { status: 400 });
+      }
+    }
+
+    // Handle inventory based on document type and status
+    if (documentType === 'quotation' || documentType === 'proforma') {
+      // Reserve inventory for quotations and proformas
+      const reserveResult = await reserveInventoryForQuotation(
+        supabase,
+        invoice.id,
+        lines,
+        user.id
+      );
+
+      if (!reserveResult.success) {
+        // Rollback invoice if reservation fails
+        await supabase.from('invoices').delete().eq('id', invoice.id);
+        return NextResponse.json(
+          { error: reserveResult.error || 'Failed to reserve inventory' },
+          { status: 400 }
+        );
+      }
+    } else if (documentType === 'invoice' && (invoice.status === 'posted' || invoice.status === 'sent')) {
+      // Reduce inventory for posted/sent invoices
+      const inventoryResult = await reduceInventoryForInvoice(
+        supabase,
+        invoice.id,
+        lines,
+        user.id
+      );
+
+      if (!inventoryResult.success) {
+        // Rollback invoice if inventory reduction fails
+        await supabase.from('invoices').delete().eq('id', invoice.id);
+        return NextResponse.json(
+          { error: inventoryResult.error || 'Insufficient inventory' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Create journal entry if invoice is posted
+    if (invoice.status === 'posted' && documentType === 'invoice') {
+      const journalResult = await createInvoiceJournalEntry(
+        supabase,
+        {
+          id: invoice.id,
+          invoice_number: invoice.invoice_number,
+          invoice_date: invoice.invoice_date,
+          total: invoice.total,
+          customer_id: invoice.customer_id,
+        },
+        user.id
+      );
+
+      if (!journalResult.success) {
+        console.error('Failed to create journal entry for invoice:', journalResult.error);
+        // Don't fail the invoice creation, just log the error
       }
     }
 

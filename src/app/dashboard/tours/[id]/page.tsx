@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
+import { formatCurrency, type SupportedCurrency } from '@/lib/currency';
 import {
   ArrowLeftIcon,
   PencilIcon,
@@ -37,25 +37,15 @@ export default function TourPackageDetailPage() {
 
   const fetchPackage = async () => {
     try {
-      const [packageRes, imagesRes] = await Promise.all([
-        supabase
-          .from('tour_packages')
-          .select(`
-            *,
-            primary_destination:destinations(*)
-          `)
-          .eq('id', params.id)
-          .single(),
-        supabase
-          .from('tour_package_images')
-          .select('*')
-          .eq('tour_package_id', params.id)
-          .order('display_order')
-      ]);
-
-      if (packageRes.error) throw packageRes.error;
-      setPkg(packageRes.data);
-      setImages(imagesRes.data || []);
+      const response = await fetch(`/api/tours/${params.id}`);
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch tour package');
+      }
+      
+      setPkg(result.data);
+      setImages(result.data?.images || []);
     } catch (error) {
       console.error('Failed to fetch tour package:', error);
       toast.error('Failed to load tour package');
@@ -69,17 +59,22 @@ export default function TourPackageDetailPage() {
     if (!pkg) return;
 
     try {
-      const { error } = await supabase
-        .from('tour_packages')
-        .update({ is_featured: !pkg.is_featured })
-        .eq('id', pkg.id);
-
-      if (error) throw error;
+      const response = await fetch(`/api/tours/${pkg.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_featured: !pkg.is_featured }),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update package');
+      }
 
       setPkg({ ...pkg, is_featured: !pkg.is_featured });
       toast.success(pkg.is_featured ? 'Removed from featured' : 'Marked as featured');
-    } catch (error) {
-      toast.error('Failed to update package');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update package');
     }
   };
 
@@ -87,17 +82,22 @@ export default function TourPackageDetailPage() {
     if (!pkg) return;
 
     try {
-      const { error } = await supabase
-        .from('tour_packages')
-        .update({ is_active: !pkg.is_active })
-        .eq('id', pkg.id);
-
-      if (error) throw error;
+      const response = await fetch(`/api/tours/${pkg.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !pkg.is_active }),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update package');
+      }
 
       setPkg({ ...pkg, is_active: !pkg.is_active });
       toast.success(pkg.is_active ? 'Package deactivated' : 'Package activated');
-    } catch (error) {
-      toast.error('Failed to update package');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update package');
     }
   };
 
@@ -110,28 +110,26 @@ export default function TourPackageDetailPage() {
 
     setDeleting(true);
     try {
-      const { error } = await supabase
-        .from('tour_packages')
-        .delete()
-        .eq('id', pkg.id);
-
-      if (error) throw error;
+      const response = await fetch(`/api/tours/${pkg.id}`, {
+        method: 'DELETE',
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete package');
+      }
 
       toast.success('Tour package deleted');
       router.push('/dashboard/tours');
-    } catch (error) {
-      toast.error('Failed to delete package');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete package');
       setDeleting(false);
     }
   };
 
-  const formatPrice = (price: number, currency: string = 'USD') => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: currency === 'UGX' ? 0 : 2,
-      maximumFractionDigits: currency === 'UGX' ? 0 : 2,
-    }).format(price);
+  const formatPrice = (price: number, currency: SupportedCurrency = 'USD') => {
+    return formatCurrency(price, currency);
   };
 
   if (loading) {

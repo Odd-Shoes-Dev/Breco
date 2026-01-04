@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import type { Vehicle } from '@/types/breco';
 import {
   PlusIcon,
@@ -50,31 +49,29 @@ export default function FleetPage() {
 
   const fetchVehicles = async () => {
     try {
-      // Fetch vehicles
-      const { data: vehiclesData, error: vehiclesError } = await supabase
-        .from('vehicles')
-        .select('*')
-        .order('registration_number');
-
-      if (vehiclesError) throw vehiclesError;
-
-      // Fetch images for all vehicles
-      const { data: imagesData, error: imagesError } = await supabase
-        .from('vehicle_images')
-        .select('*')
-        .order('display_order');
-
-      if (imagesError) {
-        console.error('Error fetching images:', imagesError);
+      const response = await fetch('/api/fleet');
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch vehicles');
       }
-
-      // Attach images to vehicles
-      const vehiclesWithImages = (vehiclesData || []).map(vehicle => ({
-        ...vehicle,
-        images: (imagesData || []).filter(img => img.vehicle_id === vehicle.id),
-        primary_image: (imagesData || []).find(img => img.vehicle_id === vehicle.id && img.is_primary),
-      }));
-
+      
+      // Fetch images for all vehicles
+      const vehiclesPromises = (result.data || []).map(async (vehicle: Vehicle) => {
+        try {
+          const detailResponse = await fetch(`/api/fleet/${vehicle.id}`);
+          const detailResult = await detailResponse.json();
+          return {
+            ...vehicle,
+            images: detailResult.data?.images || [],
+            primary_image: detailResult.data?.images?.find((img: any) => img.is_primary),
+          };
+        } catch {
+          return vehicle;
+        }
+      });
+      
+      const vehiclesWithImages = await Promise.all(vehiclesPromises);
       setVehicles(vehiclesWithImages);
     } catch (error) {
       console.error('Error fetching vehicles:', error);
@@ -86,20 +83,25 @@ export default function FleetPage() {
 
   const updateStatus = async (vehicle: Vehicle, newStatus: VehicleStatus) => {
     try {
-      const { error } = await supabase
-        .from('vehicles')
-        .update({ status: newStatus })
-        .eq('id', vehicle.id);
-
-      if (error) throw error;
+      const response = await fetch(`/api/fleet/${vehicle.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update status');
+      }
       
       setVehicles(prev => 
         prev.map(v => v.id === vehicle.id ? { ...v, status: newStatus } : v)
       );
       
       toast.success('Status updated');
-    } catch (error) {
-      toast.error('Failed to update status');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update status');
     }
   };
 
@@ -107,17 +109,20 @@ export default function FleetPage() {
     if (!confirm('Are you sure you want to delete this vehicle?')) return;
 
     try {
-      const { error } = await supabase
-        .from('vehicles')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const response = await fetch(`/api/fleet/${id}`, {
+        method: 'DELETE',
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete vehicle');
+      }
       
       setVehicles(prev => prev.filter(v => v.id !== id));
       toast.success('Vehicle deleted');
-    } catch (error) {
-      toast.error('Failed to delete vehicle');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete vehicle');
     }
   };
 

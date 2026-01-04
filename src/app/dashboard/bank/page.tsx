@@ -40,9 +40,10 @@ export default function BankPage() {
       if (accountsError) throw accountsError;
       setAccounts(accountsData || []);
 
-      // Calculate total balance (from bank transactions, since BankAccount doesn't have current_balance)
-      // We'll calculate balance from the GL account linked to each bank account
-      const totalBalance = 0; // This would need to be calculated from GL balances
+      // Calculate total balance from all bank accounts (convert to USD for now)
+      const totalBalance = accountsData?.reduce((sum, account) => {
+        return sum + (account.current_balance || 0);
+      }, 0) || 0;
 
       // Load recent transactions
       const { data: transactionsData, error: transactionsError } = await supabase

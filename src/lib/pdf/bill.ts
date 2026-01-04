@@ -63,7 +63,7 @@ export function generateBillHTML(data: BillPDFData): string {
         }
         .logo {
           width: 150px;
-          height: 30px;
+          height: 50px;
         }
         .company-info {
           flex: 1;

@@ -101,81 +101,35 @@ export default function RecordBillPaymentPage() {
         throw new Error(`Amount cannot exceed balance due (${formatCurrency(balanceDue)})`);
       }
 
-      // Record payment
-      const { error: paymentError } = await supabase
-        .from('bill_payments')
-        .insert({
-          bill_id: params.id,
+      // Get bank accounts for payment
+      const { data: bankAccounts } = await supabase
+        .from('bank_accounts')
+        .select('id')
+        .eq('is_active', true)
+        .limit(1);
+
+      if (!bankAccounts || bankAccounts.length === 0) {
+        throw new Error('No active bank account found. Please set up a bank account first.');
+      }
+
+      // Record payment via API
+      const response = await fetch(`/api/bills/${params.id}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           payment_date: formData.payment_date,
           amount: amount,
           payment_method: formData.payment_method,
-          reference_number: formData.reference_number || null,
-          notes: formData.notes || null,
-        });
+          bank_account_id: bankAccounts[0].id,
+          reference: formData.reference_number || '',
+          notes: formData.notes || '',
+          currency: bill!.currency || 'USD',
+        }),
+      });
 
-      if (paymentError) throw paymentError;
-
-      // Update bill amount_paid and status
-      const newAmountPaid = bill!.amount_paid + amount;
-      const newStatus = newAmountPaid >= bill!.total ? 'paid' : 'partial';
-
-      await supabase
-        .from('bills')
-        .update({
-          amount_paid: newAmountPaid,
-          status: newStatus,
-        })
-        .eq('id', params.id);
-
-      // Create journal entry
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        // Get AP and Cash accounts
-        const { data: apAccount } = await supabase
-          .from('accounts')
-          .select('id')
-          .eq('code', '2000')
-          .single();
-
-        const { data: cashAccount } = await supabase
-          .from('accounts')
-          .select('id')
-          .eq('code', '1000')
-          .single();
-
-        if (apAccount && cashAccount) {
-          // Create journal entry
-          const { data: journalEntry } = await supabase
-            .from('journal_entries')
-            .insert({
-              entry_date: formData.payment_date,
-              description: `Bill payment - ${bill!.bill_number}`,
-              source_module: 'bill_payments',
-              created_by: user.id,
-            })
-            .select()
-            .single();
-
-          if (journalEntry) {
-            // Create journal entry lines
-            await supabase.from('journal_entry_lines').insert([
-              {
-                journal_entry_id: journalEntry.id,
-                account_id: apAccount.id,
-                debit_amount: amount,
-                credit_amount: 0,
-                description: `Payment to ${bill!.vendor?.name ?? 'Vendor'}`,
-              },
-              {
-                journal_entry_id: journalEntry.id,
-                account_id: cashAccount.id,
-                debit_amount: 0,
-                credit_amount: amount,
-                description: `Payment to ${bill!.vendor?.name ?? 'Vendor'}`,
-              },
-            ]);
-          }
-        }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to record payment');
       }
 
       router.push(`/dashboard/bills/${params.id}`);

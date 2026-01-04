@@ -18,8 +18,16 @@ interface Vendor {
   payment_terms: number;
 }
 
+interface Product {
+  id: string;
+  name: string;
+  unit_price: number;
+  sku: string;
+}
+
 interface LineItem {
   id: string;
+  product_id: string;
   description: string;
   quantity: number;
   unit_price: number;
@@ -32,6 +40,7 @@ export default function NewBillPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
 
   const [formData, setFormData] = useState({
     vendor_id: '',
@@ -44,11 +53,12 @@ export default function NewBillPage() {
   });
 
   const [lineItems, setLineItems] = useState<LineItem[]>([
-    { id: '1', description: '', quantity: 1, unit_price: 0, account_code: '5100', amount: 0 },
+    { id: '1', product_id: '', description: '', quantity: 1, unit_price: 0, account_code: '5100', amount: 0 },
   ]);
 
   useEffect(() => {
     fetchVendors();
+    fetchProducts();
   }, []);
 
   const fetchVendors = async () => {
@@ -58,6 +68,16 @@ export default function NewBillPage() {
       setVendors(result.data || []);
     } catch (error) {
       console.error('Failed to fetch vendors:', error);
+    }
+  };
+
+  const fetchProducts = async () => {
+    try {
+      const response = await fetch('/api/inventory?active=true');
+      const result = await response.json();
+      setProducts(result.data || []);
+    } catch (error) {
+      console.error('Failed to fetch products:', error);
     }
   };
 
@@ -96,10 +116,28 @@ export default function NewBillPage() {
     );
   };
 
+  const handleProductChange = (id: string, productId: string) => {
+    const product = products.find((p) => p.id === productId);
+    if (product) {
+      setLineItems((prev) =>
+        prev.map((item) => {
+          if (item.id !== id) return item;
+          return {
+            ...item,
+            product_id: productId,
+            description: product.name,
+            unit_price: product.unit_price,
+            amount: item.quantity * product.unit_price,
+          };
+        })
+      );
+    }
+  };
+
   const addLineItem = () => {
     setLineItems((prev) => [
       ...prev,
-      { id: Date.now().toString(), description: '', quantity: 1, unit_price: 0, account_code: '5100', amount: 0 },
+      { id: Date.now().toString(), product_id: '', description: '', quantity: 1, unit_price: 0, account_code: '5100', amount: 0 },
     ]);
   };
 
@@ -300,7 +338,8 @@ export default function NewBillPage() {
             <table className="w-full">
               <thead>
                 <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  <th className="pb-2 pr-2">Description</th>
+                  <th className="pb-2 pr-2">Product</th>
+                  <th className="pb-2 px-2">Description</th>
                   <th className="pb-2 px-2 w-24">Account</th>
                   <th className="pb-2 px-2 w-20 text-right">Qty</th>
                   <th className="pb-2 px-2 w-28 text-right">Price</th>
@@ -312,6 +351,20 @@ export default function NewBillPage() {
                 {lineItems.map((item) => (
                   <tr key={item.id}>
                     <td className="py-2 pr-2">
+                      <select
+                        value={item.product_id}
+                        onChange={(e) => handleProductChange(item.id, e.target.value)}
+                        className="w-full rounded border border-gray-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#1e3a5f]"
+                      >
+                        <option value="">Custom item</option>
+                        {products.map((product) => (
+                          <option key={product.id} value={product.id}>
+                            {product.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="py-2 px-2">
                       <input
                         type="text"
                         value={item.description}

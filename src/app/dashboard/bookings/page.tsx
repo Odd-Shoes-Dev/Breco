@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import type { Booking, BookingStatus } from '@/types/breco';
 import {
   PlusIcon,
@@ -59,17 +58,14 @@ export default function BookingsPage() {
 
   const fetchBookings = async () => {
     try {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select(`
-          *,
-          customer:customers(id, name, email),
-          tour_package:tour_packages(id, name, package_code)
-        `)
-        .order('travel_start_date', { ascending: true });
-
-      if (error) throw error;
-      setBookings(data || []);
+      const response = await fetch('/api/bookings');
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch bookings');
+      }
+      
+      setBookings(result.data || []);
     } catch (error) {
       console.error('Error fetching bookings:', error);
       toast.error('Failed to load bookings');
@@ -80,20 +76,25 @@ export default function BookingsPage() {
 
   const updateStatus = async (bookingId: string, newStatus: BookingStatus) => {
     try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status: newStatus })
-        .eq('id', bookingId);
-
-      if (error) throw error;
+      const response = await fetch(`/api/bookings/${bookingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update status');
+      }
       
       setBookings(prev => 
         prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b)
       );
       
       toast.success(`Status updated to ${STATUS_LABELS[newStatus]}`);
-    } catch (error) {
-      toast.error('Failed to update status');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update status');
     }
   };
 

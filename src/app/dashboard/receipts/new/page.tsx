@@ -8,6 +8,7 @@ import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import { CurrencySelect } from '@/components/ui';
 import { useForm, useFieldArray } from 'react-hook-form';
 import toast from 'react-hot-toast';
+import { createReceiptJournalEntry } from '@/lib/accounting/journal-entry-helpers';
 import {
   ArrowLeftIcon,
   PlusIcon,
@@ -103,12 +104,26 @@ export default function NewReceiptPage() {
     }
   };
 
-  const handleProductChange = (index: number, productId: string) => {
-    const product = products.find((p) => p.id === productId);
+  const handleProductChange = (index: number, productName: string) => {
+    if (!productName) {
+      // Manual entry - clear fields for user to enter
+      setValue(`lines.${index}.description`, '');
+      setValue(`lines.${index}.unit_price`, 0);
+      setValue(`lines.${index}.tax_rate`, taxRate);
+      return;
+    }
+    
+    // Try to find product by name
+    const product = products.find((p) => p.name === productName);
     if (product) {
+      setValue(`lines.${index}.product_id`, product.id);
       setValue(`lines.${index}.description`, product.name);
       setValue(`lines.${index}.unit_price`, product.unit_price);
       setValue(`lines.${index}.tax_rate`, product.is_taxable ? taxRate : 0);
+    } else {
+      // If not found, treat as manual entry
+      setValue(`lines.${index}.product_id`, '');
+      setValue(`lines.${index}.description`, productName);
     }
   };
 
@@ -212,6 +227,24 @@ export default function NewReceiptPage() {
         .insert(receiptLines);
 
       if (linesError) throw linesError;
+
+      // Create journal entry for receipt (Debit: Cash, Credit: AR)
+      const journalResult = await createReceiptJournalEntry(
+        supabase,
+        {
+          id: receipt.id,
+          receipt_number: receipt.receipt_number,
+          receipt_date: data.receipt_date,
+          total,
+          payment_method: data.payment_method,
+        },
+        user.id
+      );
+
+      if (!journalResult.success) {
+        console.error('Failed to create journal entry for receipt:', journalResult.error);
+        // Don't fail receipt creation, just log the error
+      }
 
       toast.success('Receipt created successfully!');
       router.push(`/dashboard/receipts/${receipt.id}`);
@@ -346,18 +379,19 @@ export default function NewReceiptPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="form-group">
                       <label className="label text-sm">Product/Service</label>
-                      <select
-                        {...register(`lines.${index}.product_id`)}
+                      <input
+                        list={`products-${index}`}
                         onChange={(e) => handleProductChange(index, e.target.value)}
                         className="input input-sm"
-                      >
-                        <option value="">Select or enter manually</option>
+                        placeholder="Type or select a product"
+                      />
+                      <datalist id={`products-${index}`}>
                         {products.map((product) => (
-                          <option key={product.id} value={product.id}>
+                          <option key={product.id} value={product.name}>
                             {product.name} - {formatCurrency(product.unit_price)}
                           </option>
                         ))}
-                      </select>
+                      </datalist>
                     </div>
 
                     <div className="form-group">

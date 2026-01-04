@@ -87,7 +87,8 @@ export default function BalanceSheetPage() {
           }
           .logo { 
             width: 150px; 
-            height: 30px; 
+            height: auto; 
+            object-fit: contain;
           }
           .company-info { 
             display: flex; 
@@ -176,7 +177,7 @@ export default function BalanceSheetPage() {
             .header { border-bottom-color: #1e3a5f !important; }
             .company-name { color: #1e3a5f !important; }
             .report-title { color: #1e3a5f !important; }
-            .logo { width: 150px; height: 30px; }
+            .logo { width: 150px; height: auto; object-fit: contain; }
             .section { page-break-inside: avoid; }
           }
         </style>

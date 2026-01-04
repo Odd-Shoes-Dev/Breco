@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import type { Employee } from '@/types/breco';
+import { CurrencySelect } from '@/components/ui';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -64,13 +65,11 @@ export default function EmployeesPage() {
 
   const fetchEmployees = async () => {
     try {
-      const { data, error } = await supabase
-        .from('employees')
-        .select('*')
-        .order('first_name');
-
-      if (error) throw error;
-      setEmployees(data || []);
+      const response = await fetch('/api/employees');
+      if (!response.ok) throw new Error('Failed to fetch employees');
+      
+      const result = await response.json();
+      setEmployees(result.data || []);
     } catch (error) {
       console.error('Error fetching employees:', error);
       toast.error('Failed to load employees');
@@ -83,15 +82,20 @@ export default function EmployeesPage() {
     e.preventDefault();
     
     try {
-      const { error } = await supabase
-        .from('employees')
-        .insert([{
+      const response = await fetch('/api/employees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           ...formData,
           date_of_birth: formData.date_of_birth || null,
-          is_active: true, // New employees are active by default
-        }]);
+        }),
+      });
 
-      if (error) throw error;
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to add employee');
+      }
       
       toast.success('Employee added successfully');
       setShowCreateModal(false);
@@ -122,32 +126,31 @@ export default function EmployeesPage() {
       fetchEmployees();
     } catch (error: any) {
       console.error('Error creating employee:', error);
-      const errorMessage = error?.message || 'Failed to add employee';
-      toast.error(errorMessage);
+      toast.error(error.message || 'Failed to add employee');
     }
   };
 
   const updateStatus = async (employee: Employee, newStatus: EmploymentStatus) => {
     try {
-      const updateData: any = { employment_status: newStatus };
-      if (newStatus === 'terminated') {
-        updateData.termination_date = new Date().toISOString().split('T')[0];
+      const response = await fetch(`/api/employees/${employee.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employment_status: newStatus }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update status');
       }
 
-      const { error } = await supabase
-        .from('employees')
-        .update(updateData)
-        .eq('id', employee.id);
-
-      if (error) throw error;
-      
       setEmployees(prev => 
-        prev.map(e => e.id === employee.id ? { ...e, ...updateData } : e)
+        prev.map(e => e.id === employee.id ? result.data : e)
       );
       
       toast.success('Status updated');
-    } catch (error) {
-      toast.error('Failed to update status');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update status');
     }
   };
 
@@ -155,17 +158,20 @@ export default function EmployeesPage() {
     if (!confirm('Are you sure you want to delete this employee record?')) return;
 
     try {
-      const { error } = await supabase
-        .from('employees')
-        .delete()
-        .eq('id', id);
+      const response = await fetch(`/api/employees/${id}`, {
+        method: 'DELETE',
+      });
 
-      if (error) throw error;
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete employee');
+      }
       
       setEmployees(prev => prev.filter(e => e.id !== id));
-      toast.success('Employee deleted');
-    } catch (error) {
-      toast.error('Failed to delete employee');
+      toast.success(result.message || 'Employee deleted');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete employee');
     }
   };
 
@@ -584,15 +590,10 @@ export default function EmployeesPage() {
                   </div>
                   <div className="form-group">
                     <label className="label">Currency</label>
-                    <select
+                    <CurrencySelect
                       value={formData.salary_currency}
                       onChange={(e) => setFormData({ ...formData, salary_currency: e.target.value })}
-                      className="input"
-                    >
-                      <option value="UGX">UGX - Ugandan Shilling</option>
-                      <option value="USD">USD - US Dollar</option>
-                      <option value="EUR">EUR - Euro</option>
-                    </select>
+                    />
                   </div>
                   <div className="form-group">
                     <label className="label">Pay Frequency</label>

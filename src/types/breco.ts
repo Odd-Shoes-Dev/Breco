@@ -85,6 +85,9 @@ export interface TourPackage {
   price_per_person: boolean;
   min_group_size: number;
   max_group_size: number;
+  max_capacity: number;
+  available_slots: number;
+  slots_reserved: number;
   tour_type: string | null;
   difficulty_level: string;
   inclusions: string | null;
@@ -210,6 +213,7 @@ export interface Booking {
   num_adults: number;
   num_children: number;
   num_infants: number;
+  number_of_people: number;
   subtotal: number;
   discount_amount: number;
   tax_amount: number;
@@ -219,6 +223,9 @@ export interface Booking {
   currency: string;
   exchange_rate: number;
   status: BookingStatus;
+  booking_confirmed_at: string | null;
+  cancellation_date: string | null;
+  cancellation_reason: string | null;
   special_requests: string | null;
   dietary_requirements: string | null;
   assigned_guide_id: string | null;
@@ -484,6 +491,7 @@ export interface PayrollPeriod {
   total_paye: number;
   total_nssf: number;
   total_employer_contributions: number;
+  journal_entry_id: string | null;
   processed_by: string | null;
   processed_at: string | null;
   approved_by: string | null;
@@ -516,6 +524,7 @@ export interface Payslip {
   nssf_employer: number;
   payment_method: ExtendedPaymentMethod;
   payment_reference: string | null;
+  payment_journal_entry_id: string | null;
   paid_at: string | null;
   currency: string;
   notes: string | null;

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import type { Hotel, Destination } from '@/types/breco';
 import {
   PlusIcon,
@@ -49,34 +48,29 @@ export default function HotelsPage() {
 
   const fetchHotels = async () => {
     try {
-      // Fetch hotels with destinations and images
-      const { data: hotelsData, error: hotelsError } = await supabase
-        .from('hotels')
-        .select(`
-          *,
-          destination:destinations(*)
-        `)
-        .order('name');
-
-      if (hotelsError) throw hotelsError;
-
-      // Fetch images for all hotels
-      const { data: imagesData, error: imagesError } = await supabase
-        .from('hotel_images')
-        .select('*')
-        .order('display_order');
-
-      if (imagesError) {
-        console.error('Error fetching images:', imagesError);
+      const response = await fetch('/api/hotels');
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch hotels');
       }
-
-      // Attach images to hotels
-      const hotelsWithImages = (hotelsData || []).map(hotel => ({
-        ...hotel,
-        images: (imagesData || []).filter(img => img.hotel_id === hotel.id),
-        primary_image: (imagesData || []).find(img => img.hotel_id === hotel.id && img.is_primary),
-      }));
-
+      
+      // Fetch images for all hotels
+      const imagesPromises = (result.data || []).map(async (hotel: Hotel) => {
+        try {
+          const detailResponse = await fetch(`/api/hotels/${hotel.id}`);
+          const detailResult = await detailResponse.json();
+          return {
+            ...hotel,
+            images: detailResult.data?.images || [],
+            primary_image: detailResult.data?.images?.find((img: any) => img.is_primary),
+          };
+        } catch {
+          return hotel;
+        }
+      });
+      
+      const hotelsWithImages = await Promise.all(imagesPromises);
       setHotels(hotelsWithImages);
     } catch (error) {
       console.error('Error fetching hotels:', error);
@@ -88,14 +82,9 @@ export default function HotelsPage() {
 
   const fetchDestinations = async () => {
     try {
-      const { data, error } = await supabase
-        .from('destinations')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-
-      if (error) throw error;
-      setDestinations(data || []);
+      // Destinations can be fetched from tours API for now
+      // TODO: Create dedicated destinations API endpoint
+      setDestinations([]);
     } catch (error) {
       console.error('Error fetching destinations:', error);
     }
@@ -105,36 +94,44 @@ export default function HotelsPage() {
     if (!confirm('Are you sure you want to delete this hotel?')) return;
 
     try {
-      const { error } = await supabase
-        .from('hotels')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const response = await fetch(`/api/hotels/${id}`, {
+        method: 'DELETE',
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete hotel');
+      }
       
       setHotels(prev => prev.filter(h => h.id !== id));
       toast.success('Hotel deleted');
-    } catch (error) {
-      toast.error('Failed to delete hotel');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete hotel');
     }
   };
 
   const toggleActive = async (hotel: Hotel) => {
     try {
-      const { error } = await supabase
-        .from('hotels')
-        .update({ is_active: !hotel.is_active })
-        .eq('id', hotel.id);
-
-      if (error) throw error;
+      const response = await fetch(`/api/hotels/${hotel.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !hotel.is_active }),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update hotel');
+      }
       
       setHotels(prev => 
         prev.map(h => h.id === hotel.id ? { ...h, is_active: !h.is_active } : h)
       );
       
       toast.success(hotel.is_active ? 'Hotel deactivated' : 'Hotel activated');
-    } catch (error) {
-      toast.error('Failed to update hotel');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update hotel');
     }
   };
 

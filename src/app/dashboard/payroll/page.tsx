@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
+import { formatCurrency as currencyFormatter, type SupportedCurrency } from '@/lib/currency';
 import type { PayrollPeriod, Payslip, Employee } from '@/types/breco';
 import {
   PlusIcon,
@@ -27,6 +28,9 @@ type PayrollStatus = 'draft' | 'processing' | 'approved' | 'paid';
 interface PayrollPeriodWithPayslips extends PayrollPeriod {
   payslips?: (Payslip & { employee?: Employee })[];
 }
+
+// Default currency for payroll - can be overridden from company settings
+const defaultCurrency: SupportedCurrency = 'UGX';
 
 // Uganda PAYE rates 2023/2024
 const calculatePAYE = (grossIncome: number): number => {
@@ -183,51 +187,148 @@ export default function PayrollPage() {
         .update({ status: 'processing' })
         .eq('id', period.id);
 
+      // Fetch allowances and deductions for all employees
+      const { data: allowancesData } = await supabase
+        .from('employee_allowances')
+        .select('*')
+        .in('employee_id', employees.map(e => e.id))
+        .eq('is_active', true)
+        .lte('effective_from', period.end_date)
+        .or(`effective_to.is.null,effective_to.gte.${period.end_date}`);
+
+      const { data: deductionsData } = await supabase
+        .from('employee_deductions')
+        .select('*')
+        .in('employee_id', employees.map(e => e.id))
+        .eq('is_active', true)
+        .lte('effective_from', period.end_date)
+        .or(`effective_to.is.null,effective_to.gte.${period.end_date}`);
+
+      // Group allowances and deductions by employee
+      const allowancesByEmployee = new Map();
+      const deductionsByEmployee = new Map();
+      
+      allowancesData?.forEach(a => {
+        if (!allowancesByEmployee.has(a.employee_id)) {
+          allowancesByEmployee.set(a.employee_id, []);
+        }
+        allowancesByEmployee.get(a.employee_id).push(a);
+      });
+
+      deductionsData?.forEach(d => {
+        if (!deductionsByEmployee.has(d.employee_id)) {
+          deductionsByEmployee.set(d.employee_id, []);
+        }
+        deductionsByEmployee.get(d.employee_id).push(d);
+      });
+
       // Generate payslips for all active employees
       const payslips = employees.map(emp => {
-        const grossSalary = emp.basic_salary || 0;
-        const nssf = calculateNSSF(grossSalary);
-        const paye = calculatePAYE(grossSalary - nssf.employee); // PAYE on taxable income after NSSF
+        const basicSalary = emp.basic_salary || 0;
+        
+        // Calculate total allowances
+        const empAllowances = allowancesByEmployee.get(emp.id) || [];
+        const totalAllowances = empAllowances.reduce((sum: number, a: any) => sum + (a.amount || 0), 0);
+        const taxableAllowances = empAllowances
+          .filter((a: any) => a.is_taxable)
+          .reduce((sum: number, a: any) => sum + (a.amount || 0), 0);
+        
+        // Gross salary = basic + allowances
+        const grossSalary = basicSalary + totalAllowances;
+        
+        // NSSF on basic salary only (Uganda rule)
+        const nssf = calculateNSSF(basicSalary);
+        
+        // PAYE on taxable income (basic + taxable allowances - NSSF employee)
+        const taxableIncome = basicSalary + taxableAllowances - nssf.employee;
+        const paye = calculatePAYE(taxableIncome);
+        
+        // Calculate other deductions
+        const empDeductions = deductionsByEmployee.get(emp.id) || [];
+        const otherDeductions = empDeductions.reduce((sum: number, d: any) => {
+          if (d.is_percentage) {
+            return sum + (grossSalary * (d.amount / 100));
+          }
+          return sum + (d.amount || 0);
+        }, 0);
+        
+        const totalDeductions = nssf.employee + paye + otherDeductions;
+        const netSalary = grossSalary - totalDeductions;
         
         return {
           payroll_period_id: period.id,
           employee_id: emp.id,
           payslip_number: `PS-${period.id.substring(0,8)}-${emp.employee_number}`,
-          basic_salary: grossSalary,
+          basic_salary: basicSalary,
+          total_allowances: totalAllowances,
           gross_salary: grossSalary,
           nssf_employee: nssf.employee,
           nssf_employer: nssf.employer,
           paye: paye,
-          total_deductions: nssf.employee + paye,
-          net_salary: grossSalary - nssf.employee - paye,
+          other_deductions: otherDeductions,
+          total_deductions: totalDeductions,
+          net_salary: netSalary,
         };
       });
 
       // Insert payslips
-      const { error: payslipError } = await supabase
+      const { data: insertedPayslips, error: payslipError } = await supabase
         .from('payslips')
-        .insert(payslips);
+        .insert(payslips)
+        .select();
 
       if (payslipError) throw payslipError;
 
-      // Calculate totals and update period
-      const totalGross = payslips.reduce((sum, p) => sum + p.gross_salary, 0);
-      const totalDeductions = payslips.reduce((sum, p) => sum + p.total_deductions, 0);
-      const totalNet = payslips.reduce((sum, p) => sum + p.net_salary, 0);
-      const totalPaye = payslips.reduce((sum, p) => sum + p.paye, 0);
-      const totalNssf = payslips.reduce((sum, p) => sum + p.nssf_employee + p.nssf_employer, 0);
+      // Create payslip line items for detailed breakdown
+      const payslipItems = [];
+      
+      for (const payslip of insertedPayslips || []) {
+        const empAllowances = allowancesByEmployee.get(payslip.employee_id) || [];
+        const empDeductions = deductionsByEmployee.get(payslip.employee_id) || [];
+        
+        // Add allowance items
+        for (const allowance of empAllowances) {
+          payslipItems.push({
+            payslip_id: payslip.id,
+            item_type: 'earning',
+            item_name: allowance.allowance_type,
+            amount: allowance.amount,
+            is_taxable: allowance.is_taxable,
+          });
+        }
+        
+        // Add deduction items
+        for (const deduction of empDeductions) {
+          let amount = deduction.amount;
+          if (deduction.is_percentage) {
+            amount = payslip.gross_salary * (deduction.amount / 100);
+          }
+          payslipItems.push({
+            payslip_id: payslip.id,
+            item_type: 'deduction',
+            item_name: deduction.deduction_type,
+            amount: amount,
+            is_taxable: false,
+          });
+        }
+      }
 
+      // Insert payslip items if any
+      if (payslipItems.length > 0) {
+        await supabase
+          .from('payslip_items')
+          .insert(payslipItems);
+      }
+
+      // Totals will be auto-calculated by trigger
       await supabase
         .from('payroll_periods')
         .update({
           status: 'draft',
-          total_gross: totalGross,
-          total_deductions: totalDeductions,
-          total_net: totalNet,
         })
         .eq('id', period.id);
 
-      toast.success('Payroll processed successfully');
+      toast.success('Payroll processed successfully with allowances and deductions');
       setShowProcessModal(false);
       fetchPayrollPeriods();
     } catch (error) {
@@ -241,21 +342,38 @@ export default function PayrollPage() {
   const updatePeriodStatus = async (period: PayrollPeriod, newStatus: PayrollStatus) => {
     try {
       const updateData: any = { status: newStatus };
+
+      // Use API route for paid status to trigger journal entry creation
       if (newStatus === 'paid') {
-        updateData.paid_at = new Date().toISOString();
+        const response = await fetch(`/api/payroll/${period.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updateData),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to update payroll status');
+        }
+
+        toast.success(`Payroll marked as paid and posted to general ledger`);
+      } else {
+        // For other statuses, update directly
+        const { error } = await supabase
+          .from('payroll_periods')
+          .update(updateData)
+          .eq('id', period.id);
+
+        if (error) throw error;
+        
+        toast.success(`Status updated to ${newStatus}`);
       }
-
-      const { error } = await supabase
-        .from('payroll_periods')
-        .update(updateData)
-        .eq('id', period.id);
-
-      if (error) throw error;
       
-      toast.success(`Status updated to ${newStatus}`);
       fetchPayrollPeriods();
-    } catch (error) {
-      toast.error('Failed to update status');
+    } catch (error: any) {
+      console.error('Failed to update status:', error);
+      toast.error(error.message || 'Failed to update status');
     }
   };
 
@@ -266,7 +384,7 @@ export default function PayrollPage() {
     const formatCurrency = (amount: number) => {
       return new Intl.NumberFormat('en-UG', {
         style: 'currency',
-        currency: 'UGX',
+        currency: defaultCurrency,
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
       }).format(amount);
@@ -468,13 +586,9 @@ export default function PayrollPage() {
     }
   };
 
-  const formatCurrency = (amount: number | null, currency: string = 'UGX') => {
-    if (!amount) return 'UGX 0';
-    return new Intl.NumberFormat('en-UG', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 0,
-    }).format(amount);
+  const formatCurrency = (amount: number | null, currency: SupportedCurrency = 'UGX') => {
+    if (!amount) return currencyFormatter(0, currency);
+    return currencyFormatter(amount, currency);
   };
 
   const formatDate = (date: string | null) => {

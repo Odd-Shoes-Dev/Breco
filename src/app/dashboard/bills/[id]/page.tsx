@@ -27,6 +27,16 @@ interface BillLine {
   tax_amount: number;
 }
 
+interface BillPayment {
+  id: string;
+  payment_number: string;
+  payment_date: string;
+  amount: number;
+  payment_method: string;
+  reference: string;
+  notes: string;
+}
+
 interface Bill {
   id: string;
   bill_number: string;
@@ -60,6 +70,7 @@ export default function BillDetailPage() {
   const router = useRouter();
   const [bill, setBill] = useState<Bill | null>(null);
   const [lines, setLines] = useState<BillLine[]>([]);
+  const [payments, setPayments] = useState<BillPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -106,6 +117,13 @@ export default function BillDetailPage() {
 
       if (linesError) throw linesError;
       setLines(linesData || []);
+
+      // Fetch bill payments
+      const paymentsResponse = await fetch(`/api/bills/${params.id}/payments`);
+      if (paymentsResponse.ok) {
+        const paymentsResult = await paymentsResponse.json();
+        setPayments(paymentsResult.data || []);
+      }
     } catch (error) {
       console.error('Failed to load bill:', error);
     } finally {
@@ -485,6 +503,45 @@ export default function BillDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Payment History */}
+      {payments.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden print:break-inside-avoid">
+          <div className="p-4 md:p-6 bg-gray-50 border-b border-gray-200">
+            <h2 className="text-base md:text-lg font-semibold text-gray-900">Payment History</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3">Date</th>
+                  <th className="px-4 py-3">Reference</th>
+                  <th className="px-4 py-3">Method</th>
+                  <th className="px-4 py-3 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {payments.map((payment) => (
+                  <tr key={payment.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm text-gray-900">
+                      {new Date(payment.payment_date).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {payment.reference || payment.payment_number}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600 capitalize">
+                      {payment.payment_method.replace('_', ' ')}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-right font-medium text-green-600">
+                      {formatCurrency(payment.amount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
