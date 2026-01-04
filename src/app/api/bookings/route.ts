@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
         *,
         customer:customers(id, name, email, phone, country),
         tour_package:tour_packages(id, name, duration_days),
-        assigned_guide:employees!bookings_assigned_guide_id_fkey(id, first_name, last_name),
-        assigned_vehicle:vehicles(id, registration_number, make, model)
+        assigned_guide:user_profiles!bookings_assigned_guide_id_fkey(id, full_name, email),
+        assigned_vehicle:vehicles!bookings_assigned_vehicle_id_fkey(id, registration_number, make, model)
       `)
       .order('created_at', { ascending: false });
 

@@ -116,11 +116,11 @@ export default function BankPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card bg-gradient-to-br from-navy-600 to-navy-700 text-white">
+        <div className="card">
           <div className="card-body">
-            <p className="text-navy-200 text-sm">Total Cash Balance</p>
+            <p className="text-sm text-gray-500">Total Cash Balance</p>
             <p className="text-3xl font-bold mt-1">{formatCurrency(stats.totalBalance)}</p>
-            <p className="text-navy-200 text-sm mt-2">Across {accounts.length} accounts</p>
+            <p className="text-sm text-gray-500 mt-2">Across {accounts.length} accounts</p>
           </div>
         </div>
         <div className="card">

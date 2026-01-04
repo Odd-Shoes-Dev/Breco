@@ -9,9 +9,9 @@ ADD COLUMN paid_by UUID REFERENCES user_profiles(id),
 ADD COLUMN paid_at TIMESTAMPTZ;
 
 -- Add indexes for better query performance
-CREATE INDEX idx_expenses_approved_by ON expenses(approved_by);
-CREATE INDEX idx_expenses_status ON expenses(status);
-CREATE INDEX idx_expenses_approval_date ON expenses(approved_at);
+CREATE INDEX IF NOT EXISTS idx_expenses_approved_by ON expenses(approved_by);
+CREATE INDEX IF NOT EXISTS idx_expenses_status ON expenses(status);
+CREATE INDEX IF NOT EXISTS idx_expenses_approval_date ON expenses(approved_at);
 
 -- Add comment
 COMMENT ON COLUMN expenses.approved_by IS 'User who approved the expense';

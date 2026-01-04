@@ -16,6 +16,7 @@ import {
   CalendarIcon,
   BuildingOfficeIcon,
   CurrencyDollarIcon,
+  PrinterIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
@@ -30,6 +31,7 @@ interface Employee {
   national_id: string | null;
   nssf_number: string | null;
   tin: string | null;
+  tin_number: string | null;
   date_of_birth: string | null;
   gender: string | null;
   nationality: string;
@@ -139,7 +141,315 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
     });
   };
 
+  const handlePrint = () => {
+    if (!employee) return;
+
+    const printHTML = `
+      <html>
+        <head>
+          <title>Employee Details - ${employee.first_name} ${employee.last_name}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              color: #111827;
+              background: white;
+              padding: 40px;
+              max-width: 1200px;
+              margin: 0 auto;
+            }
+            .header { 
+              display: flex; 
+              align-items: center; 
+              justify-content: space-between;
+              margin-bottom: 30px;
+              border-bottom: 3px solid #1e3a5f;
+              padding-bottom: 20px;
+            }
+            .company-section {
+              display: flex;
+              align-items: center;
+            }
+            .logo { 
+              width: 120px; 
+              height: 120px; 
+              margin-right: 20px;
+              border-radius: 8px;
+              object-fit: contain;
+            }
+            .company-info h1 { 
+              font-size: 24px; 
+              font-weight: bold; 
+              color: #1e3a5f;
+              margin-bottom: 4px;
+            }
+            .company-info .address { 
+              font-size: 12px; 
+              color: #6b7280;
+              margin-bottom: 2px;
+            }
+            .document-header { 
+              text-align: right;
+            }
+            .document-header h2 { 
+              font-size: 28px; 
+              font-weight: bold; 
+              color: #1e3a5f;
+              margin-bottom: 8px;
+            }
+            .document-header .employee-number { 
+              font-size: 14px; 
+              color: #6b7280;
+            }
+            .employee-name {
+              font-size: 20px;
+              font-weight: 600;
+              color: #1e3a5f;
+              margin: 20px 0 10px 0;
+            }
+            .job-title {
+              font-size: 14px;
+              color: #6b7280;
+              margin-bottom: 20px;
+            }
+            .section { 
+              margin-bottom: 30px;
+              background: #f9fafb;
+              padding: 20px;
+              border-radius: 8px;
+              border: 1px solid #e5e7eb;
+              page-break-inside: avoid;
+            }
+            .section h3 { 
+              font-size: 16px; 
+              font-weight: 600; 
+              color: #1e3a5f;
+              margin-bottom: 15px;
+              padding-bottom: 10px;
+              border-bottom: 2px solid #e5e7eb;
+            }
+            .info-grid {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 15px;
+            }
+            .info-item {
+              display: flex;
+              flex-direction: column;
+            }
+            .info-label {
+              font-size: 11px;
+              font-weight: 600;
+              color: #6b7280;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+              margin-bottom: 4px;
+            }
+            .info-value {
+              font-size: 14px;
+              color: #111827;
+              font-weight: 500;
+            }
+            .compensation-section {
+              background: #eff6ff;
+              border: 1px solid #bfdbfe;
+            }
+            .salary-amount {
+              font-size: 24px;
+              font-weight: bold;
+              color: #1e3a5f;
+            }
+            .allowances-grid, .deductions-grid {
+              display: grid;
+              grid-template-columns: 1fr auto;
+              gap: 10px;
+              margin-top: 10px;
+            }
+            .allowance-item, .deduction-item {
+              display: contents;
+            }
+            .allowance-name, .deduction-name {
+              font-size: 13px;
+              color: #374151;
+            }
+            .allowance-amount {
+              font-size: 13px;
+              font-weight: 600;
+              color: #059669;
+              text-align: right;
+            }
+            .deduction-amount {
+              font-size: 13px;
+              font-weight: 600;
+              color: #dc2626;
+              text-align: right;
+            }
+            .footer {
+              margin-top: 40px;
+              padding-top: 20px;
+              border-top: 2px solid #e5e7eb;
+              text-align: center;
+              font-size: 11px;
+              color: #9ca3af;
+            }
+            @media print {
+              body { padding: 20px; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="company-section">
+              <img src="${window.location.origin}/assets/logo.jpg" alt="Breco Safaris" class="logo" onerror="this.style.display='none'">
+              <div class="company-info">
+                <h1>Breco Safaris Ltd</h1>
+                <p class="address">Plot 123, Kampala Road</p>
+                <p class="address">Kampala, Uganda</p>
+                <p class="address">Tel: +256 123 456 789</p>
+                <p class="address">Email: info@brecosafaris.com</p>
+              </div>
+            </div>
+            <div class="document-header">
+              <h2>EMPLOYEE DETAILS</h2>
+              <p class="employee-number">${employee.employee_number}</p>
+            </div>
+          </div>
+
+          <div class="employee-name">${employee.first_name} ${employee.last_name}</div>
+          <div class="job-title">${employee.job_title || 'N/A'}</div>
+
+          <div class="section">
+            <h3>Personal Information</h3>
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="info-label">Full Name</span>
+                <span class="info-value">${employee.first_name} ${employee.last_name}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Date of Birth</span>
+                <span class="info-value">${employee.date_of_birth ? formatDate(employee.date_of_birth) : '-'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Gender</span>
+                <span class="info-value">${employee.gender || '-'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Nationality</span>
+                <span class="info-value">${employee.nationality || '-'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">National ID</span>
+                <span class="info-value">${employee.national_id || '-'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">NSSF Number</span>
+                <span class="info-value">${employee.nssf_number || '-'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">TIN Number</span>
+                <span class="info-value">${employee.tin_number || '-'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>Contact Information</h3>
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="info-label">Email</span>
+                <span class="info-value">${employee.email || '-'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Phone</span>
+                <span class="info-value">${employee.phone || '-'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Address</span>
+                <span class="info-value">${employee.address || '-'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>Employment Details</h3>
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="info-label">Department</span>
+                <span class="info-value">${employee.department || '-'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Position</span>
+                <span class="info-value">${employee.job_title || '-'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Hire Date</span>
+                <span class="info-value">${employee.hire_date ? formatDate(employee.hire_date) : '-'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Employment Type</span>
+                <span class="info-value">${employee.employment_type || '-'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="section compensation-section">
+            <h3>Compensation</h3>
+            <div class="info-item" style="margin-bottom: 15px;">
+              <span class="info-label">Basic Salary</span>
+              <span class="salary-amount">${formatCurrency(employee.basic_salary || 0)}</span>
+              <span class="info-value" style="font-size: 12px; color: #6b7280;">Monthly</span>
+            </div>
+            
+            ${allowances.length > 0 ? `
+            <div style="margin-top: 20px;">
+              <span class="info-label" style="display: block; margin-bottom: 10px;">Allowances</span>
+              <div class="allowances-grid">
+                ${allowances.map(allowance => `
+                  <span class="allowance-name">${allowance.allowance_type}</span>
+                  <span class="allowance-amount">${allowance.is_percentage ? allowance.amount + '%' : formatCurrency(allowance.amount)}</span>
+                `).join('')}
+              </div>
+            </div>
+            ` : ''}
+            
+            ${deductions.length > 0 ? `
+            <div style="margin-top: 20px;">
+              <span class="info-label" style="display: block; margin-bottom: 10px;">Deductions</span>
+              <div class="deductions-grid">
+                ${deductions.map(deduction => `
+                  <span class="deduction-name">${deduction.deduction_type}</span>
+                  <span class="deduction-amount">${deduction.is_percentage ? deduction.amount + '%' : formatCurrency(deduction.amount)}</span>
+                `).join('')}
+              </div>
+            </div>
+            ` : ''}
+          </div>
+
+          <div class="footer">
+            <p>This is a confidential document.</p>
+            <p>Generated on ${new Date().toLocaleString()}</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    // Open print dialog in new window
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printHTML);
+      printWindow.document.close();
+      printWindow.focus();
+
+      // Wait a moment for content to load, then show print dialog
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
+    if (!status) return null;
+    
     const statusStyles: Record<string, string> = {
       active: 'badge-success',
       on_leave: 'badge-warning',
@@ -149,7 +459,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
 
     return (
       <span className={`badge ${statusStyles[status] || 'badge'}`}>
-        {status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+        {status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
       </span>
     );
   };
@@ -186,6 +496,10 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={handlePrint} className="btn-secondary flex items-center gap-2">
+            <PrinterIcon className="w-4 h-4" />
+            Print
+          </button>
           <Link
             href={`/dashboard/employees/${employeeId}/edit`}
             className="btn-primary flex items-center gap-2"

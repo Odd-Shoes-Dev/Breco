@@ -150,68 +150,81 @@ export default function PayslipDetailPage({
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
-              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-              padding: 40px; 
-              color: #111827; 
-              background: #fff;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              color: #111827;
+              background: white;
+              padding: 40px;
             }
             .payslip-container { 
               max-width: 800px; 
-              margin: 0 auto; 
-              border: 2px solid #1e3a8a;
-              border-radius: 8px;
+              margin: 0 auto;
             }
             .header { 
-              text-align: center; 
-              padding: 30px 40px;
-              background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
-              color: white;
-              border-radius: 6px 6px 0 0;
+              display: flex; 
+              align-items: center; 
+              justify-content: space-between;
+              margin-bottom: 30px;
+              border-bottom: 2px solid #e5e7eb;
+              padding-bottom: 20px;
             }
-            .header h1 { 
+            .company-section {
+              display: flex;
+              align-items: center;
+            }
+            .logo { 
+              width: 120px; 
+              height: 120px; 
+              margin-right: 20px;
+              border-radius: 8px;
+              object-fit: contain;
+            }
+            .company-info h1 { 
+              font-size: 24px; 
+              font-weight: bold; 
+              color: #1e3a5f;
+              margin-bottom: 4px;
+            }
+            .company-info .address { 
+              font-size: 12px; 
+              color: #6b7280;
+              margin-bottom: 2px;
+            }
+            .payslip-header { 
+              text-align: right;
+            }
+            .payslip-header h2 { 
               font-size: 28px; 
-              margin-bottom: 8px; 
-              font-weight: 600;
+              font-weight: bold; 
+              color: #1e3a5f;
+              margin-bottom: 4px;
             }
-            .header p { 
+            .payslip-header .period { 
               font-size: 14px; 
-              opacity: 0.95;
+              color: #6b7280;
             }
             .payslip-info {
               display: grid;
               grid-template-columns: 1fr 1fr;
               gap: 30px;
-              padding: 30px 40px;
-              background: #f9fafb;
-              border-bottom: 1px solid #e5e7eb;
+              margin: 30px 0;
             }
-            .info-section h3 {
-              font-size: 11px;
+            .info-box h3 {
+              font-size: 12px;
+              font-weight: 600;
+              color: #6b7280;
               text-transform: uppercase;
-              color: #6b7280;
-              font-weight: 600;
-              margin-bottom: 12px;
-              letter-spacing: 0.5px;
+              margin-bottom: 10px;
             }
-            .info-item {
-              display: flex;
-              justify-content: space-between;
-              padding: 6px 0;
-              font-size: 13px;
-            }
-            .info-label {
-              color: #6b7280;
-              font-weight: 500;
-            }
-            .info-value {
+            .info-box p {
+              font-size: 14px;
               color: #111827;
-              font-weight: 600;
+              margin-bottom: 4px;
             }
             .breakdown {
-              padding: 30px 40px;
+              margin: 30px 0;
             }
             .breakdown-section {
-              margin-bottom: 25px;
+              margin-bottom: 30px;
             }
             .breakdown-section h3 {
               font-size: 14px;
@@ -225,17 +238,17 @@ export default function PayslipDetailPage({
               display: flex;
               justify-content: space-between;
               padding: 8px 0;
-              font-size: 13px;
-            }
-            .breakdown-item.total {
-              border-top: 2px solid #111827;
-              margin-top: 8px;
-              padding-top: 12px;
-              font-weight: 700;
               font-size: 14px;
             }
+            .breakdown-item.total {
+              border-top: 2px solid #e5e7eb;
+              margin-top: 8px;
+              padding-top: 12px;
+              font-weight: bold;
+              font-size: 15px;
+            }
             .breakdown-label {
-              color: #4b5563;
+              color: #6b7280;
             }
             .breakdown-value {
               font-weight: 600;
@@ -245,9 +258,10 @@ export default function PayslipDetailPage({
               color: #dc2626;
             }
             .summary {
-              background: #f9fafb;
-              padding: 25px 40px;
-              border-top: 2px solid #e5e7eb;
+              background: #f3f4f6;
+              padding: 20px;
+              border-radius: 8px;
+              margin: 30px 0;
             }
             .summary-grid {
               display: grid;
@@ -277,31 +291,32 @@ export default function PayslipDetailPage({
             .summary-value.deductions { color: #dc2626; }
             .summary-value.net { color: #16a34a; }
             .net-pay-banner {
-              background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+              background: #16a34a;
               color: white;
               padding: 20px;
               text-align: center;
-              border-radius: 6px;
+              border-radius: 8px;
               margin-top: 15px;
             }
             .net-pay-banner .label {
-              font-size: 12px;
-              opacity: 0.9;
-              margin-bottom: 4px;
+              font-size: 14px;
+              margin-bottom: 8px;
+              font-weight: 500;
             }
             .net-pay-banner .amount {
-              font-size: 32px;
-              font-weight: 700;
+              font-size: 36px;
+              font-weight: bold;
             }
             .footer {
-              padding: 20px 40px;
+              margin-top: 50px;
+              padding-top: 20px;
+              border-top: 1px solid #e5e7eb;
               text-align: center;
               font-size: 11px;
-              color: #6b7280;
-              border-top: 1px solid #e5e7eb;
+              color: #9ca3af;
             }
             @media print {
-              body { padding: 0; }
+              body { padding: 20px; }
               @page { margin: 0.5in; }
             }
           </style>
@@ -309,50 +324,37 @@ export default function PayslipDetailPage({
         <body>
           <div class="payslip-container">
             <div class="header">
-              <h1>Breco Safaris Ltd</h1>
-              <p>Salary Slip</p>
-              <p style="margin-top: 8px; font-size: 13px;">${payslip.payroll_period.period_name}</p>
+              <div class="company-section">
+                <img src="${typeof window !== 'undefined' ? window.location.origin : ''}/assets/logo.jpg" alt="Breco Safaris" class="logo" onerror="this.style.display='none'">
+                <div class="company-info">
+                  <h1>Breco Safaris Ltd</h1>
+                  <p class="address">Plot 123, Kampala Road</p>
+                  <p class="address">Kampala, Uganda</p>
+                  <p class="address">Tel: +256 123 456 789</p>
+                  <p class="address">Email: info@brecosafaris.com</p>
+                </div>
+              </div>
+              <div class="payslip-header">
+                <h2>SALARY SLIP</h2>
+                <p class="period">${payslip.payroll_period.period_name}</p>
+              </div>
             </div>
 
             <div class="payslip-info">
-              <div class="info-section">
+              <div class="info-box">
                 <h3>Employee Information</h3>
-                <div class="info-item">
-                  <span class="info-label">Name:</span>
-                  <span class="info-value">${payslip.employee.first_name} ${payslip.employee.last_name}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Employee ID:</span>
-                  <span class="info-value">${payslip.employee.employee_number}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Job Title:</span>
-                  <span class="info-value">${payslip.employee.job_title}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Department:</span>
-                  <span class="info-value">${payslip.employee.department || 'N/A'}</span>
-                </div>
+                <p><strong>Name:</strong> ${payslip.employee.first_name} ${payslip.employee.last_name}</p>
+                <p><strong>Employee ID:</strong> ${payslip.employee.employee_number}</p>
+                <p><strong>Job Title:</strong> ${payslip.employee.job_title}</p>
+                <p><strong>Department:</strong> ${payslip.employee.department || 'N/A'}</p>
               </div>
 
-              <div class="info-section">
+              <div class="info-box">
                 <h3>Payment Information</h3>
-                <div class="info-item">
-                  <span class="info-label">Payslip No:</span>
-                  <span class="info-value">${payslip.payslip_number}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Pay Period:</span>
-                  <span class="info-value">${formatDate(payslip.payroll_period.start_date)} - ${formatDate(payslip.payroll_period.end_date)}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Payment Date:</span>
-                  <span class="info-value">${formatDate(payslip.payroll_period.payment_date)}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Payment Method:</span>
-                  <span class="info-value">${payslip.payment_method.replace('_', ' ').toUpperCase()}</span>
-                </div>
+                <p><strong>Payslip No:</strong> ${payslip.payslip_number}</p>
+                <p><strong>Pay Period:</strong> ${formatDate(payslip.payroll_period.start_date)} - ${formatDate(payslip.payroll_period.end_date)}</p>
+                <p><strong>Payment Date:</strong> ${formatDate(payslip.payroll_period.payment_date)}</p>
+                <p><strong>Payment Method:</strong> ${payslip.payment_method.replace('_', ' ').toUpperCase()}</p>
               </div>
             </div>
 

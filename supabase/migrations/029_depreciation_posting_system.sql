@@ -22,7 +22,7 @@ CREATE TABLE depreciation_postings (
 CREATE TABLE depreciation_posting_details (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   posting_id UUID NOT NULL REFERENCES depreciation_postings(id) ON DELETE CASCADE,
-  asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+  asset_id UUID NOT NULL REFERENCES fixed_assets(id) ON DELETE CASCADE,
   depreciation_amount DECIMAL(15,2) NOT NULL,
   accumulated_before DECIMAL(15,2) NOT NULL,
   accumulated_after DECIMAL(15,2) NOT NULL,
@@ -44,7 +44,7 @@ RETURNS TRIGGER AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
     -- Update asset with new accumulated depreciation and book value
-    UPDATE assets
+    UPDATE fixed_assets
     SET 
       accumulated_depreciation = NEW.accumulated_after,
       book_value = NEW.book_value_after,
@@ -52,7 +52,7 @@ BEGIN
     WHERE id = NEW.asset_id;
   ELSIF TG_OP = 'DELETE' THEN
     -- Reverse the depreciation (when posting is voided)
-    UPDATE assets
+    UPDATE fixed_assets
     SET 
       accumulated_depreciation = OLD.accumulated_before,
       book_value = OLD.book_value_before,

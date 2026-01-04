@@ -3,14 +3,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generatePayslipHTML, type PayslipData } from '@/lib/pdf/payslip-pdf';
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 // POST /api/payslips/[id]/email - Email payslip to employee
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Check if Resend API key is configured
+    if (!process.env.RESEND_API_KEY) {
+      console.error('RESEND_API_KEY is not configured');
+      return NextResponse.json(
+        { error: 'Email service is not configured. Please contact your administrator.' },
+        { status: 500 }
+      );
+    }
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
     const supabase = await createClient();
     const { id } = await params;
 
