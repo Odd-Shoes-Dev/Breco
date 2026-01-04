@@ -78,7 +78,8 @@ export default function NewGoodsReceiptPage() {
           id,
           po_number,
           order_date,
-          vendors!inner (
+          vendor_id,
+          vendors (
             name,
             company_name
           )
@@ -87,7 +88,14 @@ export default function NewGoodsReceiptPage() {
         .order('order_date', { ascending: false });
 
       if (error) throw error;
-      setPurchaseOrders((data || []) as PurchaseOrder[]);
+      
+      // Transform vendors from array to single object
+      const transformedData = (data || []).map(po => ({
+        ...po,
+        vendors: Array.isArray(po.vendors) ? po.vendors[0] : po.vendors
+      }));
+      
+      setPurchaseOrders(transformedData);
     } catch (error) {
       console.error('Failed to load POs:', error);
       toast.error('Failed to load purchase orders');
