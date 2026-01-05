@@ -173,18 +173,22 @@ export default function BillDetailPage() {
     
     setActionLoading(true);
     try {
-      const { error } = await supabase
-        .from('bills')
-        .update({ status: 'approved' })
-        .eq('id', params.id);
+      const response = await fetch(`/api/bills/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'approved' }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error);
+      }
       
       // Reload bill
       await loadBillDetails();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to approve bill:', error);
-      alert('Failed to approve bill');
+      alert(error.message || 'Failed to approve bill');
     } finally {
       setActionLoading(false);
     }
@@ -234,6 +238,32 @@ export default function BillDetailPage() {
     }
   };
 
+  const handleChangeToDraft = async () => {
+    if (!confirm('Change this bill back to draft status? This will allow you to edit it.')) return;
+    
+    setActionLoading(true);
+    try {
+      const response = await fetch(`/api/bills/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'draft' }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error);
+      }
+
+      // Reload bill
+      await loadBillDetails();
+    } catch (error: any) {
+      console.error('Failed to change bill status:', error);
+      alert(error.message || 'Failed to change bill status');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -279,12 +309,13 @@ export default function BillDetailPage() {
             <span className="hidden md:inline">Print</span>
           </button>
           
+          <Link href={`/dashboard/bills/${params.id}/edit`} className="btn-secondary text-sm">
+            <PencilIcon className="w-4 h-4 md:w-5 md:h-5 md:mr-2" />
+            <span className="hidden md:inline">Edit</span>
+          </Link>
+          
           {bill.status === 'draft' && (
             <>
-              <Link href={`/dashboard/bills/${params.id}/edit`} className="btn-secondary text-sm">
-                <PencilIcon className="w-4 h-4 md:w-5 md:h-5 md:mr-2" />
-                <span className="hidden md:inline">Edit</span>
-              </Link>
               <button 
                 onClick={handleApprove} 
                 disabled={actionLoading}
@@ -319,6 +350,17 @@ export default function BillDetailPage() {
                 <span className="hidden md:inline">Void</span>
               </button>
             </>
+          )}
+
+          {bill.status === 'approved' && (
+            <button 
+              onClick={handleChangeToDraft} 
+              disabled={actionLoading}
+              className="btn-secondary text-sm"
+            >
+              <PencilIcon className="w-4 h-4 md:w-5 md:h-5 md:mr-2" />
+              <span className="hidden md:inline">Change to Draft</span>
+            </button>
           )}
 
           {bill.status === 'paid' && (

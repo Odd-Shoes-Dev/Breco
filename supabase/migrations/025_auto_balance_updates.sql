@@ -5,7 +5,7 @@ CREATE OR REPLACE FUNCTION update_vendor_balance(p_vendor_id UUID, p_amount NUME
 RETURNS VOID AS $$
 BEGIN
   UPDATE vendors
-  SET balance = COALESCE(balance, 0) + p_amount
+  SET current_balance = COALESCE(current_balance, 0) + p_amount
   WHERE id = p_vendor_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -15,7 +15,7 @@ CREATE OR REPLACE FUNCTION update_customer_balance(p_customer_id UUID, p_amount 
 RETURNS VOID AS $$
 BEGIN
   UPDATE customers
-  SET balance = COALESCE(balance, 0) + p_amount
+  SET current_balance = COALESCE(current_balance, 0) + p_amount
   WHERE id = p_customer_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

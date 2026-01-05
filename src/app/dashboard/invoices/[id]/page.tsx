@@ -514,14 +514,21 @@ export default function InvoiceDetailPage() {
   const handleMarkAsSent = async () => {
     setActionLoading('send');
     try {
-      await supabase
-        .from('invoices')
-        .update({ status: 'sent' })
-        .eq('id', params.id);
+      const response = await fetch(`/api/invoices/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'sent' }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to update invoice');
+      }
       
       fetchInvoice();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating invoice:', error);
+      alert(error.message || 'Failed to update invoice');
     } finally {
       setActionLoading(null);
     }
@@ -647,6 +654,19 @@ export default function InvoiceDetailPage() {
           {invoice.status === 'draft' && (
             <Button 
               variant="outline" 
+              size="sm" 
+              onClick={handleMarkAsSent}
+              disabled={actionLoading === 'send'}
+              className="text-xs sm:text-sm"
+            >
+              <CheckCircleIcon className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Mark as Sent</span>
+            </Button>
+          )}
+          
+          {(invoice.status === 'sent' || invoice.status === 'draft') && invoice.document_type === 'invoice' && (
+            <Button 
+              variant="success" 
               size="sm" 
               onClick={handleMarkAsSent}
               disabled={actionLoading === 'send'}

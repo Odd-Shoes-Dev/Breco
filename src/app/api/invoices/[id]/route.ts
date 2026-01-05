@@ -11,6 +11,7 @@ import { createInvoiceJournalEntry } from '@/lib/accounting/journal-entry-helper
 // GET /api/invoices/[id] - Get single invoice with lines
 export async function GET(request: NextRequest, context: any) {
   const { params } = context || {};
+  const resolvedParams = await params;
   try {
     const supabase = await createClient();
 
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest, context: any) {
         customers (id, name, email, phone, address_line1, address_line2, city, state, zip_code),
         invoice_lines (*, products (id, name, sku))
       `)
-      .eq('id', params.id)
+      .eq('id', resolvedParams.id)
       .single();
 
     if (invoiceError) {
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest, context: any) {
           notes
         )
       `)
-      .eq('invoice_id', params.id)
+      .eq('invoice_id', resolvedParams.id)
       .order('payments_received.payment_date', { ascending: false });
 
     return NextResponse.json({
@@ -59,6 +60,7 @@ export async function GET(request: NextRequest, context: any) {
 // PATCH /api/invoices/[id] - Update invoice
 export async function PATCH(request: NextRequest, context: any) {
   const { params } = context || {};
+  const resolvedParams = await params;
   try {
     const supabase = await createClient();
     const body = await request.json();
@@ -67,7 +69,7 @@ export async function PATCH(request: NextRequest, context: any) {
     const { data: existing, error: fetchError } = await supabase
       .from('invoices')
       .select('*, invoice_lines(*)')
-      .eq('id', params.id)
+      .eq('id', resolvedParams.id)
       .single();
 
     if (fetchError) {
@@ -106,7 +108,7 @@ export async function PATCH(request: NextRequest, context: any) {
     const { data: invoice, error: updateError } = await supabase
       .from('invoices')
       .update(updateData)
-      .eq('id', params.id)
+      .eq('id', resolvedParams.id)
       .select()
       .single();
 
@@ -119,12 +121,12 @@ export async function PATCH(request: NextRequest, context: any) {
       // Quotation/Proforma -> Invoice conversion
       if ((documentType === 'quotation' || documentType === 'proforma') && newStatus === 'posted' && oldStatus === 'draft') {
         // Release reservation
-        await releaseReservedInventory(supabase, params.id, existing.invoice_lines);
+        await releaseReservedInventory(supabase, resolvedParams.id, existing.invoice_lines);
         
         // Reduce actual inventory
         const inventoryResult = await reduceInventoryForInvoice(
           supabase,
-          params.id,
+          resolvedParams.id,
           existing.invoice_lines,
           user.id
         );
@@ -140,7 +142,7 @@ export async function PATCH(request: NextRequest, context: any) {
       else if (documentType === 'invoice' && (newStatus === 'sent' || newStatus === 'posted') && oldStatus === 'draft') {
         const inventoryResult = await reduceInventoryForInvoice(
           supabase,
-          params.id,
+          resolvedParams.id,
           existing.invoice_lines,
           user.id
         );
@@ -154,8 +156,8 @@ export async function PATCH(request: NextRequest, context: any) {
       }
     }
 
-    // Create journal entry when invoice is marked as 'posted' (accrual accounting)
-    if (newStatus === 'posted' && oldStatus !== 'posted' && !invoice.journal_entry_id && documentType === 'invoice') {
+    // Create journal entry when invoice is marked as 'sent' (accrual accounting)
+    if (newStatus === 'sent' && oldStatus !== 'sent' && !invoice.journal_entry_id && documentType === 'invoice') {
       const journalResult = await createInvoiceJournalEntry(
         supabase,
         {
@@ -172,14 +174,14 @@ export async function PATCH(request: NextRequest, context: any) {
         await supabase
           .from('invoices')
           .update({ journal_entry_id: journalResult.journalEntry.id })
-          .eq('id', params.id);
+          .eq('id', resolvedParams.id);
       }
     }
 
     // If lines are provided, update them
     if (body.lines) {
       // Delete existing lines
-      await supabase.from('invoice_lines').delete().eq('invoice_id', params.id);
+      await supabase.from('invoice_lines').delete().eq('invoice_id', resolvedParams.id);
 
       // Calculate new totals
       let subtotal = 0;
@@ -197,7 +199,7 @@ export async function PATCH(request: NextRequest, context: any) {
         discountAmount += lineDiscount;
 
         return {
-          invoice_id: params.id,
+          invoice_id: resolvedParams.id,
           line_number: index + 1,
           product_id: line.product_id || null,
           description: line.description,
@@ -224,7 +226,7 @@ export async function PATCH(request: NextRequest, context: any) {
           discount_amount: discountAmount,
           total,
         })
-        .eq('id', params.id);
+        .eq('id', resolvedParams.id);
     }
 
     return NextResponse.json({ data: invoice });
@@ -236,6 +238,7 @@ export async function PATCH(request: NextRequest, context: any) {
 // DELETE /api/invoices/[id] - Delete or void invoice
 export async function DELETE(request: NextRequest, context: any) {
   const { params } = context || {};
+  const resolvedParams = await params;
   try {
     const supabase = await createClient();
     const { searchParams } = new URL(request.url);
@@ -245,7 +248,7 @@ export async function DELETE(request: NextRequest, context: any) {
     const { data: existing, error: fetchError } = await supabase
       .from('invoices')
       .select('*, invoice_lines(*)')
-      .eq('id', params.id)
+      .eq('id', resolvedParams.id)
       .single();
 
     if (fetchError) {
@@ -270,14 +273,14 @@ export async function DELETE(request: NextRequest, context: any) {
 
       // Release inventory reservation if quotation/proforma
       if ((existing.document_type === 'quotation' || existing.document_type === 'proforma') && user) {
-        await releaseReservedInventory(supabase, params.id, existing.invoice_lines);
+        await releaseReservedInventory(supabase, resolvedParams.id, existing.invoice_lines);
       }
 
       // Delete lines first
-      await supabase.from('invoice_lines').delete().eq('invoice_id', params.id);
+      await supabase.from('invoice_lines').delete().eq('invoice_id', resolvedParams.id);
       
       // Delete invoice
-      const { error } = await supabase.from('invoices').delete().eq('id', params.id);
+      const { error } = await supabase.from('invoices').delete().eq('id', resolvedParams.id);
       
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 400 });
@@ -288,14 +291,14 @@ export async function DELETE(request: NextRequest, context: any) {
       // Restore inventory if invoice was posted/sent
       if ((existing.status === 'posted' || existing.status === 'sent') && 
           existing.document_type === 'invoice' && user) {
-        await restoreInventoryForInvoice(supabase, params.id, existing.invoice_lines, user.id);
+        await restoreInventoryForInvoice(supabase, resolvedParams.id, existing.invoice_lines, user.id);
       }
 
       // Void the invoice
       const { data, error } = await supabase
         .from('invoices')
         .update({ status: 'void' })
-        .eq('id', params.id)
+        .eq('id', resolvedParams.id)
         .select()
         .single();
 
