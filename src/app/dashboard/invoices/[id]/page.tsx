@@ -534,6 +534,32 @@ export default function InvoiceDetailPage() {
     }
   };
 
+  const handleMarkAsPaid = async () => {
+    if (!confirm('Mark this invoice as paid? This will create accounting journal entries.')) return;
+    
+    setActionLoading('paid');
+    try {
+      const response = await fetch(`/api/invoices/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'paid' }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to update invoice');
+      }
+      
+      alert('Invoice marked as paid! Journal entry created.');
+      fetchInvoice();
+    } catch (error: any) {
+      console.error('Error updating invoice:', error);
+      alert(error.message || 'Failed to mark as paid');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleSendEmail = async () => {
     if (!invoice?.customer?.email) {
       alert('Customer does not have an email address');
@@ -664,16 +690,16 @@ export default function InvoiceDetailPage() {
             </Button>
           )}
           
-          {(invoice.status === 'sent' || invoice.status === 'draft') && invoice.document_type === 'invoice' && (
+          {(invoice.status === 'sent' || invoice.status === 'partial') && invoice.document_type === 'invoice' && (
             <Button 
               variant="success" 
               size="sm" 
-              onClick={handleMarkAsSent}
-              disabled={actionLoading === 'send'}
+              onClick={handleMarkAsPaid}
+              disabled={actionLoading === 'paid'}
               className="text-xs sm:text-sm"
             >
               <CheckCircleIcon className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
-              <span className="hidden sm:inline">Mark as Sent</span>
+              <span className="hidden sm:inline">{actionLoading === 'paid' ? 'Processing...' : 'Mark as Paid'}</span>
             </Button>
           )}
           

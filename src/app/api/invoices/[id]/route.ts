@@ -156,8 +156,8 @@ export async function PATCH(request: NextRequest, context: any) {
       }
     }
 
-    // Create journal entry when invoice is marked as 'sent' (accrual accounting)
-    if (newStatus === 'sent' && oldStatus !== 'sent' && !invoice.journal_entry_id && documentType === 'invoice') {
+    // Create journal entry when invoice is marked as 'paid' or 'partial' (accrual accounting)
+    if ((newStatus === 'paid' || newStatus === 'partial') && (oldStatus !== 'paid' && oldStatus !== 'partial') && !invoice.journal_entry_id && documentType === 'invoice') {
       const journalResult = await createInvoiceJournalEntry(
         supabase,
         {
