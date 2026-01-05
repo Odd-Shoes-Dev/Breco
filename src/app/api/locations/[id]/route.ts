@@ -1,20 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+export const dynamic = 'force-dynamic';
+
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = getSupabase();
+    const { id } = await params;
     const { data, error } = await supabase
       .from('locations')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (error) throw error;
@@ -27,7 +33,7 @@ export async function GET(
     const { data: inventoryData } = await supabase
       .from('inventory_by_location')
       .select('quantity')
-      .eq('location_id', params.id);
+      .eq('location_id', id);
 
     const totalQuantity = inventoryData?.reduce((sum, item) => sum + item.quantity, 0) || 0;
 
@@ -40,15 +46,17 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = getSupabase();
     const body = await request.json();
+    const { id } = await params;
 
     const { data, error } = await supabase
       .from('locations')
       .update(body)
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
@@ -63,14 +71,16 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = getSupabase();
+    const { id } = await params;
     // Check if location has inventory
     const { data: inventoryData } = await supabase
       .from('inventory_by_location')
       .select('id')
-      .eq('location_id', params.id)
+      .eq('location_id', id)
       .limit(1);
 
     if (inventoryData && inventoryData.length > 0) {
@@ -83,7 +93,7 @@ export async function DELETE(
     const { error } = await supabase
       .from('locations')
       .delete()
-      .eq('id', params.id);
+      .eq('id', id);
 
     if (error) throw error;
 

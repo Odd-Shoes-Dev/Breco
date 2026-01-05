@@ -37,7 +37,12 @@ interface AssetMaintenance {
   };
 }
 
-export default function MaintenanceDetailPage({ params }: { params: { id: string } }) {
+export default async function MaintenanceDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <MaintenanceDetailPageClient maintenanceId={id} />;
+}
+
+function MaintenanceDetailPageClient({ maintenanceId }: { maintenanceId: string }) {
   const router = useRouter();
   const [maintenance, setMaintenance] = useState<AssetMaintenance | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,7 +50,7 @@ export default function MaintenanceDetailPage({ params }: { params: { id: string
 
   useEffect(() => {
     loadMaintenance();
-  }, [params.id]);
+  }, [maintenanceId]);
 
   const loadMaintenance = async () => {
     try {
@@ -60,7 +65,7 @@ export default function MaintenanceDetailPage({ params }: { params: { id: string
           employees:performed_by_employee_id (first_name, last_name, employee_number)
         `
         )
-        .eq('id', params.id)
+        .eq('id', maintenanceId)
         .single();
 
       if (error) throw error;
@@ -85,7 +90,7 @@ export default function MaintenanceDetailPage({ params }: { params: { id: string
           status: 'completed',
           performed_date: new Date().toISOString().split('T')[0],
         })
-        .eq('id', params.id);
+        .eq('id', maintenanceId);
 
       if (error) throw error;
 
@@ -144,7 +149,7 @@ export default function MaintenanceDetailPage({ params }: { params: { id: string
           {maintenance.status !== 'completed' && (
             <>
               <button
-                onClick={() => router.push(`/dashboard/assets/maintenance/${params.id}/edit`)}
+                onClick={() => router.push(`/dashboard/assets/maintenance/${maintenanceId}/edit`)}
                 className="btn-secondary flex items-center gap-2"
               >
                 <PencilIcon className="w-5 h-5" />

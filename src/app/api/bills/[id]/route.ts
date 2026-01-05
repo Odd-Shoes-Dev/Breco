@@ -175,10 +175,10 @@ export async function PATCH(request: NextRequest, context: any) {
           user.id
         );
 
-        if (journalResult.success && journalResult.journalEntryId) {
+        if (journalResult.success && journalResult.journalEntry) {
           await supabase
             .from('bills')
-            .update({ journal_entry_id: journalResult.journalEntryId })
+            .update({ journal_entry_id: journalResult.journalEntry.id })
             .eq('id', params.id);
         }
       }

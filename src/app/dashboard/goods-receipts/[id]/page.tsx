@@ -41,7 +41,12 @@ interface GRLine {
   };
 }
 
-export default function GoodsReceiptDetailPage({ params }: { params: { id: string } }) {
+export default async function GoodsReceiptDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <GoodsReceiptDetailPageClient grId={id} />;
+}
+
+function GoodsReceiptDetailPageClient({ grId }: { grId: string }) {
   const router = useRouter();
   const [goodsReceipt, setGoodsReceipt] = useState<GoodsReceipt | null>(null);
   const [lines, setLines] = useState<GRLine[]>([]);
@@ -51,7 +56,7 @@ export default function GoodsReceiptDetailPage({ params }: { params: { id: strin
 
   useEffect(() => {
     loadGoodsReceipt();
-  }, [params.id]);
+  }, [grId]);
 
   const loadGoodsReceipt = async () => {
     try {
@@ -69,7 +74,7 @@ export default function GoodsReceiptDetailPage({ params }: { params: { id: strin
             )
           )
         `)
-        .eq('id', params.id)
+        .eq('id', grId)
         .single();
 
       if (grError) throw grError;
@@ -85,7 +90,7 @@ export default function GoodsReceiptDetailPage({ params }: { params: { id: strin
             quantity_received
           )
         `)
-        .eq('goods_receipt_id', params.id)
+        .eq('goods_receipt_id', grId)
         .order('id');
 
       if (linesError) throw linesError;
@@ -104,7 +109,7 @@ export default function GoodsReceiptDetailPage({ params }: { params: { id: strin
     try {
       setUpdating(true);
 
-      const response = await fetch(`/api/goods-receipts/${params.id}/status`, {
+      const response = await fetch(`/api/goods-receipts/${grId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

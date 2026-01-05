@@ -49,7 +49,12 @@ interface StockTakeLine {
   };
 }
 
-export default function StockTakeDetailPage({ params }: { params: { id: string } }) {
+export default async function StockTakeDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <StockTakeDetailPageClient stockTakeId={id} />;
+}
+
+function StockTakeDetailPageClient({ stockTakeId }: { stockTakeId: string }) {
   const router = useRouter();
   const [stockTake, setStockTake] = useState<StockTake | null>(null);
   const [lines, setLines] = useState<StockTakeLine[]>([]);
@@ -58,7 +63,7 @@ export default function StockTakeDetailPage({ params }: { params: { id: string }
 
   useEffect(() => {
     loadStockTake();
-  }, [params.id]);
+  }, [stockTakeId]);
 
   const loadStockTake = async () => {
     try {
@@ -74,7 +79,7 @@ export default function StockTakeDetailPage({ params }: { params: { id: string }
           user_profiles!stock_takes_counted_by_fkey (full_name)
         `
         )
-        .eq('id', params.id)
+        .eq('id', stockTakeId)
         .single();
 
       if (stockTakeError) throw stockTakeError;
@@ -89,7 +94,7 @@ export default function StockTakeDetailPage({ params }: { params: { id: string }
           products (id, name, sku, unit)
         `
         )
-        .eq('stock_take_id', params.id)
+        .eq('stock_take_id', stockTakeId)
         .order('created_at');
 
       if (linesError) throw linesError;
@@ -119,7 +124,7 @@ export default function StockTakeDetailPage({ params }: { params: { id: string }
           approved_by: user.id,
           approved_at: new Date().toISOString(),
         })
-        .eq('id', params.id);
+        .eq('id', stockTakeId);
 
       if (updateError) throw updateError;
 
@@ -134,7 +139,7 @@ export default function StockTakeDetailPage({ params }: { params: { id: string }
               quantity_change: line.variance,
               reason: 'stock_take',
               reference_type: 'stock_take',
-              reference_id: params.id,
+              reference_id: stockTakeId,
               notes: `Stock take ${stockTake?.reference_number}: Expected ${line.expected_quantity}, Counted ${line.counted_quantity}`,
             });
 
@@ -169,7 +174,7 @@ export default function StockTakeDetailPage({ params }: { params: { id: string }
       const { error } = await supabase
         .from('stock_takes')
         .update({ status: 'cancelled' })
-        .eq('id', params.id);
+        .eq('id', stockTakeId);
 
       if (error) throw error;
 
@@ -227,7 +232,7 @@ export default function StockTakeDetailPage({ params }: { params: { id: string }
           {stockTake.status === 'draft' && (
             <>
               <button
-                onClick={() => router.push(`/dashboard/inventory/stock-takes/${params.id}/edit`)}
+                onClick={() => router.push(`/dashboard/inventory/stock-takes/${stockTakeId}/edit`)}
                 className="btn-secondary flex items-center gap-2"
               >
                 <PencilIcon className="w-5 h-5" />

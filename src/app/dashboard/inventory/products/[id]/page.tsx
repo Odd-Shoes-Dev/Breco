@@ -48,7 +48,12 @@ interface InventoryMovement {
   notes: string | null;
 }
 
-export default function ProductDetailPage({ params }: { params: { id: string } }) {
+export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <ProductDetailPageClient productId={id} />;
+}
+
+function ProductDetailPageClient({ productId }: { productId: string }) {
   const router = useRouter();
   const [product, setProduct] = useState<Product | null>(null);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
@@ -59,7 +64,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   useEffect(() => {
     loadProduct();
     loadMovements();
-  }, [params.id]);
+  }, [productId]);
 
   const loadProduct = async () => {
     try {
@@ -70,7 +75,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
           *,
           product_categories (name)
         `)
-        .eq('id', params.id)
+        .eq('id', productId)
         .single();
 
       if (error) throw error;
@@ -89,7 +94,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
       const { data, error } = await supabase
         .from('inventory_movements')
         .select('*')
-        .eq('product_id', params.id)
+        .eq('product_id', productId)
         .order('movement_date', { ascending: false })
         .limit(50);
 
@@ -114,7 +119,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
           reorder_point: formData.reorder_point ? parseFloat(formData.reorder_point) : null,
           weight: formData.weight ? parseFloat(formData.weight) : null,
         })
-        .eq('id', params.id);
+        .eq('id', productId);
 
       if (error) throw error;
 
@@ -136,7 +141,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
       const { error } = await supabase
         .from('products')
         .delete()
-        .eq('id', params.id);
+        .eq('id', productId);
 
       if (error) throw error;
 
