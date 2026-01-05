@@ -183,21 +183,6 @@ export async function PATCH(request: NextRequest, context: any) {
         }
       }
     }
-            base_debit: 0,
-            base_credit: bill.total,
-          });
-
-          // Insert journal lines
-          await supabase.from('journal_lines').insert(journalLines);
-
-          // Update bill with journal entry ID
-          await supabase
-            .from('bills')
-            .update({ journal_entry_id: journalEntry.id })
-            .eq('id', params.id);
-        }
-      }
-    }
 
     // If lines are provided, update them
     if (lines.length > 0) {
