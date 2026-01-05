@@ -8,15 +8,16 @@ const supabase = createClient(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { status, inspection_notes } = await request.json();
+    const { id } = await params;
 
     const { data: gr, error: grError } = await supabase
       .from('goods_receipts')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (grError || !gr) {
@@ -30,7 +31,7 @@ export async function PATCH(
         status,
         inspection_notes,
       })
-      .eq('id', params.id);
+      .eq('id', id);
 
     if (updateError) throw updateError;
 
@@ -39,7 +40,7 @@ export async function PATCH(
       const { data: grLines, error: linesError } = await supabase
         .from('goods_receipt_lines')
         .select('*')
-        .eq('goods_receipt_id', params.id);
+        .eq('goods_receipt_id', id);
 
       if (linesError) throw linesError;
 
@@ -68,7 +69,7 @@ export async function PATCH(
             quantity: line.quantity_received,
             unit_cost: line.unit_cost,
             reference_type: 'goods_receipt',
-            reference_id: params.id,
+            reference_id: id,
             movement_date: gr.received_date,
             notes: `Goods Receipt ${gr.gr_number}`,
           });
