@@ -4,7 +4,7 @@ import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
-import { formatCurrency as currencyFormatter } from '@/lib/currency';
+import { formatCurrency as currencyFormatter, convertCurrency } from '@/lib/currency';
 import { CurrencySelect } from '@/components/ui';
 import { useForm, useFieldArray } from 'react-hook-form';
 import toast from 'react-hot-toast';
@@ -13,7 +13,7 @@ import {
   PlusIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
-import type { Customer, Product, Invoice, InvoiceLine } from '@/types/database';
+import type { Customer, Product, Invoice, InvoiceLine, InvoiceStatus } from '@/types/database';
 
 interface InvoiceLineInput {
   id?: string;
@@ -44,6 +44,7 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [statusChanging, setStatusChanging] = useState(false);
   const [taxRate] = useState(0.0625); // MA sales tax
 
   const {
@@ -161,11 +162,35 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
     }
   };
 
-  const handleProductChange = (index: number, productId: string) => {
+  const handleProductChange = async (index: number, productId: string) => {
     const product = products.find((p) => p.id === productId);
     if (product) {
       setValue(`lines.${index}.description`, product.name);
-      setValue(`lines.${index}.unit_price`, product.unit_price);
+      
+      // Check if currency conversion is needed
+      const invoiceCurrency = watchCurrency || 'USD';
+      const productCurrency = product.currency || 'USD';
+      
+      let convertedPrice = product.unit_price;
+      
+      if (productCurrency !== invoiceCurrency) {
+        // Convert the product price to invoice currency
+        const converted = await convertCurrency(
+          supabase,
+          product.unit_price,
+          productCurrency as any,
+          invoiceCurrency as any
+        );
+        
+        if (converted !== null) {
+          convertedPrice = converted;
+        } else {
+          // If conversion fails, show a warning
+          toast.error(`Unable to convert from ${productCurrency} to ${invoiceCurrency}. Using original price.`);
+        }
+      }
+      
+      setValue(`lines.${index}.unit_price`, convertedPrice);
       setValue(`lines.${index}.tax_rate`, product.is_taxable ? taxRate : 0);
     }
   };
@@ -194,6 +219,48 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
 
   const formatCurrency = (amount: number) => {
     return currencyFormatter(amount, watchCurrency as any || 'USD');
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!invoice) return;
+
+    // Show confirmation for paid status
+    if (newStatus === 'paid') {
+      if (!confirm('Mark this invoice as paid? This will create accounting journal entries.')) {
+        return;
+      }
+    }
+
+    setStatusChanging(true);
+    try {
+      const response = await fetch(`/api/invoices/${resolvedParams.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to update invoice status');
+      }
+
+      // Update local invoice state
+      setInvoice({ ...invoice, status: newStatus as InvoiceStatus });
+      
+      if (newStatus === 'paid' || newStatus === 'partial') {
+        toast.success('Invoice status updated! Journal entry created.', { duration: 4000 });
+      } else {
+        toast.success('Invoice status updated successfully!');
+      }
+
+      // Reload invoice data to get fresh data
+      loadData();
+    } catch (error: any) {
+      console.error('Error updating invoice status:', error);
+      toast.error(error.message || 'Failed to update invoice status');
+    } finally {
+      setStatusChanging(false);
+    }
   };
 
   const onSubmit = async (data: InvoiceFormData) => {
@@ -346,15 +413,36 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link href={`/dashboard/invoices/${resolvedParams.id}`} className="btn-ghost p-2">
-          <ArrowLeftIcon className="w-5 h-5" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Edit Invoice</h1>
-          <p className="text-gray-500 mt-1">
-            Invoice #{invoice.invoice_number}
-          </p>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Link href={`/dashboard/invoices/${resolvedParams.id}`} className="btn-ghost p-2">
+            <ArrowLeftIcon className="w-5 h-5" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Edit Invoice</h1>
+            <p className="text-gray-500 mt-1">
+              Invoice #{invoice.invoice_number}
+            </p>
+          </div>
+        </div>
+
+        {/* Status Dropdown */}
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium text-gray-700">Status:</label>
+          <select
+            value={invoice.status}
+            onChange={(e) => handleStatusChange(e.target.value)}
+            disabled={statusChanging}
+            className="input min-w-[140px]"
+          >
+            <option value="draft">Draft</option>
+            <option value="sent">Sent</option>
+            <option value="partial">Partial</option>
+            <option value="paid">Paid</option>
+            <option value="overdue">Overdue</option>
+            <option value="void">Void</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
         </div>
       </div>
 

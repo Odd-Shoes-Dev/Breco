@@ -158,6 +158,13 @@ export async function PATCH(request: NextRequest, context: any) {
 
     // Create journal entry when invoice is marked as 'paid' or 'partial' (accrual accounting)
     if ((newStatus === 'paid' || newStatus === 'partial') && (oldStatus !== 'paid' && oldStatus !== 'partial') && !invoice.journal_entry_id && documentType === 'invoice') {
+      console.log('Creating journal entry for invoice:', {
+        id: invoice.id,
+        invoice_number: invoice.invoice_number,
+        total: invoice.total,
+        status: newStatus,
+      });
+
       const journalResult = await createInvoiceJournalEntry(
         supabase,
         {
@@ -169,6 +176,16 @@ export async function PATCH(request: NextRequest, context: any) {
         },
         user?.id || ''
       );
+
+      console.log('Journal entry result:', journalResult);
+
+      if (!journalResult.success) {
+        console.error('Failed to create journal entry:', journalResult.error);
+        return NextResponse.json(
+          { error: `Failed to create journal entry: ${journalResult.error}` },
+          { status: 500 }
+        );
+      }
 
       if (journalResult.success && journalResult.journalEntry) {
         await supabase

@@ -5,7 +5,7 @@ import { createBillJournalEntry } from '@/lib/accounting/journal-entry-helpers';
 
 // GET /api/bills/[id] - Get single bill
 export async function GET(request: NextRequest, context: any) {
-  const { params } = context || {};
+  const params = await context.params;
   try {
     const supabase = await createClient();
 
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest, context: any) {
 
 // PATCH /api/bills/[id] - Update bill
 export async function PATCH(request: NextRequest, context: any) {
-  const { params } = context || {};
+  const params = await context.params;
   try {
     const supabase = await createClient();
     const body = await request.json();
@@ -157,11 +157,20 @@ export async function PATCH(request: NextRequest, context: any) {
         .eq('bill_id', params.id);
 
       if (billLines && billLines.length > 0) {
+        // Calculate bill total from lines to ensure it's a number
+        let billTotalFromLines = 0;
+        billLines.forEach((line: any) => {
+          billTotalFromLines += parseFloat(line.line_total || 0) + parseFloat(line.tax_amount || 0);
+        });
+
         const journalBillLines = billLines.map((line: any) => ({
           account_code: line.accounts?.code || '5000',
-          amount: line.line_total + line.tax_amount,
+          amount: parseFloat(line.line_total || 0) + parseFloat(line.tax_amount || 0),
           description: line.description,
         }));
+
+        // Use the calculated total from lines to ensure accuracy
+        const billTotal = billTotalFromLines;
 
         const journalResult = await createBillJournalEntry(
           supabase,
@@ -169,13 +178,21 @@ export async function PATCH(request: NextRequest, context: any) {
             id: bill.id,
             bill_number: bill.bill_number,
             bill_date: bill.bill_date,
-            total: bill.total,
+            total: billTotal,
           },
           journalBillLines,
           user.id
         );
 
-        if (journalResult.success && journalResult.journalEntry) {
+        if (!journalResult.success) {
+          console.error('Failed to create journal entry for bill:', journalResult.error);
+          return NextResponse.json(
+            { error: `Bill updated but journal entry failed: ${journalResult.error}` },
+            { status: 500 }
+          );
+        }
+
+        if (journalResult.journalEntry) {
           await supabase
             .from('bills')
             .update({ journal_entry_id: journalResult.journalEntry.id })
@@ -234,7 +251,7 @@ export async function PATCH(request: NextRequest, context: any) {
 
 // DELETE /api/bills/[id] - Delete or void bill
 export async function DELETE(request: NextRequest, context: any) {
-  const { params } = context || {};
+  const params = await context.params;
   try {
     const supabase = await createClient();
     const { searchParams } = new URL(request.url);

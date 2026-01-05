@@ -126,8 +126,7 @@ export async function POST(
       supabase: supabase,
       entry_date: period.payment_date,
       description: `Payroll for period ${period.period_start} to ${period.period_end}`,
-      reference: `PAYROLL-${period.period_start}`,
-      source: 'payroll',
+      source_module: 'payroll',
       lines,
       created_by: user.id,
     });

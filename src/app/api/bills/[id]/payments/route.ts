@@ -12,19 +12,34 @@ export async function GET(
     const { id } = await params;
 
     const { data, error } = await supabase
-      .from('bill_payments')
+      .from('bill_payment_applications')
       .select(`
         *,
-        bank_accounts (id, name, currency)
+        bill_payment:bill_payments(
+          *,
+          bank_account:bank_accounts(id, name, currency)
+        )
       `)
       .eq('bill_id', id)
-      .order('payment_date', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    return NextResponse.json({ data });
+    // Flatten the structure for easier consumption
+    const payments = (data || []).map(app => ({
+      id: app.id,
+      payment_number: app.bill_payment.payment_number,
+      payment_date: app.bill_payment.payment_date,
+      amount_applied: app.amount_applied,
+      payment_method: app.bill_payment.payment_method,
+      reference_number: app.bill_payment.reference_number,
+      notes: app.bill_payment.notes,
+      bank_account: app.bill_payment.bank_account,
+    }));
+
+    return NextResponse.json({ data: payments });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -64,7 +79,7 @@ export async function POST(
     }
 
     // Check if payment amount exceeds balance
-    const balance = bill.total - (bill.amount_paid || 0);
+    const balance = parseFloat(bill.total || 0) - parseFloat(bill.amount_paid || 0);
     if (body.amount > balance) {
       return NextResponse.json(
         { error: `Payment amount cannot exceed bill balance of ${balance}` },
@@ -76,17 +91,24 @@ export async function POST(
     const date = new Date();
     const ref = `BP-${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}${date.getDate().toString().padStart(2, '0')}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
 
+    // Get the GL account for the bank account
+    const { data: bankAccount } = await supabase
+      .from('bank_accounts')
+      .select('gl_account_id')
+      .eq('id', body.bank_account_id)
+      .single();
+
     // Create bill payment
     const { data: payment, error: paymentError } = await supabase
       .from('bill_payments')
       .insert({
-        bill_id: billId,
+        vendor_id: bill.vendor_id,
         payment_number: body.reference || ref,
         payment_date: body.payment_date,
         amount: body.amount,
         payment_method: body.payment_method || 'bank_transfer',
-        bank_account_id: body.bank_account_id,
-        reference: body.reference || ref,
+        pay_from_account_id: bankAccount?.gl_account_id || null,
+        reference_number: body.reference || ref,
         notes: body.notes || null,
         currency: body.currency || bill.currency || 'USD',
         exchange_rate: body.exchange_rate || 1,
@@ -99,9 +121,26 @@ export async function POST(
       return NextResponse.json({ error: paymentError.message }, { status: 400 });
     }
 
+    // Create bill payment application (junction table)
+    const { error: applicationError } = await supabase
+      .from('bill_payment_applications')
+      .insert({
+        bill_payment_id: payment.id,
+        bill_id: billId,
+        amount_applied: body.amount,
+      });
+
+    if (applicationError) {
+      // Rollback payment
+      await supabase.from('bill_payments').delete().eq('id', payment.id);
+      return NextResponse.json({ error: applicationError.message }, { status: 400 });
+    }
+
     // Update bill amount_paid and status
-    const newAmountPaid = (bill.amount_paid || 0) + body.amount;
-    const newStatus = newAmountPaid >= bill.total ? 'paid' : 'partial';
+    const currentAmountPaid = parseFloat(bill.amount_paid || 0);
+    const billTotal = parseFloat(bill.total || 0);
+    const newAmountPaid = currentAmountPaid + body.amount;
+    const newStatus = newAmountPaid >= billTotal ? 'paid' : 'partial';
 
     const { error: updateError } = await supabase
       .from('bills')
@@ -132,13 +171,7 @@ export async function POST(
     // Credit: Cash/Bank Account - reducing asset
     const apAccountId = await getAccountByCode(supabase, '2000');
     
-    // Get bank account's GL account
-    const { data: bankAccount } = await supabase
-      .from('bank_accounts')
-      .select('gl_account_id')
-      .eq('id', body.bank_account_id)
-      .single();
-
+    // Use the GL account we already fetched
     let cashAccountId = bankAccount?.gl_account_id;
     if (!cashAccountId) {
       cashAccountId = await getAccountByCode(supabase, '1010'); // Default bank account
@@ -149,8 +182,7 @@ export async function POST(
         supabase,
         entry_date: body.payment_date,
         description: `Payment for Bill ${bill.bill_number} - ${bill.vendors?.name || 'Vendor'}`,
-        reference: payment.payment_number,
-        source: 'bill_payment',
+        source_module: 'bill_payment',
         lines: [
           {
             account_id: apAccountId,

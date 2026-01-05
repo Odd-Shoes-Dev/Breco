@@ -88,8 +88,7 @@ export async function POST(request: NextRequest) {
       supabase,
       entry_date: recognition_date || new Date().toISOString().split('T')[0],
       description: `Revenue recognition for Invoice ${invoice.invoice_number}`,
-      reference: invoice.invoice_number,
-      source: 'revenue_recognition',
+      source_module: 'revenue_recognition',
       lines: [
         {
           account_id: unearnedRevenueId,

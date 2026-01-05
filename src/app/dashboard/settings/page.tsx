@@ -44,6 +44,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<CompanySettings | null>(null);
+  const [refreshingRates, setRefreshingRates] = useState(false);
 
   const companyForm = useForm<CompanyFormData>();
   const financialForm = useForm<FinancialFormData>();
@@ -130,6 +131,28 @@ export default function SettingsPage() {
       toast.error(error.message || 'Failed to save settings');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRefreshExchangeRates = async () => {
+    setRefreshingRates(true);
+    try {
+      const response = await fetch('/api/exchange-rates', {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to refresh exchange rates');
+      }
+
+      toast.success(`Exchange rates updated! ${data.data?.length || 0} rates refreshed from exchangerate-api.com`);
+    } catch (error: any) {
+      console.error('Failed to refresh exchange rates:', error);
+      toast.error(error.message || 'Failed to refresh exchange rates');
+    } finally {
+      setRefreshingRates(false);
     }
   };
 
@@ -366,6 +389,36 @@ export default function SettingsPage() {
                   <h4 className="font-medium text-blue-900">Base Currency</h4>
                   <p className="text-sm text-blue-700 mt-1">
                     USD (US Dollar) - Contact support to change base currency
+                  </p>
+                </div>
+
+                <hr />
+
+                <div>
+                  <h3 className="font-medium text-gray-900 mb-2">Exchange Rates</h3>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Multi-currency support with automatic exchange rate updates from exchangerate-api.com
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleRefreshExchangeRates}
+                    disabled={refreshingRates}
+                    className="btn-secondary"
+                  >
+                    {refreshingRates ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Refreshing...
+                      </>
+                    ) : (
+                      'Refresh Exchange Rates'
+                    )}
+                  </button>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Last updated rates are cached in database. Click to fetch latest rates for USD, EUR, GBP, and UGX.
                   </p>
                 </div>
               </div>

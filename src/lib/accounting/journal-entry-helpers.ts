@@ -16,11 +16,12 @@ interface CreateJournalEntryParams {
   supabase: SupabaseClient;
   entry_date: string;
   description: string;
-  reference: string;
-  source: string;
+  reference?: string; // This will be incorporated into description/memo
+  source_module: string;
   lines: JournalLineInput[];
   created_by: string;
   status?: 'draft' | 'posted';
+  source_document_id?: string;
 }
 
 /**
@@ -31,10 +32,11 @@ export async function createJournalEntry({
   entry_date,
   description,
   reference,
-  source,
+  source_module,
   lines,
   created_by,
   status = 'posted',
+  source_document_id,
 }: CreateJournalEntryParams) {
   try {
     // Validate that debits equal credits
@@ -54,17 +56,19 @@ export async function createJournalEntry({
 
     if (numError) throw numError;
 
+    // Combine description and reference for display
+    const fullDescription = reference ? `${description} - Ref: ${reference}` : description;
+
     // Create journal entry
     const { data: journalEntry, error: entryError } = await supabase
       .from('journal_entries')
       .insert({
         entry_number: entryNumber,
         entry_date,
-        description,
-        reference,
-        source,
+        description: fullDescription,
+        source_module: source_module,
+        source_document_id,
         status,
-        is_posted: status === 'posted',
         created_by,
       })
       .select()
@@ -73,8 +77,9 @@ export async function createJournalEntry({
     if (entryError) throw entryError;
 
     // Create journal lines
-    const journalLines = lines.map((line) => ({
+    const journalLines = lines.map((line, index) => ({
       journal_entry_id: journalEntry.id,
+      line_number: index + 1,
       account_id: line.account_id,
       debit: line.debit,
       credit: line.credit,
@@ -146,8 +151,8 @@ export async function createInvoiceJournalEntry(
     supabase,
     entry_date: invoice.invoice_date,
     description: `Invoice ${invoice.invoice_number}`,
-    reference: invoice.invoice_number,
-    source: 'invoice',
+    source_module: 'invoice',
+    source_document_id: invoice.id,
     lines: [
       {
         account_id: arAccountId,
@@ -220,8 +225,8 @@ export async function createBillJournalEntry(
     supabase,
     entry_date: bill.bill_date,
     description: `Bill ${bill.bill_number}`,
-    reference: bill.bill_number,
-    source: 'bill',
+    source_module: 'bill',
+    source_document_id: bill.id,
     lines,
     created_by,
     status: 'posted',
@@ -262,8 +267,8 @@ export async function createReceiptJournalEntry(
     supabase,
     entry_date: receipt.receipt_date,
     description: `Receipt ${receipt.receipt_number}`,
-    reference: receipt.receipt_number,
-    source: 'receipt',
+    source_module: 'receipt',
+    source_document_id: receipt.id,
     lines: [
       {
         account_id: cashAccountId,
@@ -332,8 +337,8 @@ export async function createExpenseJournalEntry(
     supabase,
     entry_date: expense.expense_date,
     description: `Expense: ${expense.description}`,
-    reference: expense.expense_number,
-    source: 'expense',
+    source_module: 'expense',
+    source_document_id: expense.id,
     lines: [
       {
         account_id: expenseAccountId,

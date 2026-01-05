@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { CurrencySelect } from '@/components/ui';
-import { formatCurrency as currencyFormatter } from '@/lib/currency';
+import { formatCurrency as currencyFormatter, convertCurrency } from '@/lib/currency';
 import { useForm, useFieldArray } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import {
@@ -118,11 +118,35 @@ export default function NewInvoicePage() {
     }
   };
 
-  const handleProductChange = (index: number, productId: string) => {
+  const handleProductChange = async (index: number, productId: string) => {
     const product = products.find((p) => p.id === productId);
     if (product) {
       setValue(`lines.${index}.description`, product.name);
-      setValue(`lines.${index}.unit_price`, product.unit_price);
+      
+      // Check if currency conversion is needed
+      const invoiceCurrency = watchCurrency || 'USD';
+      const productCurrency = product.currency || 'USD';
+      
+      let convertedPrice = product.unit_price;
+      
+      if (productCurrency !== invoiceCurrency) {
+        // Convert the product price to invoice currency
+        const converted = await convertCurrency(
+          supabase,
+          product.unit_price,
+          productCurrency as any,
+          invoiceCurrency as any
+        );
+        
+        if (converted !== null) {
+          convertedPrice = converted;
+        } else {
+          // If conversion fails, show a warning
+          toast.error(`Unable to convert from ${productCurrency} to ${invoiceCurrency}. Using original price.`);
+        }
+      }
+      
+      setValue(`lines.${index}.unit_price`, convertedPrice);
       setValue(`lines.${index}.tax_rate`, product.is_taxable ? taxRate : 0);
     }
   };
