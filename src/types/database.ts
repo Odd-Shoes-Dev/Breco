@@ -174,7 +174,7 @@ export interface Customer {
   tax_id: string | null;
   payment_terms: number;
   credit_limit: number | null;
-  balance: number | null;
+  current_balance: number | null;
   currency: 'USD' | 'EUR' | 'GBP' | 'UGX';
   notes: string | null;
   is_active: boolean;

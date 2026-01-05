@@ -256,7 +256,7 @@ export default function CustomerDetailPage({ params }: PageProps) {
           <div className="space-y-3 sm:space-y-4">
             <div>
               <p className="text-xs sm:text-sm text-gray-500">Current Balance</p>
-              <p className="text-xl sm:text-2xl font-bold text-gray-900">{formatCurrency(customer.balance || 0)}</p>
+              <p className="text-xl sm:text-2xl font-bold text-gray-900">{formatCurrency(customer.current_balance || 0)}</p>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:gap-4 pt-3 sm:pt-4 border-t border-gray-200">
               <div>
