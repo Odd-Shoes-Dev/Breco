@@ -1502,7 +1502,7 @@ Address: Buzzi Close Kajjansi, Entebbe Road, Kampala
 ---
 
 **Document Version**: 1.0  
-**Last Updated**: January 2026  
+**Last Updated**: January 5, 2026  
 **Next Review**: July 2026
 
 **© 2026 Breco Safaris Ltd. All rights reserved.**
