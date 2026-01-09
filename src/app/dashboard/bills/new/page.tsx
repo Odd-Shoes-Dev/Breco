@@ -56,10 +56,53 @@ export default function NewBillPage() {
     { id: '1', product_id: '', description: '', quantity: 1, unit_price: 0, account_code: '5100', amount: 0 },
   ]);
 
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({
+    USD: 1,
+    EUR: 1,
+    GBP: 1,
+    UGX: 1,
+  });
+
+  const [previousCurrency, setPreviousCurrency] = useState('USD');
+
   useEffect(() => {
     fetchVendors();
     fetchProducts();
+    fetchExchangeRates();
   }, []);
+
+  const fetchExchangeRates = async () => {
+    try {
+      const response = await fetch('/api/exchange-rates');
+      const result = await response.json();
+      if (result.data && Array.isArray(result.data)) {
+        // Convert array to object with currency codes as keys
+        const ratesMap: Record<string, number> = {
+          USD: 1, // Base currency
+        };
+        
+        // Get the most recent rate for each currency
+        const latestRates = result.data.reduce((acc: any, rate: any) => {
+          if (!acc[rate.to_currency] || new Date(rate.effective_date) > new Date(acc[rate.to_currency].effective_date)) {
+            acc[rate.to_currency] = rate;
+          }
+          return acc;
+        }, {});
+        
+        // Build rates map (USD to each currency)
+        Object.values(latestRates).forEach((rate: any) => {
+          if (rate.from_currency === 'USD') {
+            ratesMap[rate.to_currency] = parseFloat(rate.rate);
+          }
+        });
+        
+        console.log('Exchange rates loaded:', ratesMap);
+        setExchangeRates(ratesMap);
+      }
+    } catch (error) {
+      console.error('Failed to fetch exchange rates:', error);
+    }
+  };
 
   const fetchVendors = async () => {
     try {
@@ -119,6 +162,12 @@ export default function NewBillPage() {
   const handleProductChange = (id: string, productId: string) => {
     const product = products.find((p) => p.id === productId);
     if (product) {
+      // Convert product price from USD to current currency
+      const usdRate = exchangeRates['USD'] || 1;
+      const currentRate = exchangeRates[formData.currency] || 1;
+      const conversionFactor = currentRate / usdRate;
+      const convertedPrice = product.unit_price * conversionFactor;
+      
       setLineItems((prev) =>
         prev.map((item) => {
           if (item.id !== id) return item;
@@ -126,8 +175,8 @@ export default function NewBillPage() {
             ...item,
             product_id: productId,
             description: product.name,
-            unit_price: product.unit_price,
-            amount: item.quantity * product.unit_price,
+            unit_price: Math.round(convertedPrice * 100) / 100,
+            amount: Math.round(item.quantity * convertedPrice * 100) / 100,
           };
         })
       );
@@ -314,7 +363,38 @@ export default function NewBillPage() {
               </label>
               <CurrencySelect
                 value={formData.currency}
-                onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                onChange={(e) => {
+                  const newCurrency = e.target.value;
+                  const oldCurrency = previousCurrency;
+                  
+                  console.log('Currency change:', { oldCurrency, newCurrency, exchangeRates });
+                  
+                  // Convert existing line items to new currency
+                  if (oldCurrency !== newCurrency) {
+                    const oldRate = exchangeRates[oldCurrency] || 1;
+                    const newRate = exchangeRates[newCurrency] || 1;
+                    const conversionFactor = newRate / oldRate;
+                    
+                    console.log('Conversion:', { oldRate, newRate, conversionFactor });
+                    
+                    setLineItems((prev) =>
+                      prev.map((item) => {
+                        const convertedUnitPrice = item.unit_price * conversionFactor;
+                        const newItem = {
+                          ...item,
+                          unit_price: Math.round(convertedUnitPrice * 100) / 100,
+                          amount: Math.round(item.quantity * convertedUnitPrice * 100) / 100,
+                        };
+                        console.log('Line item converted:', { old: item, new: newItem });
+                        return newItem;
+                      })
+                    );
+                    
+                    setPreviousCurrency(newCurrency);
+                  }
+                  
+                  setFormData({ ...formData, currency: newCurrency });
+                }}
               />
             </div>
           </div>

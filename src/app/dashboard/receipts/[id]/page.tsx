@@ -22,6 +22,12 @@ export default function ReceiptDetailPage() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [lineItems, setLineItems] = useState<InvoiceLine[]>([]);
   const [loading, setLoading] = useState(true);
+  const [relatedInvoiceId, setRelatedInvoiceId] = useState<string | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [paymentNotes, setPaymentNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchReceipt();
@@ -66,6 +72,20 @@ export default function ReceiptDetailPage() {
         .eq('invoice_id', params.id)
         .order('line_number');
       setLineItems(itemsData || []);
+
+      // Fetch related invoice ID if reference exists
+      const refNumber = (receiptData as any).reference_invoice_number;
+      if (refNumber) {
+        const { data: invoiceData } = await supabase
+          .from('invoices')
+          .select('id')
+          .eq('invoice_number', refNumber)
+          .eq('document_type', 'invoice')
+          .single();
+        if (invoiceData) {
+          setRelatedInvoiceId(invoiceData.id);
+        }
+      }
 
     } catch (error) {
       console.error('Error fetching receipt:', error);
@@ -398,7 +418,7 @@ export default function ReceiptDetailPage() {
               </div>
               <div class="total-row balance">
                 <span>BALANCE DUE</span>
-                <span>$0.00</span>
+                <span>${formatCurrency(Number(receipt.total) - Number(receipt.amount_paid))}</span>
               </div>
             </div>
           </div>
@@ -482,6 +502,52 @@ export default function ReceiptDetailPage() {
     }
   };
 
+  const handleRecordPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const amount = parseFloat(paymentAmount);
+    if (!amount || amount <= 0) {
+      toast.error('Please enter a valid payment amount');
+      return;
+    }
+    
+    const balanceDue = Math.round((receipt!.total - (receipt!.amount_paid || 0)) * 100) / 100;
+    if (amount > balanceDue + 0.01) { // Allow small rounding differences
+      toast.error(`Payment amount cannot exceed balance due of ${formatCurrency(balanceDue)}`);
+      return;
+    }
+    
+    setSubmitting(true);
+    try {
+      const response = await fetch(`/api/receipts/${params.id}/payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount,
+          payment_method: paymentMethod,
+          notes: paymentNotes,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to record payment');
+      }
+
+      toast.success('Payment recorded successfully!');
+      setShowPaymentModal(false);
+      setPaymentAmount('');
+      setPaymentNotes('');
+      fetchReceipt(); // Refresh receipt data
+    } catch (error: any) {
+      console.error('Error recording payment:', error);
+      toast.error(error.message || 'Failed to record payment');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -524,6 +590,21 @@ export default function ReceiptDetailPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {(() => {
+            const balanceDue = receipt.total - (receipt.amount_paid || 0);
+            const hasInvoiceReference = !!(receipt as any).reference_invoice_number;
+            // Only show Record Payment for standalone receipts (no invoice reference) with balance due
+            return balanceDue > 0 && !hasInvoiceReference && (
+              <button 
+                onClick={() => setShowPaymentModal(true)}
+                className="px-3 py-2 text-sm rounded-lg font-medium bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 flex items-center gap-2"
+              >
+                <CheckCircleIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline">Record Payment</span>
+                <span className="sm:hidden">Pay</span>
+              </button>
+            );
+          })()}
           {customer?.email && (
             <button onClick={handleSendEmail} className="px-3 py-2 text-sm rounded-lg font-medium bg-[#1e3a5f] hover:bg-[#152a45] text-white flex items-center gap-2">
               <EnvelopeIcon className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -622,15 +703,21 @@ export default function ReceiptDetailPage() {
               <p className="text-sm text-gray-500">Receipt Time</p>
               <p className="font-medium">{formatTime(receipt.created_at)}</p>
             </div>
-            {receipt.invoice_number && receipt.invoice_number !== `TEMP-${receipt.created_at}` && (
+            {(receipt as any).reference_invoice_number && (
               <div>
                 <p className="text-sm text-gray-500">Related Invoice</p>
-                <Link 
-                  href={`/dashboard/invoices/${receipt.id}`}
-                  className="font-medium text-blue-600 hover:underline"
-                >
-                  {receipt.invoice_number}
-                </Link>
+                {relatedInvoiceId ? (
+                  <Link
+                    href={`/dashboard/invoices/${relatedInvoiceId}`}
+                    className="font-medium text-blue-600 hover:underline"
+                  >
+                    {(receipt as any).reference_invoice_number}
+                  </Link>
+                ) : (
+                  <p className="font-medium text-blue-600">
+                    {(receipt as any).reference_invoice_number}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -700,10 +787,20 @@ export default function ReceiptDetailPage() {
                   {formatCurrency(receipt.amount_paid || receipt.total)}
                 </span>
               </div>
-              <div className="flex justify-between pt-2 text-sm sm:text-base">
-                <span className="font-semibold text-gray-900">Balance Due</span>
-                <span className="font-semibold text-green-600">{formatCurrency(0)}</span>
-              </div>
+              {(() => {
+                const balanceDue = receipt.total - (receipt.amount_paid || 0);
+                return balanceDue > 0 ? (
+                  <div className="flex justify-between pt-2 text-sm sm:text-base">
+                    <span className="font-semibold text-red-900">Balance Due</span>
+                    <span className="font-semibold text-red-600">{formatCurrency(balanceDue)}</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between pt-2 text-sm sm:text-base">
+                    <span className="font-semibold text-gray-900">Balance Due</span>
+                    <span className="font-semibold text-green-600">{formatCurrency(0)}</span>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -730,6 +827,83 @@ export default function ReceiptDetailPage() {
           <p className="mt-2 text-xs">This is an official receipt for accounting purposes.</p>
         </div>
       </div>
+
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h2 className="text-xl font-bold mb-4">Record Payment</h2>
+            <form onSubmit={handleRecordPayment} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Payment Amount *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                  required
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Balance due: {formatCurrency(receipt.total - (receipt.amount_paid || 0))}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Payment Method *
+                </label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="cash">Cash</option>
+                  <option value="check">Check</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="credit_card">Credit Card</option>
+                  <option value="stripe">Stripe</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Notes (Optional)
+                </label>
+                <textarea
+                  value={paymentNotes}
+                  onChange={(e) => setPaymentNotes(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Additional notes about this payment..."
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowPaymentModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50"
+                  disabled={submitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:opacity-50"
+                  disabled={submitting}
+                >
+                  {submitting ? 'Recording...' : 'Record Payment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

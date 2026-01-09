@@ -8,7 +8,7 @@ import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import type { Invoice, Customer } from '@/types/database';
 
 export default function ReceiptsPage() {
-  const [receipts, setReceipts] = useState<(Invoice & { customers: Customer })[]>([]);
+  const [receipts, setReceipts] = useState<(Invoice & { customers: Customer; related_invoice_id?: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [stats, setStats] = useState({
@@ -31,7 +31,25 @@ export default function ReceiptsPage() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setReceipts(data || []);
+      
+      // Fetch related invoice IDs for receipts that have reference numbers
+      const receiptsWithInvoiceIds = await Promise.all(
+        (data || []).map(async (receipt) => {
+          const refNumber = (receipt as any).reference_invoice_number;
+          if (refNumber) {
+            const { data: invoiceData } = await supabase
+              .from('invoices')
+              .select('id')
+              .eq('invoice_number', refNumber)
+              .eq('document_type', 'invoice')
+              .single();
+            return { ...receipt, related_invoice_id: invoiceData?.id };
+          }
+          return receipt;
+        })
+      );
+      
+      setReceipts(receiptsWithInvoiceIds || []);
     } catch (error) {
       console.error('Failed to load receipts:', error);
     } finally {
@@ -76,7 +94,7 @@ export default function ReceiptsPage() {
     return (
       receipt.receipt_number?.toLowerCase().includes(query) ||
       receipt.customers?.name?.toLowerCase().includes(query) ||
-      receipt.invoice_number?.toLowerCase().includes(query)
+      (receipt as any).reference_invoice_number?.toLowerCase().includes(query)
     );
   });
 
@@ -154,13 +172,19 @@ export default function ReceiptsPage() {
                     </td>
                     <td>{receipt.customers?.name || 'Unknown'}</td>
                     <td>
-                      {receipt.invoice_number && receipt.invoice_number !== `TEMP-${receipt.created_at}` ? (
-                        <Link
-                          href={`/dashboard/invoices/${receipt.id}`}
-                          className="text-blue-600 hover:underline text-sm"
-                        >
-                          {receipt.invoice_number}
-                        </Link>
+                      {(receipt as any).reference_invoice_number ? (
+                        receipt.related_invoice_id ? (
+                          <Link
+                            href={`/dashboard/invoices/${receipt.related_invoice_id}`}
+                            className="text-blue-600 hover:underline text-sm"
+                          >
+                            {(receipt as any).reference_invoice_number}
+                          </Link>
+                        ) : (
+                          <span className="text-blue-600 text-sm">
+                            {(receipt as any).reference_invoice_number}
+                          </span>
+                        )
                       ) : (
                         <span className="text-gray-400 text-sm">-</span>
                       )}

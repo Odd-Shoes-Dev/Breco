@@ -117,14 +117,18 @@ export async function POST(request: NextRequest) {
     }
 
     lines.forEach((line: any) => {
-      const unitCost = line.unit_cost || line.unit_price || 0;
-      const lineSubtotal = line.quantity * unitCost;
-      const lineTax = lineSubtotal * (line.tax_rate || 0);
+      const unitCost = parseFloat(line.unit_cost || line.unit_price || 0);
+      const quantity = parseFloat(line.quantity || 0);
+      const taxRate = parseFloat(line.tax_rate || 0);
+      const lineSubtotal = quantity * unitCost;
+      const lineTax = lineSubtotal * taxRate;
       subtotal += lineSubtotal;
       taxAmount += lineTax;
     });
 
     const total = subtotal + taxAmount;
+
+    console.log('Bill creation totals:', { subtotal, taxAmount, total, linesCount: lines.length });
 
     const { data: bill, error: billError } = await supabase
       .from('bills')
@@ -157,12 +161,15 @@ export async function POST(request: NextRequest) {
     if (lines.length > 0) {
       const billLines = lines
         .filter((line: any) => {
-          const unitCost = line.unit_cost || line.unit_price || 0;
+          const unitCost = parseFloat(line.unit_cost || line.unit_price || 0);
+          const quantity = parseFloat(line.quantity || 0);
           const hasDescription = line.description && line.description.trim();
-          return hasDescription && (line.quantity * unitCost) > 0;
+          return hasDescription && (quantity * unitCost) > 0;
         })
         .map((line: any, index: number) => {
-          const unitCost = line.unit_cost || line.unit_price || 0;
+          const unitCost = parseFloat(line.unit_cost || line.unit_price || 0);
+          const quantity = parseFloat(line.quantity || 0);
+          const taxRate = parseFloat(line.tax_rate || 0);
           const expenseAccountId = line.expense_account_id || (line.account_code ? accountMap[line.account_code] : null);
           return {
             bill_id: bill.id,
@@ -172,11 +179,11 @@ export async function POST(request: NextRequest) {
             project_id: line.project_id || null,
             department: line.department || null,
             description: line.description || '',
-            quantity: line.quantity,
+            quantity: quantity,
             unit_cost: unitCost,
-            tax_rate: line.tax_rate || 0,
-            tax_amount: line.quantity * unitCost * (line.tax_rate || 0),
-            line_total: line.quantity * unitCost,
+            tax_rate: taxRate,
+            tax_amount: quantity * unitCost * taxRate,
+            line_total: quantity * unitCost,
           };
         });
 

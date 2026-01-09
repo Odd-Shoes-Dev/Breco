@@ -18,6 +18,7 @@ import type { Customer, Product } from '@/types/database';
 
 interface ReceiptLineInput {
   product_id: string;
+  product_name?: string; // For display only
   description: string;
   quantity: number;
   unit_price: number;
@@ -32,15 +33,35 @@ interface ReceiptFormData {
   reference_invoice_number: string;
   notes: string;
   currency: string;
+  amount_paid: number;
   lines: ReceiptLineInput[];
+}
+
+interface CustomerInvoice {
+  id: string;
+  invoice_number: string;
+  total: number;
+  amount_paid: number;
+  balance_due: number;
+  invoice_date: string;
+  status: string;
 }
 
 export default function NewReceiptPage() {
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [customerInvoices, setCustomerInvoices] = useState<CustomerInvoice[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isManualInvoiceEntry, setIsManualInvoiceEntry] = useState(false);
   const [taxRate] = useState(0.0625); // MA sales tax
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({
+    USD: 1,
+    EUR: 1,
+    GBP: 1,
+    UGX: 1,
+  });
+  const [previousCurrency, setPreviousCurrency] = useState('USD');
 
   const {
     register,
@@ -54,9 +75,11 @@ export default function NewReceiptPage() {
       receipt_date: new Date().toISOString().split('T')[0],
       payment_method: 'cash',
       currency: 'USD',
+      amount_paid: 0,
       lines: [
         {
           product_id: '',
+          product_name: '',
           description: '',
           quantity: 1,
           unit_price: 0,
@@ -78,7 +101,41 @@ export default function NewReceiptPage() {
 
   useEffect(() => {
     loadData();
+    fetchExchangeRates();
   }, []);
+
+  const fetchExchangeRates = async () => {
+    try {
+      const response = await fetch('/api/exchange-rates');
+      const result = await response.json();
+      if (result.data && Array.isArray(result.data)) {
+        // Convert array to object with currency codes as keys
+        const ratesMap: Record<string, number> = {
+          USD: 1, // Base currency
+        };
+        
+        // Get the most recent rate for each currency
+        const latestRates = result.data.reduce((acc: any, rate: any) => {
+          if (!acc[rate.to_currency] || new Date(rate.effective_date) > new Date(acc[rate.to_currency].effective_date)) {
+            acc[rate.to_currency] = rate;
+          }
+          return acc;
+        }, {});
+        
+        // Build rates map (USD to each currency)
+        Object.values(latestRates).forEach((rate: any) => {
+          if (rate.from_currency === 'USD') {
+            ratesMap[rate.to_currency] = parseFloat(rate.rate);
+          }
+        });
+        
+        console.log('Exchange rates loaded:', ratesMap);
+        setExchangeRates(ratesMap);
+      }
+    } catch (error) {
+      console.error('Failed to fetch exchange rates:', error);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -90,23 +147,151 @@ export default function NewReceiptPage() {
       setCustomers(customersRes.data || []);
       setProducts(productsRes.data || []);
     } catch (error) {
-    
+      console.error('Failed to load data:', error);
+    }
+  };
 
-  // Auto-select currency from customer
+  const fetchCustomerInvoices = async (customerId: string) => {
+    try {
+      console.log('Fetching invoices for customer:', customerId);
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('id, invoice_number, total, amount_paid, invoice_date, status')
+        .eq('customer_id', customerId)
+        .eq('document_type', 'invoice')
+        .in('status', ['sent', 'partial', 'overdue'])
+        .order('invoice_date', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+
+      console.log('Fetched invoices:', data);
+
+      const invoicesWithBalance = (data || []).map(inv => ({
+        ...inv,
+        balance_due: Number(inv.total) - Number(inv.amount_paid || 0),
+      })).filter(inv => inv.balance_due > 0);
+
+      console.log('Invoices with balance:', invoicesWithBalance);
+      setCustomerInvoices(invoicesWithBalance);
+    } catch (error) {
+      console.error('Failed to fetch customer invoices:', error);
+      setCustomerInvoices([]);
+    }
+  };
+
+  // Auto-select currency from customer and load their invoices
   useEffect(() => {
     if (watchCustomerId) {
       const customer = customers.find(c => c.id === watchCustomerId);
       if (customer?.currency) {
         setValue('currency', customer.currency);
       }
+      // Load customer's unpaid/partial invoices
+      fetchCustomerInvoices(watchCustomerId);
+    } else {
+      setCustomerInvoices([]);
     }
-  }, [watchCustomerId, customers, setValue]);  console.error('Failed to load data:', error);
+  }, [watchCustomerId, customers, setValue]);
+
+  const handleInvoiceSelect = async (invoiceNumber: string) => {
+    if (!invoiceNumber || invoiceNumber === 'MANUAL') {
+      // Clear line items for manual entry
+      setValue('lines', [{
+        product_id: '',
+        product_name: '',
+        description: '',
+        quantity: 1,
+        unit_price: 0,
+        discount_percent: 0,
+        tax_rate: taxRate,
+      }]);
+      setValue('amount_paid', 0);
+      return;
+    }
+
+    try {
+      // Fetch invoice with line items
+      const { data: invoiceData, error: invoiceError } = await supabase
+        .from('invoices')
+        .select(`
+          id,
+          invoice_number,
+          total,
+          amount_paid,
+          subtotal,
+          tax_amount,
+          discount_amount,
+          currency,
+          invoice_lines (
+            id,
+            line_number,
+            product_id,
+            description,
+            quantity,
+            unit_price,
+            discount_percent,
+            discount_amount,
+            tax_rate,
+            tax_amount,
+            line_total
+          )
+        `)
+        .eq('invoice_number', invoiceNumber)
+        .single();
+
+      if (invoiceError) throw invoiceError;
+
+      console.log('Fetched invoice details:', invoiceData);
+
+      // Calculate balance due
+      const balanceDue = Number(invoiceData.total) - Number(invoiceData.amount_paid || 0);
+
+      // Update currency if different
+      if (invoiceData.currency) {
+        setValue('currency', invoiceData.currency);
+      }
+
+      // Populate line items from invoice
+      const invoiceLines = (invoiceData.invoice_lines || [])
+        .sort((a: any, b: any) => a.line_number - b.line_number)
+        .map((line: any) => {
+          // Look up product name if product_id exists
+          let productName = '';
+          if (line.product_id) {
+            const product = products.find(p => p.id === line.product_id);
+            productName = product?.name || '';
+          }
+          return {
+            product_id: line.product_id || '',
+            product_name: productName,
+            description: line.description,
+            quantity: Number(line.quantity),
+            unit_price: Number(line.unit_price),
+            discount_percent: Number(line.discount_percent || 0),
+            tax_rate: Number(line.tax_rate || 0),
+          };
+        });
+
+      if (invoiceLines.length > 0) {
+        setValue('lines', invoiceLines);
+      }
+
+      // Set amount paid to balance due
+      setValue('amount_paid', balanceDue);
+
+      toast.success(`Loaded ${invoiceLines.length} item(s) from invoice`);
+    } catch (error: any) {
+      console.error('Failed to fetch invoice details:', error);
+      toast.error('Failed to load invoice details');
     }
   };
 
   const handleProductChange = (index: number, productName: string) => {
     if (!productName) {
       // Manual entry - clear fields for user to enter
+      setValue(`lines.${index}.product_id`, '');
+      setValue(`lines.${index}.product_name`, '');
       setValue(`lines.${index}.description`, '');
       setValue(`lines.${index}.unit_price`, 0);
       setValue(`lines.${index}.tax_rate`, taxRate);
@@ -116,13 +301,34 @@ export default function NewReceiptPage() {
     // Try to find product by name
     const product = products.find((p) => p.name === productName);
     if (product) {
+      // Get current currency value directly from watch
+      const currentCurrency = watch('currency') || 'USD';
+      
+      // Convert product price from USD to current currency
+      const usdRate = exchangeRates['USD'] || 1;
+      const currentRate = exchangeRates[currentCurrency] || 1;
+      const conversionFactor = currentRate / usdRate;
+      const convertedPrice = product.unit_price * conversionFactor;
+      
+      console.log('Product selected:', {
+        product: product.name,
+        basePrice: product.unit_price,
+        currentCurrency,
+        usdRate,
+        currentRate,
+        conversionFactor,
+        convertedPrice: Math.round(convertedPrice * 100) / 100
+      });
+      
       setValue(`lines.${index}.product_id`, product.id);
+      setValue(`lines.${index}.product_name`, product.name);
       setValue(`lines.${index}.description`, product.name);
-      setValue(`lines.${index}.unit_price`, product.unit_price);
+      setValue(`lines.${index}.unit_price`, Math.round(convertedPrice * 100) / 100);
       setValue(`lines.${index}.tax_rate`, product.is_taxable ? taxRate : 0);
     } else {
       // If not found, treat as manual entry
       setValue(`lines.${index}.product_id`, '');
+      setValue(`lines.${index}.product_name`, productName);
       setValue(`lines.${index}.description`, productName);
     }
   };
@@ -172,6 +378,12 @@ export default function NewReceiptPage() {
       const subtotal = calculateSubtotal();
       const tax_amount = calculateTax();
       const total = calculateTotal();
+      
+      // Use the amount paid from form, default to total if not specified
+      const amountPaid = data.amount_paid && data.amount_paid > 0 ? data.amount_paid : total;
+      
+      // Determine status based on payment
+      const status = amountPaid >= total ? 'paid' : 'partial';
 
       // Get AR account
       const { data: arAccount } = await supabase
@@ -191,14 +403,15 @@ export default function NewReceiptPage() {
           invoice_date: data.receipt_date,
           due_date: data.receipt_date, // Same as receipt date for receipts
           payment_terms: data.payment_method === 'cash' ? 0 : 30,
+          reference_invoice_number: data.reference_invoice_number || null,
           notes: data.notes || null,
           currency: data.currency || 'USD',
           subtotal,
           tax_amount,
           discount_amount: 0,
           total,
-          amount_paid: total, // Receipts are always fully paid
-          status: 'paid',
+          amount_paid: amountPaid,
+          status: status,
           ar_account_id: arAccount?.id,
           created_by: user.id,
         })
@@ -244,6 +457,59 @@ export default function NewReceiptPage() {
       if (!journalResult.success) {
         console.error('Failed to create journal entry for receipt:', journalResult.error);
         // Don't fail receipt creation, just log the error
+      }
+
+      // Update related invoice if reference exists and matches a system invoice
+      if (data.reference_invoice_number && data.reference_invoice_number.trim() !== '') {
+        try {
+          // Check if this invoice exists in the system
+          const { data: relatedInvoice, error: invoiceCheckError } = await supabase
+            .from('invoices')
+            .select('id, invoice_number, total, amount_paid, document_type')
+            .eq('invoice_number', data.reference_invoice_number.trim())
+            .eq('document_type', 'invoice')
+            .single();
+
+          if (!invoiceCheckError && relatedInvoice) {
+            // Calculate new amount paid for the invoice
+            const currentInvoiceAmountPaid = Number(relatedInvoice.amount_paid || 0);
+            const paymentToApply = Number(amountPaid); // Use the amount_paid from receipt
+            const newInvoiceAmountPaid = currentInvoiceAmountPaid + paymentToApply;
+            const invoiceTotal = Number(relatedInvoice.total);
+
+            // Round to avoid floating-point precision issues
+            const roundedNewAmount = Math.round(newInvoiceAmountPaid * 100) / 100;
+            const roundedTotal = Math.round(invoiceTotal * 100) / 100;
+
+            // Determine new invoice status
+            let newInvoiceStatus = 'partial';
+            if (roundedNewAmount >= roundedTotal) {
+              newInvoiceStatus = 'paid';
+            }
+
+            // Update the invoice
+            const { error: updateError } = await supabase
+              .from('invoices')
+              .update({
+                amount_paid: roundedNewAmount,
+                status: newInvoiceStatus,
+              })
+              .eq('id', relatedInvoice.id);
+
+            if (updateError) {
+              console.error('Failed to update related invoice:', updateError);
+              toast.error(`Receipt created but failed to update invoice ${data.reference_invoice_number}`);
+            } else {
+              console.log(`Updated invoice ${data.reference_invoice_number}: amount_paid = ${roundedNewAmount}, status = ${newInvoiceStatus}`);
+            }
+          } else {
+            // Invoice not found in system - probably external invoice
+            console.log(`Invoice ${data.reference_invoice_number} not found in system (likely external)`);
+          }
+        } catch (error) {
+          console.error('Error updating related invoice:', error);
+          // Don't fail receipt creation if invoice update fails
+        }
       }
 
       toast.success('Receipt created successfully!');
@@ -317,20 +583,106 @@ export default function NewReceiptPage() {
                 <label className="label">Currency *</label>
                 <CurrencySelect
                   value={watchCurrency || 'USD'}
-                  onChange={(e) => setValue('currency', e.target.value)}
+                  onChange={(e) => {
+                    const newCurrency = e.target.value;
+                    const oldCurrency = previousCurrency;
+                    
+                    console.log('Currency change:', { oldCurrency, newCurrency, exchangeRates });
+                    
+                    // Convert existing line items to new currency
+                    if (oldCurrency !== newCurrency) {
+                      const oldRate = exchangeRates[oldCurrency] || 1;
+                      const newRate = exchangeRates[newCurrency] || 1;
+                      const conversionFactor = newRate / oldRate;
+                      
+                      console.log('Conversion:', { oldRate, newRate, conversionFactor });
+                      
+                      // Convert all line items
+                      watchLines.forEach((line, index) => {
+                        const convertedUnitPrice = line.unit_price * conversionFactor;
+                        setValue(`lines.${index}.unit_price`, Math.round(convertedUnitPrice * 100) / 100);
+                      });
+                      
+                      setPreviousCurrency(newCurrency);
+                    }
+                    
+                    setValue('currency', newCurrency);
+                  }}
                 />
               </div>
 
               <div className="form-group md:col-span-2">
                 <label className="label">Related Invoice Number (Optional)</label>
+                {!isManualInvoiceEntry ? (
+                  <select
+                    {...register('reference_invoice_number')}
+                    onChange={(e) => {
+                      const selectedValue = e.target.value;
+                      if (selectedValue === 'MANUAL') {
+                        setIsManualInvoiceEntry(true);
+                        setValue('reference_invoice_number', '');
+                        handleInvoiceSelect('');
+                      } else {
+                        handleInvoiceSelect(selectedValue);
+                      }
+                    }}
+                    className="input"
+                  >
+                    <option value="">Select an invoice or leave blank</option>
+                    {customerInvoices.length > 0 && (
+                      <optgroup label="Unpaid Invoices">
+                        {customerInvoices.map((invoice) => (
+                          <option key={invoice.id} value={invoice.invoice_number}>
+                            {invoice.invoice_number} - Balance: {formatCurrency(invoice.balance_due)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="Manual Entry">
+                      <option value="MANUAL">Type external invoice number...</option>
+                    </optgroup>
+                  </select>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      {...register('reference_invoice_number')}
+                      className="input flex-1"
+                      placeholder="e.g., EXT-INV-12345"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsManualInvoiceEntry(false);
+                        setValue('reference_invoice_number', '');
+                        handleInvoiceSelect('');
+                      }}
+                      className="btn-secondary whitespace-nowrap"
+                    >
+                      Select from List
+                    </button>
+                  </div>
+                )}
+                <p className="text-sm text-gray-500 mt-1">
+                  {customerInvoices.length > 0 
+                    ? `${customerInvoices.length} unpaid invoice(s) available - selecting one will auto-fill items`
+                    : isManualInvoiceEntry 
+                      ? 'Type external/physical invoice number and enter items manually below'
+                      : 'Select customer first to see their invoices, or choose manual entry'}
+                </p>
+              </div>
+
+              <div className="form-group">
+                <label className="label">Amount Paid *</label>
                 <input
-                  type="text"
-                  {...register('reference_invoice_number')}
+                  type="number"
+                  step="0.01"
+                  {...register('amount_paid', { min: 0 })}
                   className="input"
-                  placeholder="e.g., INV-2025-00001"
+                  placeholder="0.00"
                 />
                 <p className="text-sm text-gray-500 mt-1">
-                  Reference the invoice this receipt is for (if applicable)
+                  Leave empty or 0 to record full payment. Enter partial amount if not fully paid.
                 </p>
               </div>
             </div>
@@ -346,6 +698,7 @@ export default function NewReceiptPage() {
               onClick={() =>
                 append({
                   product_id: '',
+                  product_name: '',
                   description: '',
                   quantity: 1,
                   unit_price: 0,
@@ -380,6 +733,7 @@ export default function NewReceiptPage() {
                     <div className="form-group">
                       <label className="label text-sm">Product/Service</label>
                       <input
+                        {...register(`lines.${index}.product_name`)}
                         list={`products-${index}`}
                         onChange={(e) => handleProductChange(index, e.target.value)}
                         className="input input-sm"
@@ -387,9 +741,7 @@ export default function NewReceiptPage() {
                       />
                       <datalist id={`products-${index}`}>
                         {products.map((product) => (
-                          <option key={product.id} value={product.name}>
-                            {product.name} - {formatCurrency(product.unit_price)}
-                          </option>
+                          <option key={product.id} value={product.name} />
                         ))}
                       </datalist>
                     </div>
