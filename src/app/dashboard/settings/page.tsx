@@ -13,7 +13,10 @@ import {
   UserGroupIcon,
   ShieldCheckIcon,
   PaintBrushIcon,
+  BookOpenIcon,
+  ArrowTopRightOnSquareIcon,
 } from '@heroicons/react/24/outline';
+import Link from 'next/link';
 import type { CompanySettings } from '@/types/database';
 
 type SettingsTab = 'company' | 'financial' | 'invoicing' | 'notifications' | 'users' | 'security' | 'branding';
@@ -390,6 +393,28 @@ export default function SettingsPage() {
                   <p className="text-sm text-blue-700 mt-1">
                     USD (US Dollar) - Contact support to change base currency
                   </p>
+                </div>
+
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <BookOpenIcon className="w-5 h-5 text-green-700" />
+                        <h4 className="font-medium text-green-900">Chart of Accounts</h4>
+                      </div>
+                      <p className="text-sm text-green-700">
+                        View all account numbers and categories for bills, expenses, and transactions
+                      </p>
+                    </div>
+                    <Link 
+                      href="/dashboard/chart-of-accounts"
+                      className="btn-secondary whitespace-nowrap ml-4"
+                    >
+                      <BookOpenIcon className="w-4 h-4 mr-2" />
+                      View Chart
+                      <ArrowTopRightOnSquareIcon className="w-4 h-4 ml-2" />
+                    </Link>
+                  </div>
                 </div>
 
                 <hr />

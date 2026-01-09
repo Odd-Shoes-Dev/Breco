@@ -96,8 +96,10 @@ export default function RecordBillPaymentPage() {
         throw new Error('Please enter a valid amount');
       }
 
-      const balanceDue = bill!.total - bill!.amount_paid;
-      if (amount > balanceDue) {
+      const balanceDue = Math.round((bill!.total - bill!.amount_paid) * 100) / 100;
+      const paymentAmount = Math.round(amount * 100) / 100;
+      
+      if (paymentAmount > balanceDue + 0.01) { // Add tolerance for floating-point precision
         throw new Error(`Amount cannot exceed balance due (${formatCurrency(balanceDue)})`);
       }
 

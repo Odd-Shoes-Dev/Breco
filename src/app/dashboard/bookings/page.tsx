@@ -13,6 +13,10 @@ import {
   PencilIcon,
   ChevronDownIcon,
   FunnelIcon,
+  MapIcon,
+  BuildingOffice2Icon,
+  TruckIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
@@ -40,9 +44,25 @@ const STATUS_LABELS: Record<BookingStatus, string> = {
   refunded: 'Refunded',
 };
 
+const BOOKING_TYPE_ICONS: Record<string, React.ComponentType<any>> = {
+  tour: MapIcon,
+  hotel: BuildingOffice2Icon,
+  car_hire: TruckIcon,
+  custom: SparklesIcon,
+};
+
+const BOOKING_TYPE_LABELS: Record<string, string> = {
+  tour: 'Tour Package',
+  hotel: 'Hotel',
+  car_hire: 'Car Hire',
+  custom: 'Custom',
+};
+
 interface BookingWithRelations extends Booking {
   customer?: { id: string; name: string; email: string | null };
   tour_package?: { id: string; name: string; package_code: string };
+  hotel?: { id: string; name: string; star_rating: number | null };
+  vehicle?: { id: string; vehicle_type: string; registration_number: string };
 }
 
 export default function BookingsPage() {
@@ -50,6 +70,7 @@ export default function BookingsPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [bookingTypeFilter, setBookingTypeFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<'all' | 'upcoming' | 'past'>('all');
 
   useEffect(() => {
@@ -117,7 +138,10 @@ export default function BookingsPage() {
       (dateFilter === 'upcoming' && travelDate >= today) ||
       (dateFilter === 'past' && travelDate < today);
     
-    return matchesSearch && matchesStatus && matchesDate;
+    // Type filter
+    const matchesType = bookingTypeFilter === 'all' || booking.booking_type === bookingTypeFilter;
+    
+    return matchesSearch && matchesStatus && matchesDate && matchesType;
   });
 
   const formatDate = (dateString: string) => {
@@ -251,6 +275,16 @@ export default function BookingsPage() {
               ))}
             </select>
             <select
+              value={bookingTypeFilter}
+              onChange={(e) => setBookingTypeFilter(e.target.value)}
+              className="input w-full lg:w-36"
+            >
+              <option value="all">All Types</option>
+              {Object.entries(BOOKING_TYPE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <select
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value as any)}
               className="input w-full lg:w-36"
@@ -281,8 +315,9 @@ export default function BookingsPage() {
               <thead>
                 <tr>
                   <th>Booking</th>
+                  <th>Type</th>
                   <th>Customer</th>
-                  <th>Tour</th>
+                  <th>Details</th>
                   <th>Travel Dates</th>
                   <th>Guests</th>
                   <th>Total</th>
@@ -306,6 +341,17 @@ export default function BookingsPage() {
                         </div>
                       </td>
                       <td>
+                        {(() => {
+                          const Icon = BOOKING_TYPE_ICONS[booking.booking_type];
+                          return (
+                            <div className="flex items-center gap-2">
+                              <Icon className="w-4 h-4 text-gray-400" />
+                              <span className="text-sm text-gray-600">{BOOKING_TYPE_LABELS[booking.booking_type]}</span>
+                            </div>
+                          );
+                        })()}
+                      </td>
+                      <td>
                         <div>
                           <p className="font-medium text-gray-900">{booking.customer?.name}</p>
                           <p className="text-xs text-gray-500">{booking.customer?.email}</p>
@@ -313,13 +359,40 @@ export default function BookingsPage() {
                       </td>
                       <td>
                         <div>
-                          <p className="font-medium text-gray-900 line-clamp-1">
-                            {booking.tour_package?.name || 'Custom Tour'}
-                          </p>
-                          {booking.tour_package && (
-                            <p className="text-xs text-gray-500 font-mono">
-                              {booking.tour_package.package_code}
-                            </p>
+                          {booking.booking_type === 'tour' && booking.tour_package && (
+                            <>
+                              <p className="font-medium text-gray-900 line-clamp-1">
+                                {booking.tour_package.name}
+                              </p>
+                              <p className="text-xs text-gray-500 font-mono">
+                                {booking.tour_package.package_code}
+                              </p>
+                            </>
+                          )}
+                          {booking.booking_type === 'hotel' && booking.hotel && (
+                            <>
+                              <p className="font-medium text-gray-900 line-clamp-1">
+                                {booking.hotel.name}
+                              </p>
+                              {booking.hotel.star_rating && (
+                                <p className="text-xs text-yellow-600">
+                                  {'★'.repeat(booking.hotel.star_rating)}
+                                </p>
+                              )}
+                            </>
+                          )}
+                          {booking.booking_type === 'car_hire' && booking.vehicle && (
+                            <>
+                              <p className="font-medium text-gray-900 line-clamp-1">
+                                {booking.vehicle.vehicle_type}
+                              </p>
+                              <p className="text-xs text-gray-500 font-mono">
+                                {booking.vehicle.registration_number}
+                              </p>
+                            </>
+                          )}
+                          {booking.booking_type === 'custom' && (
+                            <p className="font-medium text-gray-900">Custom Booking</p>
                           )}
                         </div>
                       </td>

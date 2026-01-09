@@ -207,6 +207,12 @@ export interface Booking {
   customer_id: string;
   booking_type: 'tour' | 'hotel' | 'car_hire' | 'custom';
   tour_package_id: string | null;
+  hotel_id: string | null;
+  room_type: string | null;
+  num_rooms: number | null;
+  rental_type: string | null;
+  pickup_location: string | null;
+  dropoff_location: string | null;
   booking_date: string;
   travel_start_date: string;
   travel_end_date: string;

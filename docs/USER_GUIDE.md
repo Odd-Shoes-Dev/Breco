@@ -1,8 +1,8 @@
 # Breco Safaris Operations & Finance System
 ## Complete User Guide
 
-**Version:** 1.0  
-**Last Updated:** January 2026  
+**Version:** 1.1  
+**Last Updated:** January 9, 2026  
 **System:** Breco Safaris Management Platform
 
 ---
@@ -30,7 +30,8 @@
 
 Breco Safaris Operations & Finance System is a comprehensive business management platform designed specifically for tour and safari operations. It integrates:
 
-- **Tour Operations Management** - Bookings, packages, hotels, fleet
+- **Unified Booking System** - Handle tour packages, hotel bookings, and car hire from one interface
+- **Tour Operations Management** - Packages, itineraries, destinations, guides
 - **Financial Accounting** - Full double-entry accounting, invoicing, expenses
 - **HR & Payroll** - Employee management, salary processing, payslips
 - **Inventory & Assets** - Stock management, fixed asset tracking
@@ -176,31 +177,102 @@ When you log in, you'll see the main dashboard with:
 
 ### 4.2 Bookings
 
+The booking system handles all types of reservations in one unified interface:
+- **Tour Packages** - Multi-day safari tours
+- **Hotel Bookings** - Accommodation only
+- **Car Hire** - Vehicle rentals
+- **Custom Bookings** - Combined hotel + vehicle packages
+
 **Creating a New Booking**
 
 1. Go to **Tour Operations → Bookings**
 2. Click **New Booking**
-3. Select or create customer:
-   - Name, email, phone
-   - Country, ID/Passport
-4. Choose tour package
-5. Select dates and number of travelers
-6. Add special requests
-7. Calculate total price
-8. Click **Create Booking**
+3. **Select Booking Type**:
+   - Click the type button at the top: Tour Package, Hotel, Car Hire, or Custom
+   - The form adapts to show relevant fields for your selection
+
+4. **Customer Information**:
+   - Select existing customer or create new
+   - Enter name, email, phone
+   - Add country, ID/Passport if needed
+
+5. **Fill Type-Specific Details**:
+
+   **For Tour Package:**
+   - Select tour package from dropdown
+   - System auto-fills duration and pricing
+   - Enter number of travelers (adults/children/infants)
+   - Select travel dates
+   
+   **For Hotel:**
+   - Select hotel from dropdown
+   - Choose room type (single, double, suite, etc.)
+   - Enter number of rooms
+   - Select check-in and check-out dates
+   - System calculates nights and total cost
+   
+   **For Car Hire:**
+   - Select vehicle from fleet
+   - Choose rental type (self-drive or with driver)
+   - Enter pickup and dropoff locations
+   - Select rental dates
+   - System calculates daily rate and total
+   
+   **For Custom:**
+   - Select hotel AND/OR vehicle
+   - All relevant fields appear for both
+   - System calculates combined total
+
+6. **Additional Details**:
+   - Add special requests
+   - Enter dietary requirements
+   - Add internal notes
+   - Apply discounts if applicable
+
+7. **Review & Create**:
+   - System automatically calculates totals
+   - Review pricing breakdown
+   - Click **Create Booking**
+
+**Booking List Features**
+
+The bookings list now shows all booking types together:
+- **Type Filter**: Filter by Tour, Hotel, Car Hire, or Custom
+- **Type Icons**: Visual indicators for each booking type
+  - 🗺️ Tour Package
+  - 🏢 Hotel
+  - 🚗 Car Hire
+  - ✨ Custom
+- **Details Column**: Shows relevant item (package name, hotel name, or vehicle)
+- **Status Filter**: Filter by booking status
+- **Date Filter**: View upcoming or past bookings
 
 **Booking Statuses**
-- **Pending**: Awaiting confirmation
-- **Confirmed**: Customer confirmed
-- **In Progress**: Tour is ongoing
-- **Completed**: Tour finished
+- **Inquiry**: Initial customer inquiry
+- **Quote Sent**: Quotation sent to customer
+- **Confirmed**: Booking confirmed by customer
+- **Deposit Paid**: Partial payment received
+- **Fully Paid**: Complete payment received
+- **In Progress**: Service is ongoing
+- **Completed**: Service finished
 - **Cancelled**: Booking cancelled
+- **Refunded**: Payment refunded
+
+**Viewing Booking Details**
+
+Click any booking to see:
+- **Tour bookings**: Package details, itinerary, duration, travelers
+- **Hotel bookings**: Hotel name, star rating, room type, number of rooms
+- **Car hire**: Vehicle type, registration, rental type, pickup/dropoff locations
+- **Custom bookings**: Combined hotel and vehicle information
 
 **Booking Actions**
 - **Convert to Invoice**: Generate invoice for payment
 - **Send Confirmation**: Email booking details
-- **Modify**: Change dates or travelers
+- **Modify**: Change dates or details
+- **Change Status**: Update booking status
 - **Cancel**: Cancel booking (with reason)
+- **Add Notes**: Internal notes and updates
 
 ### 4.3 Hotels Management
 
@@ -251,7 +323,7 @@ When you log in, you'll see the main dashboard with:
 
 **Understanding Accounts**
 
-The Chart of Accounts is the foundation of your accounting system:
+The Chart of Accounts is the foundation of your accounting system. Every financial transaction must be categorized using these account numbers.
 
 **Account Types:**
 - **Assets**: What you own (cash, inventory, equipment)
@@ -260,10 +332,77 @@ The Chart of Accounts is the foundation of your accounting system:
 - **Revenue**: Income from sales
 - **Expenses**: Business costs
 
-**Viewing Accounts**
-1. Go to **Finance → General Ledger → Chart of Accounts**
-2. View organized by type and category
-3. Click account to see transaction history
+**Viewing the Chart of Accounts**
+
+1. Go to **Settings → Financial** tab
+2. Scroll down to find **"Chart of Accounts"** section
+3. Click **"View Chart"** button
+4. Or navigate directly to **Finance → Chart of Accounts**
+
+**What You'll See:**
+- Complete list of all account numbers and names
+- Accounts grouped by type (Assets, Expenses, Revenue, etc.)
+- Search functionality to find specific accounts
+- Filter by account type
+- Quick reference guide for common accounts
+
+**Common Account Number Ranges:**
+
+**5000-5999: Cost of Services (Direct Costs)**
+- **5100** - Park Entry Fees
+- **5110** - Gorilla Permits Cost
+- **5120** - Chimpanzee Permits Cost
+- **5200** - Accommodation Costs
+- **5300** - Guide & Porter Fees
+- **5400** - Meals for Clients
+- **5500** - Activity Costs (boat hire, equipment rental)
+
+**6000-6999: Operating Expenses**
+- **6100** - Salaries & Wages
+- **6200** - Office Rent
+- **6210** - Utilities
+- **6220** - Telephone & Internet
+- **6300** - Insurance
+- **6400** - Office Supplies
+- **6500** - Professional Fees
+- **6600** - Bank Charges
+
+**7000-7999: Other Expenses**
+- **7000** - Marketing & Advertising
+- **7500** - Fleet Expenses
+- **7510** - Fuel & Diesel
+- **7520** - Vehicle Servicing
+- **7600** - Travel & Entertainment
+- **7700** - Repairs & Maintenance
+
+**4000-4999: Revenue Accounts**
+- **4100** - Tour Revenue
+- **4110** - Safari Packages
+- **4200** - Car Hire Revenue
+- **4300** - Accommodation Commissions
+- **4400** - Airport Transfers
+
+**How to Use Account Numbers:**
+
+When creating bills, expenses, or journal entries, you'll select an account number. Choose the one that best describes your transaction:
+
+**Examples:**
+- Paying for gorilla permits → Use **5110** (Gorilla Permits Cost)
+- Employee salaries → Use **6100** (Salaries & Wages)
+- Vehicle fuel → Use **7510** (Fuel & Diesel)
+- Safari package sale → Use **4110** (Safari Packages)
+
+**Searching for Accounts:**
+1. Use the search box to find accounts by number or name
+2. Type keywords like "fuel" or "5510"
+3. Filter by account type (Expenses, Revenue, etc.)
+4. Click on any account to see its details
+
+**Best Practices:**
+- Always use the most specific account available
+- Consult the Chart of Accounts when unsure
+- Consistent categorization helps with accurate reporting
+- Contact your accountant if you need a new account category
 
 ### 5.2 Customer Invoices
 
@@ -306,19 +445,107 @@ The Chart of Accounts is the foundation of your accounting system:
 
 ### 5.3 Recording Payments (Receipts)
 
-**When Payment is Received**
+**Understanding Receipts**
+
+Receipts serve two purposes:
+1. **Proof of payment** for an invoice you issued
+2. **Standalone receipt** for walk-in sales or cash transactions
+
+**Creating a Receipt for an Invoice Payment**
 
 1. Go to **Finance → Receipts**
 2. Click **New Receipt**
-3. Select:
-   - **Customer**: Who paid
-   - **Invoice**: Which invoice (or manual entry)
-   - **Amount**: How much received
-   - **Payment Method**: Cash, Bank Transfer, Card, etc.
-   - **Date**: Payment date
-   - **Bank Account**: Where money went
-4. Add reference number (check #, transfer ID)
-5. Click **Save**
+3. Select **Customer**
+4. In **Related Invoice Number** field:
+   - Click dropdown to see unpaid/partial invoices for this customer
+   - Select the invoice being paid
+   - System auto-fills all line items, taxes, and amounts from invoice
+   - Pre-fills "Amount Paid" with invoice balance
+5. Adjust amount if partial payment
+6. Select **Payment Method** (Cash, Bank Transfer, etc.)
+7. Add reference number if applicable
+8. Click **Create Receipt**
+
+**What Happens Automatically:**
+- Invoice line items populate in receipt
+- Amount Paid defaults to invoice balance
+- Invoice status updates (Partial or Paid)
+- Invoice amount_paid increases
+- Payment recorded in audit trail
+
+**Creating a Standalone Receipt (No Invoice)**
+
+For walk-in sales, external invoices, or cash sales:
+
+1. Go to **Finance → Receipts**
+2. Click **New Receipt**
+3. Select **Customer**
+4. **Related Invoice Number**: 
+   - **Currency**: USD, UGX, EUR, etc.
+4. Add line items:
+   - **Description**: What you're paying for
+   - **Quantity**: Number of units
+   - **Unit Cost**: Price per unit
+   - **Account**: **IMPORTANT** - Select account number that describes the expense
+     - Example: Gorilla permits → 5110
+     - Example: Fuel → 7510
+     - Example: Office rent → 6200
+   - **Tax Rate**: If applicable
+5. Review total
+6. Click **Save**
+
+**Selecting the Right Account:**
+
+When adding line items to a bill, the "Account" dropdown shows account numbers. These categorize your expenses:
+
+- **Don't know which account?** Go to **Settings → Financial → View Chart** for reference
+- Search for the expense type (e.g., "fuel", "permits")
+- Use the most specific account available
+- Common accounts are listed in the Chart of Accounts
+
+**Bill Statuses:**
+- **Draft**: Being prepared
+- **Pending Approval**: Awaiting approval
+- **Approved**: Ready for payment
+- **Partial**: Some payment made
+- **Paid**: Fully paid
+- **Overdue**: Past due date
+
+**Bill Payment**
+
+1. Open the bill
+2. Click **Record Payment**
+3. Enter:
+   - **Payment Date**: When paid
+   - **Amount**: How much (can be partial)
+   - **Payment Method**: Bank Transfer, Cash, etc.
+   - **Bank Account**: Which account paid from
+   - **Reference**: Check number or transfer ID
+   - **Notes**: Any additional info
+4. Click **Save**
+
+**What Happens:**
+- Bill status updates (Partial or Paid)
+- Bank account balance reduces
+- Journal entry created automatically
+- Payment recorded in audit trail
+
+**Multi-Currency Bills:**
+- Select currency when creating bill
+- Exchange rate applied automatically
+- Converts to base currency (USD) for reporting
+- Can change currency - items convert automatically
+If you created a receipt without an invoice and need to record another payment:
+
+1. Open the receipt
+2. If balance due shows > $0, click **"Record Payment"** button
+3. Enter:
+   - Payment amount
+   - Payment method
+   - Notes (optional)
+4. Click **Save**
+
+**Note:** Receipts linked to invoices don't show "Record Payment" button because they already documented the invoice payment.
 
 **Payment Methods:**
 - Cash
@@ -326,10 +553,20 @@ The Chart of Accounts is the foundation of your accounting system:
 - Credit Card
 - Mobile Money
 - Check
+- Stripe
 
-**Multiple Invoices:**
-- Can apply one payment to multiple invoices
-- System tracks partial payments automatically
+**Important Notes:**
+- Receipts that reference invoices automatically update the invoice
+- Can't edit receipt after creation (void and recreate if needed)
+- Amount paid cannot exceed receipt total
+- System handles floating-point precision automatically
+
+**Viewing Receipt History:**
+1. Go to **Finance → Receipts**
+2. Search by receipt number, customer, or invoice number
+3. Click receipt to view details
+4. See related invoice link (if applicable)
+5. Print or email receipt to customer
 
 ### 5.4 Vendor Bills
 
@@ -952,22 +1189,81 @@ Use for:
 - Items sold
 - Items purchased
 - Adjustments made
+Financial Settings
 
-**Low Stock Alert**
-- Items below reorder point
-- Suggested purchase quantities
+**Accessing Financial Settings**
 
-### 9.7 Asset Reports
+1. Go to **Settings**
+2. Click **Financial** tab
+3. Configure fiscal year, tax rates, and view Chart of Accounts
 
-**Asset Register**
-- All assets listed
-- Purchase dates and costs
-- Current values
-- Depreciation to date
+**Fiscal Year Settings**
+- Set fiscal year start month (e.g., January)
+- Default payment terms (e.g., 30 days)
+- Default tax rate
 
-**Depreciation Schedule**
-- Monthly/annual depreciation
-- Accumulated depreciation
+**Chart of Accounts**
+
+The Chart of Accounts is your complete list of account categories for financial transactions:
+
+**Accessing:**
+1. In Settings → Financial tab
+2. Find "Chart of Accounts" section (green box)
+3. Click **"View Chart"** button
+4. Opens complete account reference page
+
+**Features:**
+- **Search**: Find accounts by number or name
+- **Filter**: View by type (Assets, Expenses, Revenue, etc.)
+- **Groups**: Accounts organized by category
+- **Quick Reference**: Common account guides included
+
+**Using Account Numbers:**
+
+Every bill, expense, and transaction needs an account category. The Chart of Accounts shows all available accounts with their numbers:
+
+**Example Accounts:**
+- **5110** - Gorilla Permits Cost
+- **6100** - Salaries & Wages
+- **7510** - Fuel & Diesel
+- **4110** - Safari Package Revenue
+
+**When to Reference:**
+- Creating bills (selecting expense account)
+- Recording expenses (categorizing)
+- Creating journal entries
+- Understanding financial reports
+
+**Multi-Currency Support**
+
+**Base Currency:** USD (US Dollar)
+
+**Additional Currencies:**
+- EUR (Euro)
+- GBP (British Pound)
+- UGX (Ugandan Shilling)
+
+**Exchange Rates:**
+1. In Settings → Financial tab
+2. Scroll to "Exchange Rates" section
+3. Click **"Refresh Exchange Rates"** button
+4. Fetches latest rates from exchangerate-api.com
+5. Rates cached in database
+
+**Using Multiple Currencies:**
+- Create invoices in any currency
+- Create bills in any currency
+- System converts to base currency automatically
+- Exchange rates applied at transaction time
+- Change currency on forms - amounts convert automatically
+- Financial reports show in base currency (USD)
+- Exchange gains/losses tracked
+
+**Currency Conversion:**
+- Automatic when selecting products
+- Manual currency change converts all line items
+- Real-time exchange rates from API
+- Historical rates preserved on transactions
 - Book values
 - By category
 
@@ -1023,23 +1319,53 @@ Use for:
    - Account (Tax Payable)
 3. Click **Save**
 
-**Applying Taxes:**
-- Select on invoice lines
-- Automatically calculated
-- Tracks tax liability
+**AppWhat's the difference between an Invoice and a Receipt?**
+A: An **Invoice** requests payment from customer. A **Receipt** proves payment was received. Create invoice first, then receipt when customer pays.
 
-### 10.4 Payment Methods
+**Q: Can I create a receipt for a walk-in customer without an invoice?**
+A: Yes! Create a standalone receipt. Leave the "Related Invoice Number" blank or enter an external reference. Add line items manually.
 
-**Setting Up Payment Options**
+**Q: How do I link a receipt to an invoice?**
+A: When creating a receipt, select the customer, then choose their unpaid invoice from the dropdown. System auto-fills all details from the invoice.
 
-1. Go to **Settings → Payment Methods**
-2. Add methods:
-   - Cash
-   - Bank Transfer
-   - Credit Card
-   - Mobile Money
-3. Link to bank accounts
-4. Click **Save**
+**Q: What happens when I create a receipt for an invoice?**
+A: The invoice automatically updates: amount_paid increases, status changes to "Partial" or "Paid", and the invoice balance adjusts.
+
+**Q: Which account number do I use for expenses?**
+A: Go to **Settings → Financial → View Chart** to see all accounts. Search by description (e.g., "fuel" shows 7510). Use the most specific account available.
+
+**Q: How do I find the right account number?**
+A: Open the Chart of Accounts from Settings. Search for keywords or browse by category. Common accounts are listed in the quick reference guide.
+
+**Q: Can I record partial payments?**
+A: Yes! For invoices: use "Record Payment" and enter partial amount. For receipts: enter the amount paid when creating the receipt. System tracks balance automatically.
+
+**Q: How do I handle refunds?**
+A: Create a Credit Note for the invoice amount, then create a payment (negative amount) from the customer's account.
+
+**Q: Can I edit an invoice after it's sent?**
+A: You cannot edit a sent invoice. Instead, void it and create a new one, or create a credit note for adjustments.
+
+**Q: How do I track cash in hand?**
+A: Set up a "Petty Cash" bank account. Record cash receipts and expenses through this account. Reconcile regularly.
+
+**Q: What if I make a mistake in accounting?**
+A: Contact your accountant or admin. They can create correcting journal entries. Never delete posted transactions.
+
+**Q: How often should I reconcile bank accounts?**
+A: Best practice is monthly, but weekly is even better. This helps catch errors early.
+
+**Q: What's a journal entry and when do I need it?**
+A: A journal entry is a manual accounting record. Use for depreciation, corrections, or complex transactions not covered by standard forms.
+
+**Q: Why can't I pay more than the balance due?**
+A: System prevents overpayment for accuracy. If you need to pay more, create a separate transaction for the additional amount.
+
+**Q: How does multi-currency work?**
+A: Select currency when creating invoices/bills. System uses real-time exchange rates to convert. Reports show in base currency (USD). Can change currency mid-entry - amounts convert automatically.
+
+**Q: Where do exchange rates come from?**
+A: From exchangerate-api.com. Refresh rates in Settings → Financial. Rates update automatically but you can manually refresh anytime
 
 ### 10.5 User Management
 

@@ -79,8 +79,10 @@ export async function POST(
     }
 
     // Check if payment amount exceeds balance
-    const balance = parseFloat(bill.total || 0) - parseFloat(bill.amount_paid || 0);
-    if (body.amount > balance) {
+    const balance = Math.round((parseFloat(bill.total || 0) - parseFloat(bill.amount_paid || 0)) * 100) / 100;
+    const paymentAmount = Math.round(parseFloat(body.amount) * 100) / 100;
+    
+    if (paymentAmount > balance + 0.01) { // Add tolerance for floating-point precision
       return NextResponse.json(
         { error: `Payment amount cannot exceed bill balance of ${balance}` },
         { status: 400 }
