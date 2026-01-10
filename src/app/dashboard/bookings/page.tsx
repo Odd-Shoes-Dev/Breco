@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { Booking, BookingStatus } from '@/types/breco';
 import {
   PlusIcon,
@@ -22,26 +23,20 @@ import toast from 'react-hot-toast';
 
 const STATUS_COLORS: Record<BookingStatus, string> = {
   inquiry: 'bg-purple-100 text-purple-800',
-  quote_sent: 'bg-blue-100 text-blue-800',
   confirmed: 'bg-breco-navy text-white',
   deposit_paid: 'bg-breco-gold text-white',
   fully_paid: 'bg-green-100 text-green-800',
-  in_progress: 'bg-breco-teal text-white',
   completed: 'bg-green-500 text-white',
   cancelled: 'bg-gray-200 text-gray-600',
-  refunded: 'bg-red-100 text-red-800',
 };
 
 const STATUS_LABELS: Record<BookingStatus, string> = {
   inquiry: 'Inquiry',
-  quote_sent: 'Quote Sent',
   confirmed: 'Confirmed',
   deposit_paid: 'Deposit Paid',
   fully_paid: 'Fully Paid',
-  in_progress: 'In Progress',
   completed: 'Completed',
   cancelled: 'Cancelled',
-  refunded: 'Refunded',
 };
 
 const BOOKING_TYPE_ICONS: Record<string, React.ComponentType<any>> = {
@@ -66,6 +61,7 @@ interface BookingWithRelations extends Booking {
 }
 
 export default function BookingsPage() {
+  const router = useRouter();
   const [bookings, setBookings] = useState<BookingWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -331,7 +327,11 @@ export default function BookingsPage() {
                   const daysUntil = getDaysUntilTravel(booking.travel_start_date);
                   
                   return (
-                    <tr key={booking.id}>
+                    <tr 
+                      key={booking.id}
+                      onClick={() => router.push(`/dashboard/bookings/${booking.id}`)}
+                      className="cursor-pointer hover:bg-gray-50 transition-colors"
+                    >
                       <td>
                         <div>
                           <p className="font-medium text-gray-900">{booking.booking_number}</p>
@@ -427,7 +427,7 @@ export default function BookingsPage() {
                         )}
                       </td>
                       <td>
-                        <div className="relative group">
+                        <div className="relative group" onClick={(e) => e.stopPropagation()}>
                           <button
                             className={`badge ${STATUS_COLORS[booking.status]} cursor-pointer flex items-center gap-1`}
                           >
@@ -450,7 +450,7 @@ export default function BookingsPage() {
                         </div>
                       </td>
                       <td>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                           <Link
                             href={`/dashboard/bookings/${booking.id}`}
                             className="p-1 hover:bg-gray-100 rounded"

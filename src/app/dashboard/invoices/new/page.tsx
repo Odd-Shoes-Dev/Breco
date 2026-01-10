@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { CurrencySelect } from '@/components/ui';
@@ -38,10 +38,21 @@ interface InvoiceFormData {
 
 export default function NewInvoicePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [taxRate] = useState(0.0625); // MA sales tax
+
+  // Get query parameters from URL (for booking-generated invoices)
+  const bookingId = searchParams.get('booking_id');
+  const prefilledCustomerId = searchParams.get('customer_id');
+  const prefilledCurrency = searchParams.get('currency') as 'USD' | 'EUR' | 'GBP' | 'UGX' | null;
+  const prefilledDescription = searchParams.get('description');
+  const prefilledAmount = searchParams.get('amount');
+  const prefilledInvoiceType = searchParams.get('invoice_type');
+  const prefilledDeposit = searchParams.get('deposit_amount');
+  const prefilledBalance = searchParams.get('balance_amount');
 
   const {
     register,
@@ -53,16 +64,16 @@ export default function NewInvoicePage() {
   } = useForm<InvoiceFormData>({
     defaultValues: {
       document_type: 'invoice',
-      currency: 'USD',
+      currency: prefilledCurrency || 'USD',
       invoice_date: new Date().toISOString().split('T')[0],
       due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       payment_terms: 30,
       lines: [
         {
           product_id: '',
-          description: '',
+          description: prefilledDescription || '',
           quantity: 1,
-          unit_price: 0,
+          unit_price: prefilledAmount ? parseFloat(prefilledAmount) : 0,
           discount_percent: 0,
           tax_rate: taxRate,
         },
@@ -83,6 +94,13 @@ export default function NewInvoicePage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Pre-fill form when coming from booking page
+  useEffect(() => {
+    if (prefilledCustomerId && customers.length > 0) {
+      setValue('customer_id', prefilledCustomerId);
+    }
+  }, [prefilledCustomerId, customers]);
 
   useEffect(() => {
     // Update due date when payment terms change
@@ -187,12 +205,17 @@ export default function NewInvoicePage() {
     setLoading(true);
     try {
       // Use the API route to create invoice with proper document type handling
+      const payload = {
+        ...data,
+        ...(bookingId && { booking_id: bookingId }), // Include booking_id if present
+      };
+
       const response = await fetch('/api/invoices', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -225,6 +248,27 @@ export default function NewInvoicePage() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* Booking Info Banner */}
+        {bookingId && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-blue-900">
+                  Creating invoice for Booking #{bookingId.substring(0, 8)}
+                </p>
+                <p className="text-xs text-blue-700 mt-0.5">
+                  {prefilledInvoiceType === 'deposit' && `Deposit invoice (${prefilledDeposit})`}
+                  {prefilledInvoiceType === 'balance' && `Balance invoice (${prefilledBalance})`}
+                  {prefilledInvoiceType === 'full' && 'Full amount invoice'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Customer and dates */}
         <div className="card">
           <div className="card-body">
@@ -357,8 +401,8 @@ export default function NewInvoicePage() {
                   <label className="label text-xs">Qty</label>
                   <input
                     type="number"
-                    step="0.01"
-                    {...register(`lines.${index}.quantity`, { valueAsNumber: true, min: 0.01 })}
+                    step="1"
+                    {...register(`lines.${index}.quantity`, { valueAsNumber: true, min: 1 })}
                     className="input text-sm"
                   />
                 </div>

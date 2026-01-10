@@ -390,6 +390,7 @@ export default function EditBillPage() {
                         value={item.quantity}
                         onChange={(e) => handleLineItemChange(item.id, 'quantity', Number(e.target.value))}
                         min="1"
+                        step="1"
                         className="w-full rounded border border-gray-200 px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-[#52b53b]"
                       />
                     </td>

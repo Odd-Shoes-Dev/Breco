@@ -560,8 +560,8 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
                   <label className="label text-xs">Qty</label>
                   <input
                     type="number"
-                    step="0.01"
-                    {...register(`lines.${index}.quantity`, { valueAsNumber: true, min: 0.01 })}
+                    step="1"
+                    {...register(`lines.${index}.quantity`, { valueAsNumber: true, min: 1 })}
                     className="input text-sm"
                   />
                 </div>

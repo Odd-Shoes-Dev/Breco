@@ -1,9 +1,15 @@
 # Breco Safaris Operations & Finance System
 ## Complete User Guide
 
-**Version:** 1.1  
-**Last Updated:** January 9, 2026  
+**Version:** 1.2  
+**Last Updated:** January 10, 2026  
 **System:** Breco Safaris Management Platform
+
+**Recent Updates:**
+- Enhanced booking-invoice integration with automated payment tracking
+- Multi-currency invoice support with automatic conversion
+- Smart invoice generation with validation and warnings
+- Unified payment history across all booking invoices
 
 ---
 
@@ -175,9 +181,9 @@ When you log in, you'll see the main dashboard with:
 - **Itinerary**: Add daily schedule details
 - **Inclusions/Exclusions**: Specify what's covered
 
-### 4.2 Bookings
+### 4.2 Bookings & Invoice Integration
 
-The booking system handles all types of reservations in one unified interface:
+The unified booking system handles all types of reservations and seamlessly integrates with invoicing for payment tracking:
 - **Tour Packages** - Multi-day safari tours
 - **Hotel Bookings** - Accommodation only
 - **Car Hire** - Vehicle rentals
@@ -248,30 +254,322 @@ The bookings list now shows all booking types together:
 - **Date Filter**: View upcoming or past bookings
 
 **Booking Statuses**
-- **Inquiry**: Initial customer inquiry
-- **Quote Sent**: Quotation sent to customer
-- **Confirmed**: Booking confirmed by customer
-- **Deposit Paid**: Partial payment received
-- **Fully Paid**: Complete payment received
-- **In Progress**: Service is ongoing
+- **Inquiry**: Initial customer inquiry - not yet confirmed
+- **Confirmed**: Booking confirmed by customer (ready for invoicing)
+- **Deposit Paid**: Partial payment received (tracks automatically)
+- **Fully Paid**: Complete payment received (updates from invoices)
 - **Completed**: Service finished
 - **Cancelled**: Booking cancelled
-- **Refunded**: Payment refunded
+
+**Note:** Payment-related statuses (Deposit Paid, Fully Paid) are automatically updated when payments are recorded on related invoices.
 
 **Viewing Booking Details**
 
-Click any booking to see:
-- **Tour bookings**: Package details, itinerary, duration, travelers
-- **Hotel bookings**: Hotel name, star rating, room type, number of rooms
-- **Car hire**: Vehicle type, registration, rental type, pickup/dropoff locations
-- **Custom bookings**: Combined hotel and vehicle information
+Click any booking to see complete information:
 
-**Booking Actions**
-- **Convert to Invoice**: Generate invoice for payment
-- **Send Confirmation**: Email booking details
-- **Modify**: Change dates or details
-- **Change Status**: Update booking status
-- **Cancel**: Cancel booking (with reason)
+**Main Details Section:**
+- **Tour bookings**: Package details, itinerary, duration, travelers
+- **Hotel bookings**: Hotel name, star rating, room type, number of rooms, photos
+- **Car hire**: Vehicle type, registration, rental type, pickup/dropoff locations, photos
+- **Custom bookings**: Combined hotel and vehicle information with images
+
+**Pricing Summary Card:**
+
+The revenue/pricing breakdown for each booking:
+
+**Revenue Calculation:**
+1. **Subtotal**: Base price before discounts and taxes
+   - For **Tour Package**: Package base price × number of adults (children/infants may have different rates)
+   - For **Hotel**: Room rate × number of rooms × number of nights
+   - For **Car Hire**: Daily rate × number of days
+   - For **Custom**: Combined hotel + vehicle totals
+
+2. **Discount Amount**: Any discounts applied
+   - Can be fixed amount or percentage
+   - Reduces the subtotal
+   - Shows as negative/red if applied
+
+3. **Tax Amount**: Applicable taxes
+   - Calculated on subtotal after discounts
+   - Based on tax rate (e.g., 18% VAT)
+   - Can be 0 if no tax applies
+
+4. **Total Booking Value**: Final amount customer owes
+   - Formula: `Total = Subtotal - Discount + Tax`
+   - This is the revenue for this booking
+   - Displayed prominently in large font
+
+5. **Amount Paid**: Total payments received (auto-synced from invoices)
+   - Updates automatically when payments recorded on invoices
+   - Converted to booking currency if multi-currency invoices
+   - Shows in green
+
+6. **Balance Due**: Outstanding amount
+   - Formula: `Balance = Total - Amount Paid`
+   - Auto-calculated, not editable
+   - Shows in amber/gold color
+   - Becomes $0.00 when fully paid
+
+**Example Calculation:**
+```
+Tour Package: 5-Day Safari
+Base Price: $2,000 per person
+Travelers: 2 adults, 1 child (50% rate)
+
+Subtotal: ($2,000 × 2) + ($2,000 × 0.5 × 1) = $5,000
+Discount: 10% early bird = -$500
+Tax: 18% VAT on $4,500 = +$810
+──────────────────────────────────────
+Total Booking Value: $5,310 (Revenue)
+Amount Paid: $2,655 (50% deposit)
+Balance Due: $2,655
+```
+
+**Currency Support**: All amounts display in booking currency (USD, EUR, GBP, UGX)
+
+**Related Invoices Card:**
+Shows all invoices generated for this booking:
+- Invoice number with clickable link
+- Invoice status badge (Draft, Sent, Partial, Paid)
+- Currency badge if different from booking currency (⚠️ Orange badge)
+- Amount and balance due for each invoice
+- **Summary totals**:
+  - Total invoiced across all invoices
+  - Total paid (in booking currency)
+  - Outstanding balance
+- **Invoicing progress**: Shows percentage invoiced vs booking total
+
+**Payment History Card:**
+Complete timeline of all payments received:
+- Numbered payment sequence (most recent first)
+- Payment date and amount
+- Payment method badges (Cash, Bank Transfer, Credit Card, etc.)
+- Reference numbers for bank transfers
+- Running total showing cumulative payments
+- Links to original invoices
+- Payment notes if applicable
+- **Total payments summary** at bottom
+
+**Currency Handling:**
+- System automatically converts payments to booking currency
+- Orange badges show invoices in different currencies
+- Warning displays if currency mismatch detected
+- Exchange rates applied from database
+
+**Generate Invoice from Booking**
+
+The most powerful feature - create invoices directly from bookings:
+
+1. **From Booking Detail Page**:
+   - Scroll to "Actions" card in right sidebar
+   - Click **"Generate Invoice"** button
+   
+2. **Invoice Generation Modal Opens**:
+   
+   **Smart Suggestions** (system automatically analyzes and shows):
+   - **First invoice?** → Suggests deposit invoice
+   - **Partially invoiced?** → Shows percentage invoiced and remaining balance
+   - **Fully invoiced?** → Green badge confirms complete invoicing
+   - **Over-invoiced?** → Red warning if invoices exceed booking total
+   - **Currency mismatch?** → Orange warning listing invoices in different currencies
+
+3. **Select Invoice Type**:
+   
+   **Full Invoice** (Default: Total booking amount)
+   - Creates invoice for complete booking value
+   - Best for: Fully paid bookings, pre-paid packages
+   - Warning shows if this would exceed remaining balance
+   
+   **Deposit Invoice** (Percentage-based)
+   - Default: 30% deposit
+   - Adjust slider: 1% to 100%
+   - Shows calculated amount: "30% = $3,000"
+   - Validation: Prevents deposit exceeding remaining balance
+   - Best for: Securing bookings, payment plans
+   
+   **Balance Invoice** (Remaining amount)
+   - Automatically calculates: Booking Total - Already Invoiced
+   - Shows exact remaining balance
+   - Disabled if booking already fully invoiced
+   - Best for: Final payment after deposit
+
+4. **Review Pre-filled Information**:
+   - Booking number (automatically linked)
+   - Customer name and contact
+   - Booking total and currency
+   - Already invoiced amount (if any)
+   - Remaining balance to invoice
+
+5. **Click "Generate Invoice"**:
+   - System validates amounts
+   - Pre-fills invoice creation form with:
+     - Customer details
+     - Booking reference
+     - Correct currency
+     - Line item description (based on booking type)
+     - Calculated amount
+   - Redirects to invoice creation page
+
+6. **Complete Invoice Creation**:
+   - Review auto-filled details
+   - Add/modify line items if needed
+   - Adjust payment terms
+   - Add notes
+   - Click **Create Invoice**
+
+**Smart Validation & Warnings:**
+
+System automatically prevents common errors:
+
+✅ **First Invoice - Blue Info Badge**
+```
+"This booking has no invoices yet. Consider starting with a deposit invoice."
+```
+
+⚠️ **Partially Invoiced - Amber Warning**
+```
+"45% Invoiced
+$4,500 of $10,000 invoiced.
+Remaining: $5,500"
+```
+
+✅ **Fully Invoiced - Green Success**
+```
+"Fully Invoiced
+This booking has been fully invoiced (2 invoices)."
+```
+
+❌ **Over-Invoicing Attempt - Red Error**
+```
+"Warning: This booking already has $10,500 invoiced.
+Creating a full invoice for $10,000 will exceed the booking total.
+Remaining balance to invoice: -$500.
+
+Do you want to continue anyway?"
+```
+
+🔶 **Currency Mismatch - Orange Alert**
+```
+"Currency Mismatch Detected
+Some invoices use different currencies than the booking (USD).
+Payments will be auto-converted.
+• INV-001: GBP
+• INV-002: EUR"
+```
+
+**Payment Tracking & Auto-Sync**
+
+Once invoices are created, payments are automatically synchronized:
+
+**When Payment is Recorded on Invoice:**
+1. Go to invoice detail page
+2. Click **"Record Payment"**
+3. Enter payment details (amount, method, date)
+4. Click **Save**
+
+**System Automatically:**
+- Updates invoice `amount_paid`
+- Changes invoice status (Partial → Paid)
+- **Syncs to booking**: Updates booking `amount_paid`
+- **Converts currencies**: If invoice currency differs from booking
+- **Updates booking status**:
+  - Any payment → `deposit_paid`
+  - Full payment → `fully_paid`
+- Appears in booking's Payment History
+- Recalculates remaining balance
+
+**Multiple Invoice Scenario:**
+
+Example: $10,000 USD booking with 2 invoices:
+- **Invoice 1**: £2,000 GBP deposit (paid in full)
+- **Invoice 2**: $7,500 USD balance (paid $5,000)
+
+**Booking Shows:**
+- Amount Paid: $7,540 USD (£2,000 converted + $5,000)
+- Balance Due: $2,460 USD
+- Status: `deposit_paid`
+- Payment History: 2 payments listed with conversion notes
+
+**Auto-Sync on Page Load:**
+- System checks invoice payments when viewing booking
+- Fixes any discrepancies automatically
+- Ensures booking always reflects current payment state
+- Handles legacy data without manual intervention
+
+**Best Practices for Invoicing:**
+
+1. **Start with Deposit**:
+   - Create 30-50% deposit invoice
+   - Secure the booking with partial payment
+   - Generate balance invoice closer to travel date
+
+2. **Consistent Currency**:
+   - Use same currency for all invoices when possible
+   - System handles conversions but simpler is better
+   - Check exchange rates before generating multi-currency invoices
+
+3. **Track Progress**:
+   - Monitor "Related Invoices" card on booking page
+   - Check percentage invoiced
+   - Ensure total invoices don't exceed booking total
+
+4. **Payment Recording**:
+   - Always record payments on invoices (not directly on bookings)
+   - Booking payment status updates automatically
+   - Maintains proper audit trail
+
+5. **Multiple Invoices**:
+   - No limit on invoices per booking
+   - Common pattern: Deposit → Balance → Additional charges
+   - Each invoice can be in different currency if needed
+
+**Common Scenarios:**
+
+**Scenario 1: Standard Deposit + Balance**
+1. Create booking: $10,000
+2. Generate 30% deposit invoice: $3,000
+3. Send to customer, record payment
+4. Booking status → `deposit_paid`
+5. Before travel, generate balance invoice: $7,000
+6. Record payment
+7. Booking status → `fully_paid`
+
+**Scenario 2: International Client (Multi-Currency)**
+1. Create booking: $10,000 USD
+2. Client prefers GBP, generate invoice: £7,874 GBP
+3. Record payment in GBP
+4. System converts to USD (~$10,000)
+5. Booking shows payment in USD
+6. Orange currency badge visible on invoice
+
+**Scenario 3: Payment Plan (3 Invoices)**
+1. Create booking: $15,000
+2. Generate deposit: $5,000 (33%)
+3. Generate 2nd payment: $5,000
+4. Generate final: $5,000
+5. All track separately in "Related Invoices"
+6. Payment history shows all 3 payments
+7. Booking totals accurate
+
+**Troubleshooting:**
+
+**Problem**: "Booking amount_paid doesn't match invoice payments"
+- **Solution**: Open booking page - auto-sync runs on load
+
+**Problem**: "Can't generate invoice - over booking total"
+- **Solution**: Check "Related Invoices" - may already be fully invoiced
+
+**Problem**: "Currency mismatch warning showing"
+- **Solution**: Normal if using different currencies - system handles conversion
+
+**Problem**: "Payment not showing in booking history"
+- **Solution**: Ensure payment recorded on invoice, not as standalone receipt
+
+**Other Booking Actions**
+- **Edit Booking**: Modify dates, travelers, or details
+- **Change Status**: Manually update if needed (usually automatic)
+- **Print**: Generate booking confirmation
+- **Cancel**: Cancel booking (status → Cancelled)
 - **Add Notes**: Internal notes and updates
 
 ### 4.3 Hotels Management
@@ -437,6 +735,35 @@ When creating bills, expenses, or journal entries, you'll select an account numb
 - **Void**: Cancel invoice
 - **Duplicate**: Create copy
 
+**Automatic Inventory Tracking:**
+
+When you create invoices with products that have inventory tracking enabled, the system automatically manages stock levels:
+
+**What Happens Automatically:**
+1. **Draft Invoice**: No inventory change
+2. **Sent/Posted Invoice**: 
+   - System checks if enough stock available
+   - Reduces `quantity_on_hand` for each product
+   - Creates inventory movement record (type: "sale")
+   - Prevents sending if insufficient stock
+   - Shows error: "Insufficient inventory for [Product]. Available: X, Required: Y"
+
+**Example:**
+```
+Product: Safari T-Shirt
+Stock before invoice: 50 units
+Invoice created (Draft): 50 units (no change)
+Invoice sent to customer: 10 units
+Stock after sending: 40 units (automatically reduced)
+```
+
+**Important Notes:**
+- Only affects products with "Track Inventory" enabled
+- Service products (non-inventory) are not affected
+- Voiding an invoice does NOT restore inventory (manual adjustment needed)
+- Inventory movements are logged for audit trail
+- Can view movement history in Inventory → Movements
+
 **Tips:**
 - Always attach booking reference
 - Use clear descriptions
@@ -584,6 +911,44 @@ If you created a receipt without an invoice and need to record another payment:
    - Amount
    - Account (Expense category)
 5. Click **Save**
+
+**Automatic Inventory Tracking:**
+
+When you create bills with products that have inventory tracking enabled, the system automatically manages stock levels:
+
+**What Happens Automatically:**
+1. **Draft/Pending Bill**: No inventory change
+2. **Approved/Posted Bill**: 
+   - Increases `quantity_on_hand` for each product
+   - Updates product `cost_price` using weighted average method
+   - Creates inventory movement record (type: "purchase")
+   - Creates inventory lot for FIFO tracking
+   - Records total cost and unit cost
+
+**Example:**
+```
+Product: Coffee Beans
+Stock before bill: 20 kg @ $5/kg (total value: $100)
+Bill approved: Purchase 30 kg @ $6/kg
+New stock: 50 kg
+New weighted average cost: ($100 + $180) / 50 = $5.60/kg
+```
+
+**Weighted Average Cost Calculation:**
+```
+New Cost = (Old Qty × Old Cost + New Qty × New Cost) / Total Qty
+         = (20 × $5 + 30 × $6) / 50
+         = ($100 + $180) / 50
+         = $5.60 per kg
+```
+
+**Important Notes:**
+- Only affects products with "Track Inventory" enabled
+- Service products and non-inventory items are not affected
+- Bill approval automatically increases stock
+- Cost price updates help track true product value
+- FIFO lots created for first-in-first-out tracking
+- Can view movement history in Inventory → Movements
 
 **Bill Payment**
 1. Open the bill

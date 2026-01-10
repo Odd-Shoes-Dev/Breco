@@ -21,6 +21,7 @@ interface Invoice {
   id: string;
   invoice_number: string;
   customer_id: string;
+  booking_id: string | null;
   invoice_date: string;
   due_date: string;
   status: string;
@@ -71,6 +72,7 @@ export default function InvoiceDetailPage() {
   const params = useParams();
   const router = useRouter();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
+  const [relatedBooking, setRelatedBooking] = useState<any | null>(null);
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,6 +148,34 @@ export default function InvoiceDetailPage() {
       }));
 
       setPayments(parsedPayments);
+
+      // Fetch related booking if booking_id exists
+      if (parsedInvoice.booking_id) {
+        const { data: bookingData } = await supabase
+          .from('bookings')
+          .select(`
+            id,
+            booking_number,
+            booking_type,
+            status,
+            travel_start_date,
+            travel_end_date,
+            num_adults,
+            num_children,
+            total,
+            amount_paid,
+            currency,
+            tour_package:tour_packages (id, name, package_code, duration_days, duration_nights),
+            hotel:hotels (id, name, star_rating),
+            vehicle:vehicles!bookings_assigned_vehicle_id_fkey (id, vehicle_type, registration_number)
+          `)
+          .eq('id', parsedInvoice.booking_id)
+          .single();
+
+        if (bookingData) {
+          setRelatedBooking(bookingData);
+        }
+      }
     } catch (error) {
       console.error('Error fetching invoice:', error);
     } finally {
@@ -872,7 +902,149 @@ export default function InvoiceDetailPage() {
               </Link>
             </CardBody>
           </Card>
+          {/* Related Booking */}
+          {relatedBooking && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DocumentDuplicateIcon className="h-5 w-5 text-gray-400" />
+                  Related Booking
+                </CardTitle>
+              </CardHeader>
+              <CardBody>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Booking Number</p>
+                    <p className="font-semibold text-gray-900">{relatedBooking.booking_number}</p>
+                  </div>
 
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Status</p>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                      ${relatedBooking.status === 'confirmed' ? 'bg-blue-100 text-blue-800' : ''}
+                      ${relatedBooking.status === 'deposit_paid' ? 'bg-yellow-100 text-yellow-800' : ''}
+                      ${relatedBooking.status === 'fully_paid' ? 'bg-green-100 text-green-800' : ''}
+                      ${relatedBooking.status === 'completed' ? 'bg-green-500 text-white' : ''}
+                      ${relatedBooking.status === 'cancelled' ? 'bg-gray-200 text-gray-600' : ''}
+                      ${!['confirmed', 'deposit_paid', 'fully_paid', 'completed', 'cancelled'].includes(relatedBooking.status) ? 'bg-gray-100 text-gray-800' : ''}
+                    `}>
+                      {relatedBooking.status.replace('_', ' ').toUpperCase()}
+                    </span>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Type</p>
+                    <p className="text-sm font-medium text-gray-900 capitalize">{relatedBooking.booking_type}</p>
+                  </div>
+
+                  {/* Tour Package Details */}
+                  {relatedBooking.tour_package && (
+                    <div className="pt-3 border-t border-gray-200">
+                      <p className="text-xs text-gray-500 mb-1">Tour Package</p>
+                      <p className="text-sm font-semibold text-gray-900">{relatedBooking.tour_package.name}</p>
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        {relatedBooking.tour_package.duration_days} days, {relatedBooking.tour_package.duration_nights} nights
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Hotel Details */}
+                  {relatedBooking.hotel && (
+                    <div className="pt-3 border-t border-gray-200">
+                      <p className="text-xs text-gray-500 mb-1">Hotel</p>
+                      <p className="text-sm font-semibold text-gray-900">{relatedBooking.hotel.name}</p>
+                      {relatedBooking.hotel.star_rating && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className="text-yellow-500 text-xs">
+                            {'★'.repeat(relatedBooking.hotel.star_rating)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Vehicle Details */}
+                  {relatedBooking.vehicle && (
+                    <div className="pt-3 border-t border-gray-200">
+                      <p className="text-xs text-gray-500 mb-1">Vehicle</p>
+                      <p className="text-sm font-semibold text-gray-900">{relatedBooking.vehicle.vehicle_type}</p>
+                      <p className="text-xs text-gray-600 mt-0.5">{relatedBooking.vehicle.registration_number}</p>
+                    </div>
+                  )}
+
+                  {/* Travel Dates */}
+                  <div className="pt-3 border-t border-gray-200">
+                    <p className="text-xs text-gray-500 mb-2">Travel Dates</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-gray-500 block">Start</span>
+                        <span className="font-medium text-gray-900">
+                          {new Date(relatedBooking.travel_start_date).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block">End</span>
+                        <span className="font-medium text-gray-900">
+                          {new Date(relatedBooking.travel_end_date).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Guests */}
+                  <div className="pt-3 border-t border-gray-200">
+                    <p className="text-xs text-gray-500 mb-1">Guests</p>
+                    <p className="text-sm text-gray-900">
+                      {relatedBooking.num_adults} Adult{relatedBooking.num_adults !== 1 ? 's' : ''}
+                      {relatedBooking.num_children > 0 && `, ${relatedBooking.num_children} Child${relatedBooking.num_children !== 1 ? 'ren' : ''}`}
+                    </p>
+                  </div>
+
+                  {/* Booking Financials */}
+                  <div className="pt-3 border-t border-gray-200">
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Total</span>
+                        <span className="font-semibold text-gray-900">
+                          {relatedBooking.currency} {relatedBooking.total.toFixed(2)}
+                        </span>
+                      </div>
+                      {relatedBooking.amount_paid > 0 && (
+                        <>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Paid</span>
+                            <span className="font-semibold text-green-600">
+                              {relatedBooking.currency} {relatedBooking.amount_paid.toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Balance</span>
+                            <span className="font-semibold text-amber-600">
+                              {relatedBooking.currency} {(relatedBooking.total - relatedBooking.amount_paid).toFixed(2)}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <Link href={`/dashboard/bookings/${relatedBooking.id}`}>
+                    <Button variant="outline" size="sm" className="mt-4 w-full">
+                      View Booking Details
+                    </Button>
+                  </Link>
+                </div>
+              </CardBody>
+            </Card>
+          )}
           {/* Payment Summary */}
           <Card>
             <CardHeader>

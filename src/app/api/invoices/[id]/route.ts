@@ -195,6 +195,91 @@ export async function PATCH(request: NextRequest, context: any) {
       }
     }
 
+    // Sync payment status to related booking if invoice is marked as paid
+    if ((newStatus === 'paid' || newStatus === 'partial') && (oldStatus !== 'paid' && oldStatus !== 'partial')) {
+      if (invoice.booking_id) {
+        // When marking as paid, update amount_paid to total
+        const newAmountPaid = newStatus === 'paid' ? invoice.total : invoice.amount_paid;
+        
+        await supabase
+          .from('invoices')
+          .update({ amount_paid: newAmountPaid })
+          .eq('id', resolvedParams.id);
+
+        // Get all invoices for this booking with currency info
+        const { data: allBookingInvoices } = await supabase
+          .from('invoices')
+          .select('id, total, amount_paid, currency')
+          .eq('booking_id', invoice.booking_id);
+
+        // Get booking to check currency
+        const { data: booking } = await supabase
+          .from('bookings')
+          .select('total, status, currency')
+          .eq('id', invoice.booking_id)
+          .single();
+
+        if (allBookingInvoices && booking) {
+          // Calculate total paid across all invoices, converting to booking currency if needed
+          let totalPaidAcrossInvoices = 0;
+          
+          for (const inv of allBookingInvoices) {
+            let invAmountPaid;
+            
+            // For the current invoice, use the new amount
+            if (inv.id === invoice.id) {
+              invAmountPaid = newAmountPaid;
+            } else {
+              invAmountPaid = parseFloat(inv.amount_paid) || 0;
+            }
+            
+            if (inv.currency === booking.currency) {
+              // Same currency, add directly
+              totalPaidAcrossInvoices += invAmountPaid;
+            } else {
+              // Different currency, convert using database function
+              const { data: convertedAmount } = await supabase.rpc('convert_currency', {
+                p_amount: invAmountPaid,
+                p_from_currency: inv.currency,
+                p_to_currency: booking.currency,
+                p_date: new Date().toISOString().split('T')[0],
+              });
+              
+              if (convertedAmount !== null) {
+                totalPaidAcrossInvoices += convertedAmount;
+              } else {
+                console.warn(`Could not convert ${inv.currency} to ${booking.currency} for invoice ${inv.id}`);
+                // Fallback: add the amount as-is
+                totalPaidAcrossInvoices += invAmountPaid;
+              }
+            }
+          }
+
+          if (booking) {
+            let newBookingStatus = booking.status;
+            const bookingTotal = parseFloat(booking.total);
+            
+            if (totalPaidAcrossInvoices >= bookingTotal) {
+              newBookingStatus = 'fully_paid';
+            } else if (totalPaidAcrossInvoices > 0) {
+              if (!['fully_paid', 'completed'].includes(booking.status)) {
+                newBookingStatus = 'deposit_paid';
+              }
+            }
+
+            // Update booking
+            await supabase
+              .from('bookings')
+              .update({
+                amount_paid: totalPaidAcrossInvoices,
+                status: newBookingStatus,
+              })
+              .eq('id', invoice.booking_id);
+          }
+        }
+      }
+    }
+
     // If lines are provided, update them
     if (body.lines) {
       // Delete existing lines

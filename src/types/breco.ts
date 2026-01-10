@@ -16,14 +16,11 @@ import type {
 
 export type BookingStatus =
   | 'inquiry'
-  | 'quote_sent'
   | 'confirmed'
   | 'deposit_paid'
   | 'fully_paid'
-  | 'in_progress'
   | 'completed'
-  | 'cancelled'
-  | 'refunded';
+  | 'cancelled';
 
 export type VehicleStatus =
   | 'available'

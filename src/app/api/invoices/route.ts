@@ -168,6 +168,7 @@ export async function POST(request: NextRequest) {
       ar_account_id: arAccount?.id,
       created_by: user.id,
       document_type: documentType,
+      ...(body.booking_id && { booking_id: body.booking_id }), // Include booking_id if provided
     };
 
     // Add the appropriate number field
