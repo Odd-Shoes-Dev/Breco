@@ -22,7 +22,9 @@ export async function POST(
       .select(`
         *,
         customer:customers(id, name, email, phone, address_line1, city, country),
-        tour_package:tour_packages(id, name, package_code)
+        tour_package:tour_packages(id, name, package_code),
+        hotel:hotels(id, name, star_rating),
+        vehicle:vehicles!bookings_assigned_vehicle_id_fkey(id, vehicle_type, registration_number)
       `)
       .eq('id', bookingId)
       .single();
@@ -52,7 +54,29 @@ export async function POST(
     // Determine invoice type and amount
     const invoiceType = body.invoice_type || 'full'; // 'full', 'deposit', 'balance'
     let amount = booking.total;
-    let description = `Tour: ${booking.tour_package?.name || 'Custom Tour'}`;
+    
+    // Generate description based on booking type
+    let description = '';
+    switch (booking.booking_type) {
+      case 'tour':
+        description = `Tour: ${booking.tour_package?.name || 'Tour Package'}`;
+        break;
+      case 'hotel':
+        description = `Hotel Booking: ${booking.hotel?.name || 'Accommodation'}`;
+        break;
+      case 'car_hire':
+        description = `Car Hire: ${booking.vehicle?.vehicle_type || 'Vehicle Rental'}`;
+        break;
+      case 'custom':
+        const items = [];
+        if (booking.hotel) items.push(booking.hotel.name);
+        if (booking.vehicle) items.push(booking.vehicle.vehicle_type);
+        description = `Custom Booking: ${items.join(' + ')}`;
+        break;
+      default:
+        description = `Booking: ${booking.booking_number}`;
+    }
+    
     let isAdvancePayment = false;
     
     if (invoiceType === 'deposit') {

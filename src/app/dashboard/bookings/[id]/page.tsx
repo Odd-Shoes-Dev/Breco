@@ -67,7 +67,7 @@ interface BookingWithRelations extends Booking {
     vehicle_type: string;
     registration_number: string;
     seating_capacity: number;
-    daily_rate: number;
+    daily_rate_usd: number | null;
   };
 }
 
@@ -104,7 +104,7 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
           customer:customers (id, name, email, phone),
           tour_package:tour_packages (id, name, package_code, duration_days, duration_nights, image_url, description, base_price_usd),
           hotel:hotels (id, name, star_rating, address, phone),
-          vehicle:vehicles (id, vehicle_type, registration_number, seating_capacity, daily_rate)
+          vehicle:vehicles!bookings_assigned_vehicle_id_fkey (id, vehicle_type, registration_number, seating_capacity, daily_rate_usd)
         `)
         .eq('id', id)
         .single();
@@ -360,7 +360,7 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
                         style: 'currency',
                         currency: booking.currency || 'USD',
                         minimumFractionDigits: 0,
-                      }).format(booking.vehicle.daily_rate)}
+                      }).format(booking.vehicle.daily_rate_usd || 0)}
                     </p>
                   </div>
                 </div>

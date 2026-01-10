@@ -11,10 +11,7 @@
 ALTER TABLE bookings
 ADD COLUMN IF NOT EXISTS hotel_id UUID REFERENCES hotels(id);
 
--- Add proper foreign key for vehicle (was just UUID)
-ALTER TABLE bookings
-ADD CONSTRAINT fk_bookings_vehicle 
-FOREIGN KEY (assigned_vehicle_id) REFERENCES vehicles(id);
+-- Note: Foreign key for assigned_vehicle_id already exists from migration 031
 
 -- Add room details for hotel bookings
 ALTER TABLE bookings

@@ -15,11 +15,10 @@ export async function GET(
       .select(`
         *,
         customer:customers(id, name, email, phone, country),
-        tour_package:tour_packages(id, name, duration_days, price_per_person, currency),
-        assigned_guide:user_profiles!bookings_assigned_guide_id_fkey(id, full_name, email),
-        assigned_vehicle:vehicles!bookings_assigned_vehicle_id_fkey(id, registration_number, make, model, vehicle_type, seating_capacity),
+        tour_package:tour_packages(id, name, package_code, duration_days, price_per_person, currency),
+        hotel:hotels(id, name, star_rating, address, phone),
+        vehicle:vehicles!bookings_assigned_vehicle_id_fkey(id, registration_number, vehicle_type, seating_capacity, daily_rate_usd),
         guests:booking_guests(*),
-        hotels:booking_hotels(*, hotel:hotels(name, address, phone)),
         activities:booking_activities(*),
         payments:booking_payments(*)
       `)
