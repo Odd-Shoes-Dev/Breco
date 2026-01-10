@@ -1,18 +1,21 @@
 # Breco Safaris Operations & Finance System
 ## Complete User Guide
 
-**Version:** 1.3  
+**Version:** 2.0  
 **Last Updated:** January 11, 2026  
 **System:** Breco Safaris Management Platform
 
 **Recent Updates:**
+- **NEW: Row-Level Security (RLS)** - Enhanced data security with role-based access policies
+- **NEW: Fiscal Period Locking** - Close quarters/months to prevent changes to historical data
+- **NEW: Cafe Operations Module** - Separate dashboard and revenue tracking for cafe business
+- Updated user permission system (Admin, Accountant, Operations, Sales, Guide)
+- Department-based expense tracking (Operations, Cafe, Administration, Sales, Maintenance)
+- Manual sales entry for daily/weekly/monthly cafe revenue
+- Dedicated cafe chart of accounts (42xx revenue, 52xx COGS, 63xx expenses)
+- Enhanced expense approval workflow with department filtering
 - Added quotation and proforma invoice support with conversion workflow
-- Document type filtering on invoice list (Invoice, Quotation, Proforma)
-- One-click conversion from quotation/proforma to invoice
-- Enhanced booking-invoice integration with automated payment tracking
 - Multi-currency invoice support with automatic conversion
-- Smart invoice generation with validation and warnings
-- Unified payment history across all booking invoices
 
 ---
 
@@ -21,15 +24,17 @@
 1. [Introduction](#1-introduction)
 2. [Getting Started](#2-getting-started)
 3. [Dashboard Overview](#3-dashboard-overview)
-4. [Tour Operations](#4-tour-operations)
-5. [Finance Management](#5-finance-management)
-6. [HR & Payroll](#6-hr--payroll)
-7. [Inventory & Assets](#7-inventory--assets)
-8. [Bank & Cash](#8-bank--cash)
-9. [Reports & Analytics](#9-reports--analytics)
-10. [System Settings](#10-system-settings)
-11. [Common Questions & Answers](#11-common-questions--answers)
-12. [Troubleshooting](#12-troubleshooting)
+4. [Cafe Operations](#4-cafe-operations)
+5. [Tour Operations](#5-tour-operations)
+6. [Finance Management](#6-finance-management)
+7. [Fiscal Period Management](#7-fiscal-period-management)
+8. [HR & Payroll](#8-hr--payroll)
+9. [Inventory & Assets](#9-inventory--assets)
+10. [Bank & Cash](#10-bank--cash)
+11. [Reports & Analytics](#11-reports--analytics)
+12. [System Settings](#12-system-settings)
+13. [Common Questions & Answers](#13-common-questions--answers)
+14. [Troubleshooting](#14-troubleshooting)
 
 ---
 
@@ -39,6 +44,7 @@
 
 Breco Safaris Operations & Finance System is a comprehensive business management platform designed specifically for tour and safari operations. It integrates:
 
+- **Cafe Operations** - Separate module for cafe business tracking with dedicated revenue/expense management
 - **Unified Booking System** - Handle tour packages, hotel bookings, and car hire from one interface
 - **Tour Operations Management** - Packages, itineraries, destinations, guides
 - **Financial Accounting** - Full double-entry accounting, invoicing, expenses
@@ -75,32 +81,77 @@ Breco Safaris Operations & Finance System is a comprehensive business management
 
 **First-time login?** Contact your administrator for credentials.
 
-### 2.2 Understanding User Roles
+### 2.2 Understanding User Roles & Permissions
 
-**Admin**
-- Full system access
-- Can create/edit all records
-- Manage users and settings
-- Access all reports
+The system uses a 5-tier role-based access control system with Row-Level Security (RLS) to protect sensitive data.
 
-**Manager**
-- View and create most records
-- Cannot delete major transactions
-- Limited settings access
-- Full reporting access
+**🔴 Admin** (Highest Access)
+- Full system access to all modules and data
+- Create, edit, and delete all records
+- Manage user accounts and permissions
+- Close/open fiscal periods
+- Configure system settings
+- Access all financial and operational reports
+- Override period locks when necessary
 
-**Accountant**
-- Finance module access
-- Create invoices, bills, expenses
-- Bank reconciliation
-- Financial reports
+**🟠 Accountant** (Financial Access)
+- Full access to all financial data:
+  - Chart of accounts, journal entries, ledgers
+  - Invoices, bills, payments (create/edit/delete)
+  - Bank accounts, reconciliations, cash management
+  - Payroll processing, employee compensation
+  - Asset depreciation and financial reporting
+- View-only access to operational data (bookings, tours)
+- Create and manage expenses
+- Cannot modify user permissions or close periods
 
-**Viewer**
-- Read-only access
-- View reports and dashboards
-- Cannot create or edit records
+**🟡 Operations** (Operational Access)
+- Full access to operational modules:
+  - Bookings, tours, hotels, vehicles
+  - Inventory management, stock takes
+  - Purchase orders, goods receipts
+  - Asset assignments and maintenance
+  - Vendor management
+- Limited financial access (can view, cannot manage)
+- Create expenses for approval
+- Cannot access payroll or sensitive employee data
 
-### 2.3 Navigation Basics
+**🟢 Sales** (Customer-Facing Access)
+- Customer management (create/edit customers)
+- Create and manage invoices, quotations, proformas
+- Booking creation and management
+- View tour packages and pricing
+- Create expenses for approval
+- View reports related to sales performance
+- Cannot access bank accounts, payroll, or bills
+
+**🔵 Guide** (Read-Only Access)
+- View-only access to assigned tours and bookings
+- View customer information for assigned tours
+- View tour packages and itineraries
+- Cannot create, edit, or delete any records
+- Limited reporting access
+
+### 2.3 Data Security & Privacy
+
+**Row-Level Security (RLS)**
+The system enforces data access at the database level:
+- Users only see data appropriate for their role
+- Sensitive information (payroll, bank details, passport numbers) restricted to authorized roles
+- All queries automatically filtered based on user permissions
+- Audit trail of all data access attempts
+
+**Default Role for New Users**
+- New user signups automatically receive "Sales" role
+- Admins can upgrade roles as needed from Settings → Users
+
+**Role Change Process**
+1. Only Admins can change user roles
+2. Go to Settings → Users
+3. Select user and update role
+4. Changes take effect immediately
+
+### 2.4 Navigation Basics
 
 **Sidebar Menu** (Left side)
 - Click any menu item to navigate
@@ -160,7 +211,228 @@ When you log in, you'll see the main dashboard with:
 
 ---
 
-## 4. Tour Operations
+## 4. Cafe Operations
+
+### 4.1 Overview
+
+The Cafe Operations module is a dedicated system for managing your cafe business separately from the main safari operations. It provides:
+
+- **Dedicated Dashboard** - Real-time revenue, expenses, and profitability metrics
+- **Simple Revenue Entry** - Manually record daily, weekly, or monthly sales
+- **Department Tracking** - All cafe transactions are tagged with "Cafe" department
+- **Separate Chart of Accounts** - Dedicated accounting structure for cafe financials
+- **Staff Management** - Track cafe employees and payroll separately
+
+### 4.2 Accessing Cafe Dashboard
+
+1. In the sidebar, go to **Cafe Operations → Cafe Dashboard**
+2. View key performance indicators (KPIs):
+   - **Revenue (This Month)** - Total sales from cafe accounts (42xx)
+   - **Expenses (This Month)** - All expenses with department = "Cafe"
+   - **Profit (This Month)** - Revenue minus expenses
+   - **Profit Margin** - Percentage profitability
+   - **Cafe Staff** - Number of employees and monthly payroll
+
+### 4.3 Recording Cafe Sales
+
+The cafe system allows you to manually record sales on a daily, weekly, or monthly basis.
+
+**How to Record Sales:**
+
+1. From the **Cafe Dashboard**, click **Record Sales** button
+2. Fill in the sales form:
+   - **Sale Date** - The date of the sales (for accounting records)
+   - **Period** - Select Daily Sales, Weekly Sales, or Monthly Sales
+   - **Food Sales (USD)** - Amount of food revenue
+   - **Beverage Sales (USD)** - Amount of beverage revenue
+   - **Catering Sales (USD)** - Amount of catering revenue
+   - **Payment Method** - How payment was received (Cash, Bank Transfer, Credit Card, Mobile Money)
+   - **Notes** - Optional notes about the sales
+3. Review the **Total Sales** amount
+4. Click **Record Sales**
+
+**What Happens:**
+- A journal entry is created automatically
+- Cash account (1010) is debited (asset increase)
+- Revenue accounts are credited:
+  - Food Sales → Account 4210 (Food Sales)
+  - Beverage Sales → Account 4220 (Beverage Sales)
+  - Catering Sales → Account 4230 (Catering Services)
+- Revenue appears immediately in the cafe dashboard
+
+**Example:**
+```
+Date: January 10, 2026
+Period: Daily Sales
+Food Sales: $150.00
+Beverage Sales: $75.00
+Catering Sales: $0.00
+Payment: Cash
+Total: $225.00
+```
+
+This creates a journal entry crediting $150 to Food Sales account and $75 to Beverage Sales account.
+
+### 4.4 Recording Cafe Expenses
+
+Track all cafe-related costs using the department field.
+
+**How to Record Cafe Expense:**
+
+1. From **Cafe Dashboard**, click **Add Expense** button (or go to Finance → Expenses → New)
+2. Fill in the expense form:
+   - **Date** - Expense date
+   - **Category** - Select expense type (Office Supplies, Utilities, etc.)
+   - **Department** - **Important:** Select "Cafe" from the dropdown
+   - **Vendor** - Who you paid (optional)
+   - **Amount** - Total expense amount
+   - **Payment Method** - How you paid
+   - **Description** - What the expense was for
+3. Click **Save Expense**
+
+**Important:** Always select **Department = "Cafe"** for cafe expenses. This ensures they appear in the cafe dashboard and reports.
+
+**Common Cafe Expense Categories:**
+- Food & ingredients purchases (use dedicated COGS accounts 52xx)
+- Kitchen supplies
+- Utilities (electricity, water)
+- Salaries (cafe staff)
+- Maintenance & repairs
+- Marketing for cafe
+
+### 4.5 Cafe Chart of Accounts
+
+The cafe uses dedicated account codes to keep finances separate:
+
+**Revenue Accounts (4200-4299)**
+- **4200** - Cafe Sales Revenue (general)
+- **4210** - Food Sales
+- **4220** - Beverage Sales
+- **4230** - Catering Services
+
+**Cost of Goods Sold (5250-5259)**
+- **5250** - Cafe Food Costs
+- **5251** - Cafe Beverage Costs
+- **5252** - Cafe Supplies Used
+- **5253** - Cafe Catering Costs
+
+**Operating Expenses (6350-6359)**
+- **6350** - Cafe Utilities
+- **6351** - Cafe Equipment Maintenance
+- **6352** - Cafe Marketing
+- **6353** - Cafe Licenses & Permits
+- **6354** - Cafe Miscellaneous
+
+### 4.6 Managing Cafe Staff
+
+Track cafe employees separately from safari operations staff.
+
+**Adding Cafe Employee:**
+
+1. Go to **HR & Payroll → Employees**
+2. Click **Add Employee**
+3. Fill in employee details
+4. **Important:** Set **Department = "Cafe"**
+5. Enter salary information
+6. Click **Save**
+
+**Viewing Cafe Staff:**
+- From **Cafe Dashboard**, click **View Cafe Staff** in Quick Actions
+- This filters the employee list to show only cafe department employees
+- The cafe dashboard shows total cafe staff count and monthly payroll
+
+### 4.7 Cafe Reports & Analytics
+
+**Dashboard Charts:**
+
+1. **Revenue Trend (Last 6 Months)**
+   - Bar chart showing monthly revenue from cafe accounts
+   - Helps identify seasonal patterns
+   - Compare month-over-month performance
+
+2. **Expense Breakdown (This Month)**
+   - Pie chart of expense categories
+   - Shows where cafe money is being spent
+   - Helps control costs
+
+**Detailed Financial Reports:**
+
+1. **Cafe Profit & Loss Statement**
+   - From **Cafe Dashboard**, click **Cafe P&L Report** in Quick Actions
+   - Shows detailed revenue and expenses by account
+   - Filters to accounts 42xx (cafe accounts only)
+   - View for custom date ranges
+
+2. **General Ledger (Cafe Accounts)**
+   - Go to **Finance → General Ledger**
+   - Filter by account code starting with "42" to see cafe transactions
+   - View all journal entries affecting cafe accounts
+
+### 4.8 Best Practices
+
+**Recording Sales:**
+- Record sales at consistent intervals (daily is recommended)
+- Use the appropriate period type (daily for daily totals, monthly for month-end)
+- Always specify payment method for cash flow tracking
+- Add notes for unusual sales or special events
+
+**Managing Expenses:**
+- Always set Department = "Cafe" for cafe-related expenses
+- Use specific expense categories for better reporting
+- Keep receipts and reference numbers
+- Approve expenses promptly
+
+**Staff Management:**
+- Keep cafe staff department consistent
+- Update salaries when changes occur
+- Track attendance and performance
+
+**Financial Review:**
+- Check cafe dashboard at least weekly
+- Review profit margin trends
+- Compare actual vs. budgeted performance
+- Adjust pricing or costs based on profitability
+
+### 4.9 Common Workflows
+
+**Daily Cafe Operations:**
+1. Record daily sales at end of day
+2. Enter any expenses incurred
+3. Review running totals on dashboard
+
+**Weekly Review:**
+1. Check week-to-date revenue vs. target
+2. Review expense breakdown
+3. Ensure all transactions recorded
+4. Process staff timesheets if applicable
+
+**Monthly Close:**
+1. Record all final sales for the month
+2. Ensure all expenses are entered and approved
+3. Review Cafe P&L Statement
+4. Compare to budget
+5. Plan adjustments for next month
+
+### 4.10 Troubleshooting
+
+**Issue:** Sales not showing in cafe dashboard
+- **Solution:** Check that you recorded sales using the "Record Sales" form (not regular invoices)
+- Sales must be credited to accounts 4210, 4220, or 4230
+- Check the date range - dashboard shows current month only
+
+**Issue:** Expenses not appearing in cafe reports
+- **Solution:** Ensure Department field is set to "Cafe" on expense record
+- Edit existing expenses to add department if missing
+- Department filter is case-sensitive - use exact spelling "Cafe"
+
+**Issue:** Revenue showing incorrect amounts
+- **Solution:** Check General Ledger for account 42xx for any incorrect entries
+- Verify all sales entries were recorded with correct amounts
+- Contact accounting if journal entries need to be corrected
+
+---
+
+## 5. Tour Operations
 
 ### 4.1 Tour Packages
 
@@ -618,9 +890,9 @@ Example: $10,000 USD booking with 2 invoices:
 
 ---
 
-## 5. Finance Management
+## 6. Finance Management
 
-### 5.1 Chart of Accounts
+### 6.1 Chart of Accounts
 
 **Understanding Accounts**
 
@@ -1252,9 +1524,214 @@ Use for:
 
 ---
 
-## 7. Inventory & Assets
+## 7. Fiscal Period Management
 
-### 7.1 Product Management
+### 7.1 Overview
+
+Fiscal Period Management allows administrators to close accounting periods (months, quarters, or years) to prevent unauthorized changes to historical financial data. This ensures data integrity and compliance with accounting standards.
+
+**Key Features:**
+- Close periods to lock historical transactions
+- Prevent modifications to closed period data
+- Reopen periods when corrections are needed (Admin only)
+- Automatic validation when creating/editing transactions
+- Visual status indicators (Open, Closed, Locked)
+
+**Who Can Use This:**
+- **Close Periods**: Admin only
+- **Reopen Periods**: Admin only
+- **View Periods**: All users
+
+### 7.2 Accessing Fiscal Periods
+
+1. Go to **Settings** in the sidebar
+2. Click **Fiscal Periods** (with lock icon)
+3. View the list of all fiscal periods
+
+**Fiscal Period Structure:**
+- **Annual Periods**: Full financial years (e.g., 2025, 2026)
+- **Quarterly Periods**: Q1, Q2, Q3, Q4 for each year
+- **Monthly Periods**: All 12 months for each year
+
+### 7.3 Closing a Period
+
+**When to Close Periods:**
+- At month-end after all transactions are recorded and reconciled
+- At quarter-end before filing quarterly reports
+- At year-end before annual financial statement preparation
+- When preparing audited financials
+
+**Steps to Close a Period:**
+
+1. Navigate to **Settings → Fiscal Periods**
+2. Find the period you want to close (e.g., "December 2025" or "Q4 2025")
+3. Verify the period status shows **Open** (green badge)
+4. Click the **Close Period** button for that period
+5. Confirm the action in the popup dialog
+6. Period status changes to **Closed** (yellow badge)
+
+**⚠️ Important Notes:**
+- Only Admins can close periods
+- Closing a period prevents ALL users (including Admins) from:
+  - Creating new transactions dated in that period
+  - Editing existing transactions in that period
+  - Deleting transactions from that period
+- Affected transaction types:
+  - Invoices, Bills, Payments
+  - Expenses
+  - Journal Entries
+  - Cafe Sales
+  - Bank Transactions
+
+**Best Practice:**
+Close periods in order (close January before February, Q1 before Q2, etc.)
+
+### 7.4 Reopening a Period
+
+Sometimes you need to reopen a closed period to make corrections or add missing transactions.
+
+**Steps to Reopen:**
+
+1. Go to **Settings → Fiscal Periods**
+2. Find the closed period (yellow **Closed** badge)
+3. Click **Reopen Period**
+4. Confirm the action
+5. Period status changes to **Open** (green badge)
+
+**When to Reopen:**
+- Discovered accounting error in closed period
+- Need to record a late transaction
+- Auditor requested adjustments
+- Bank reconciliation discrepancy found
+
+**⚠️ Security Warning:**
+Reopening periods should be rare and documented. Consider:
+1. Document the reason for reopening
+2. Make necessary corrections
+3. Close the period again immediately
+4. Update dependent periods if needed
+
+### 7.5 Period Status Indicators
+
+**🟢 Open** (Green Badge)
+- Transactions can be created/edited/deleted
+- Normal operations allowed
+- Default state for current and future periods
+
+**🟡 Closed** (Yellow Badge)
+- No modifications allowed
+- Data locked for historical accuracy
+- Can be reopened by Admin if needed
+
+**🔴 Locked** (Red Badge - Future Feature)
+- Permanently locked
+- Cannot be reopened
+- Used for audited periods
+
+### 7.6 Transaction Validation
+
+When creating or editing a transaction, the system automatically checks if the period is closed:
+
+**Error Message Example:**
+```
+Cannot create transaction: Period is closed
+The fiscal period for January 2025 has been closed.
+Only Admins can reopen periods to make changes.
+```
+
+**What to Do:**
+1. **If the date is wrong**: Change the transaction date to an open period
+2. **If the date is correct**: Contact your Admin to reopen the period
+3. **If unsure**: Ask your accountant before proceeding
+
+### 7.7 Common Workflows
+
+**Month-End Close Process:**
+1. Complete all bank reconciliations for the month
+2. Review and approve all pending expenses
+3. Verify all invoices and payments are recorded
+4. Run Profit & Loss and Balance Sheet reports
+5. Review for accuracy and completeness
+6. Close the monthly period
+7. Close the quarterly period (if last month of quarter)
+
+**Year-End Close Process:**
+1. Complete month-end close for December
+2. Process year-end adjustments (depreciation, accruals)
+3. Close all 12 monthly periods
+4. Close all 4 quarterly periods
+5. Run annual financial statements
+6. Close the annual period
+7. Begin new fiscal year
+
+**Making Corrections to Closed Periods:**
+1. Document the error and required correction
+2. Admin reopens the affected period
+3. Make ONLY the necessary corrections
+4. Re-run affected reports to verify
+5. Admin closes the period immediately
+6. Update any dependent reports
+
+### 7.8 Fiscal Period Calendar
+
+**Typical Setup:**
+- **Fiscal Year**: January 1 - December 31
+- **Q1**: Jan-Mar
+- **Q2**: Apr-Jun
+- **Q3**: Jul-Sep
+- **Q4**: Oct-Dec
+
+**System Defaults:**
+- New periods are created as "Open"
+- Current period remains open
+- Past periods should be progressively closed
+- Future periods are typically left open for planning
+
+### 7.9 Troubleshooting Period Issues
+
+**Issue: Can't create an invoice**
+- **Cause**: Invoice date falls in closed period
+- **Solution**: Change invoice date OR have Admin reopen period
+
+**Issue: "Period is closed" error on expense**
+- **Cause**: Expense date is in a closed month
+- **Solution**: Update expense date to current month OR get period reopened
+
+**Issue: Need to edit closed period transaction**
+- **Cause**: Period was closed after transaction creation
+- **Solution**: Admin must reopen period temporarily
+
+**Issue: Button says "Closed" but I need it open**
+- **Cause**: Period was previously closed
+- **Solution**: Click "Reopen Period" (Admin only)
+
+### 7.10 Period Management Best Practices
+
+✅ **Do:**
+- Close periods promptly after month-end reconciliation
+- Document reasons for reopening periods
+- Close periods in chronological order
+- Keep current month open until month-end
+- Review transactions before closing
+
+❌ **Don't:**
+- Close the current period (locks ongoing work)
+- Reopen periods without documentation
+- Leave critical periods open indefinitely
+- Skip period reviews before closing
+- Close periods with unreconciled accounts
+
+**Recommended Schedule:**
+- **Weekly**: Review current month transactions
+- **Monthly**: Close previous month by the 5th
+- **Quarterly**: Close quarter within 10 days of quarter-end
+- **Annually**: Close year by January 31st
+
+---
+
+## 9. Inventory & Assets
+
+### 9.1 Product Management
 
 **Adding a Product**
 
@@ -1444,7 +1921,7 @@ Use for:
 
 ---
 
-## 8. Bank & Cash
+## 10. Bank & Cash
 
 ### 8.1 Bank Accounts
 
@@ -1536,7 +2013,7 @@ Use for:
 
 ---
 
-## 9. Reports & Analytics
+## 11. Reports & Analytics
 
 ### 9.1 Financial Reports
 
@@ -1738,7 +2215,7 @@ Every bill, expense, and transaction needs an account category. The Chart of Acc
 
 ---
 
-## 10. System Settings
+## 12. System Settings
 
 ### 10.1 Company Settings
 
@@ -1885,7 +2362,7 @@ A: From exchangerate-api.com. Refresh rates in Settings → Financial. Rates upd
 
 ---
 
-## 11. Common Questions & Answers
+## 13. Common Questions & Answers
 
 ### General Questions
 
@@ -1899,7 +2376,18 @@ A: Click "Forgot Password" on the login page. Enter your email and you'll receiv
 A: Yes, unlimited concurrent users can access the system simultaneously.
 
 **Q: Is my data secure?**
-A: Yes. Data is encrypted, backed up daily, and stored securely. Only authorized users can access your information.
+A: Yes. The system uses Row-Level Security (RLS) to control access at the database level. Data is encrypted, backed up daily, and stored securely. Only users with appropriate roles can access sensitive information like payroll, bank accounts, and employee personal data.
+
+**Q: What are user roles and what can each role do?**
+A: The system has 5 roles:
+- **Admin**: Full access to everything including user management and period locking
+- **Accountant**: All financial data including payroll, bank accounts, and bills
+- **Operations**: Bookings, inventory, assets, and vendor management
+- **Sales**: Customers, invoices, bookings (no access to payroll or bank accounts)
+- **Guide**: Read-only access to assigned tours and bookings
+
+**Q: Can I change my own role?**
+A: No. Only Admins can change user roles through Settings → Users.
 
 **Q: Can I customize the system?**
 A: Yes. You can customize company settings, create custom fields, and configure workflows to match your business.
@@ -1931,6 +2419,21 @@ A: Best practice is monthly, but weekly is even better. This helps catch errors 
 
 **Q: What's a journal entry and when do I need it?**
 A: A journal entry is a manual accounting record. Use for depreciation, corrections, or complex transactions not covered by standard forms.
+
+**Q: What does "Period is closed" mean?**
+A: This means the fiscal period (month, quarter, or year) has been locked to prevent changes. You cannot create or edit transactions dated in a closed period. Contact your Admin if you need the period reopened.
+
+**Q: How do I close a month or quarter?**
+A: Only Admins can close periods. Go to Settings → Fiscal Periods, find the period, and click "Close Period". This locks all transactions in that period to prevent accidental changes.
+
+**Q: Can I reopen a closed period?**
+A: Yes, but only Admins can reopen periods. This should be done carefully and documented. After making corrections, the period should be closed again immediately.
+
+**Q: Why can't I edit an old invoice?**
+A: If the invoice date falls in a closed fiscal period, you cannot edit it. This is intentional to maintain historical accuracy. If you need to make changes, ask your Admin to reopen the period.
+
+**Q: I'm getting a "Cannot create transaction" error. Why?**
+A: Check the transaction date. If it's in a closed period, change the date to an open period or contact your Admin to reopen the period temporarily.
 
 ---
 
@@ -1978,6 +2481,32 @@ A: Contact your admin immediately. They may need to reverse the payroll and repr
 
 **Q: How do I track overtime?**
 A: Add overtime as an allowance in the employee's payroll record for that period.
+
+**Q: Why can't I see payroll information?**
+A: Payroll data is restricted to Admin and Accountant roles only for privacy and security. If you need access, contact your Admin to review your role assignment.
+
+---
+
+### Permission & Access Questions
+
+**Q: I can't create/edit a record. What's wrong?**
+A: Check your user role. Different roles have different permissions:
+- Sales users cannot access payroll or bank accounts
+- Operations users cannot manage bills or journal entries  
+- Only Accountants and Admins can access full financial data
+- Contact your Admin if you need additional permissions
+
+**Q: Why can't I see certain reports?**
+A: Report access is role-based. Financial reports require Accountant or Admin role. If you need access, your Admin can upgrade your role.
+
+**Q: Can I view other people's expenses?**
+A: Yes, all users can view all expenses (unless department filtering is applied). However, only Accountants and Admins can approve/reject expenses.
+
+**Q: I used to be able to do something, but now I can't. Why?**
+A: The system recently implemented Row-Level Security (RLS). Your Admin may need to review and update your role to ensure appropriate access.
+
+**Q: What's the difference between closing a period and restricting access?**
+A: Period locking prevents everyone (including Admins) from modifying historical data. Role-based permissions control what types of data users can access in any period.
 
 ---
 
@@ -2069,7 +2598,7 @@ A: No, internet connection is required. However, data is cached so brief disconn
 
 ---
 
-## 12. Troubleshooting
+## 14. Troubleshooting
 
 ### Common Issues & Solutions
 

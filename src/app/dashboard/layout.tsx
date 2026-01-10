@@ -30,6 +30,7 @@ import {
   BuildingStorefrontIcon,
   UsersIcon,
   CalculatorIcon,
+  CakeIcon,
 } from '@heroicons/react/24/outline';
 
 // Navigation grouped by category for a tour company
@@ -38,6 +39,12 @@ const navigationGroups = [
     name: 'Overview',
     items: [
       { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
+    ]
+  },
+  {
+    name: 'Cafe Operations',
+    items: [
+      { name: 'Cafe Dashboard', href: '/dashboard/cafe', icon: CakeIcon },
     ]
   },
   {

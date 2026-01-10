@@ -33,14 +33,6 @@ export async function POST(request: NextRequest, context: any) {
       );
     }
 
-    // Prevent self-approval (optional business rule)
-    if (expense.created_by === user.id) {
-      return NextResponse.json(
-        { error: 'You cannot approve your own expense' },
-        { status: 400 }
-      );
-    }
-
     // Update expense to approved
     const { data: updatedExpense, error: updateError } = await supabase
       .from('expenses')

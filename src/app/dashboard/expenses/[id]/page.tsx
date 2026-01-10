@@ -660,18 +660,18 @@ export default function ExpenseDetailPage() {
                 CATEGORIZATION
               </h3>
               <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-xs md:text-sm text-gray-600">Department:</span>
+                  <span className={`text-sm md:text-base font-medium ${expense.department ? 'text-gray-900' : 'text-red-600'}`}>
+                    {expense.department || 'Not Set'}
+                  </span>
+                </div>
                 {expense.category && (
                   <div className="flex justify-between">
                     <span className="text-xs md:text-sm text-gray-600">Category:</span>
                     <span className="text-sm md:text-base font-medium text-gray-900 capitalize">
                       {expense.category.replace(/_/g, ' ')}
                     </span>
-                  </div>
-                )}
-                {expense.department && (
-                  <div className="flex justify-between">
-                    <span className="text-xs md:text-sm text-gray-600">Department:</span>
-                    <span className="text-sm md:text-base font-medium text-gray-900">{expense.department}</span>
                   </div>
                 )}
               </div>

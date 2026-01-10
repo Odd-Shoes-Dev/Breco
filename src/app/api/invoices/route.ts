@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { createInvoiceJournalEntry } from '@/lib/accounting/journal-entry-helpers';
+import { validatePeriodLock } from '@/lib/accounting/period-lock';
 import {
   reduceInventoryForInvoice,
   reserveInventoryForQuotation,
@@ -74,6 +75,12 @@ export async function POST(request: NextRequest) {
         { error: 'Missing required fields: customer_id, invoice_date, due_date' },
         { status: 400 }
       );
+    }
+
+    // Check if period is closed
+    const periodError = await validatePeriodLock(supabase, body.invoice_date);
+    if (periodError) {
+      return NextResponse.json({ error: periodError }, { status: 403 });
     }
 
     // Get current user

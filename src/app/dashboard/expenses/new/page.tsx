@@ -34,6 +34,7 @@ export default function NewExpensePage() {
     vendor_id: '',
     expense_date: new Date().toISOString().split('T')[0],
     category: '',
+    department: '',
     expense_account_id: '',
     description: '',
     amount: 0,
@@ -279,6 +280,25 @@ export default function NewExpensePage() {
                     {cat.label}
                   </option>
                 ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Department
+              </label>
+              <select
+                name="department"
+                value={formData.department}
+                onChange={handleChange}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+              >
+                <option value="">Select department...</option>
+                <option value="Operations">Operations</option>
+                <option value="Cafe">Cafe</option>
+                <option value="Administration">Administration</option>
+                <option value="Sales">Sales</option>
+                <option value="Maintenance">Maintenance</option>
               </select>
             </div>
 

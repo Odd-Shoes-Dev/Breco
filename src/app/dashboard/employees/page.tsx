@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import type { Employee } from '@/types/breco';
 import { CurrencySelect } from '@/components/ui';
@@ -26,11 +27,12 @@ import toast from 'react-hot-toast';
 type EmploymentStatus = 'active' | 'on_leave' | 'terminated' | 'probation';
 
 export default function EmployeesPage() {
+  const searchParams = useSearchParams();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
+  const [departmentFilter, setDepartmentFilter] = useState<string>(searchParams.get('department') || 'all');
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Form state

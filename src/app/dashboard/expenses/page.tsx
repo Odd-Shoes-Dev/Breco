@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import {
@@ -13,7 +14,7 @@ import {
 } from '@heroicons/react/24/outline';
 import type { Expense } from '@/types/database';
 
-type ExpenseStatus = 'all';
+type ExpenseStatus = 'all' | 'pending' | 'approved' | 'paid' | 'rejected';
 
 interface ExpenseWithDetails extends Expense {
   vendors?: { name: string } | null;
@@ -21,10 +22,12 @@ interface ExpenseWithDetails extends Expense {
 }
 
 export default function ExpensesPage() {
+  const searchParams = useSearchParams();
   const [expenses, setExpenses] = useState<ExpenseWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<ExpenseStatus>('all');
+  const [departmentFilter, setDepartmentFilter] = useState<string>(searchParams.get('department') || 'all');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [stats, setStats] = useState({
@@ -38,7 +41,7 @@ export default function ExpensesPage() {
   useEffect(() => {
     loadExpenses();
     loadStats();
-  }, [searchQuery, statusFilter, currentPage]);
+  }, [searchQuery, statusFilter, departmentFilter, currentPage]);
 
   const loadExpenses = async () => {
     try {
@@ -54,6 +57,14 @@ export default function ExpensesPage() {
 
       if (searchQuery) {
         query = query.or(`expense_number.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`);
+      }
+
+      if (departmentFilter && departmentFilter !== 'all') {
+        query = query.eq('department', departmentFilter);
+      }
+
+      if (statusFilter && statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
       }
 
       const from = (currentPage - 1) * pageSize;
@@ -150,6 +161,10 @@ export default function ExpensesPage() {
                 className="input w-auto"
               >
                 <option value="all">All Expenses</option>
+                <option value="pending">Pending Approval</option>
+                <option value="approved">Approved</option>
+                <option value="paid">Paid</option>
+                <option value="rejected">Rejected</option>
               </select>
             </div>
           </div>
@@ -211,6 +226,7 @@ export default function ExpensesPage() {
                   <th>Expense #</th>
                   <th>Description</th>
                   <th>Category</th>
+                  <th>Department</th>
                   <th>Vendor</th>
                   <th className="text-right">Amount</th>
                   <th>Method</th>
@@ -219,7 +235,11 @@ export default function ExpensesPage() {
               </thead>
               <tbody>
                 {expenses.map((expense) => (
-                  <tr key={expense.id}>
+                  <tr 
+                    key={expense.id}
+                    onClick={() => window.location.href = `/dashboard/expenses/${expense.id}`}
+                    className="cursor-pointer hover:bg-gray-50 transition-colors"
+                  >
                     <td className="whitespace-nowrap">{formatDate(expense.expense_date)}</td>
                     <td>
                       <span className="font-mono text-sm">{expense.expense_number || '-'}</span>
@@ -231,6 +251,15 @@ export default function ExpensesPage() {
                       <span className="text-sm text-gray-600">
                         {expense.accounts?.name || '-'}
                       </span>
+                    </td>
+                    <td>
+                      {expense.department ? (
+                        <span className="badge badge-blue text-xs">
+                          {expense.department}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-gray-400">-</span>
+                      )}
                     </td>
                     <td className="whitespace-nowrap">{expense.vendors?.name || expense.payee || '-'}</td>
                     <td className="text-right font-medium whitespace-nowrap">
@@ -245,6 +274,7 @@ export default function ExpensesPage() {
                       <Link
                         href={`/dashboard/expenses/${expense.id}`}
                         className="btn-ghost p-2"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <EyeIcon className="w-5 h-5" />
                       </Link>

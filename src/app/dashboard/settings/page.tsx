@@ -15,6 +15,7 @@ import {
   PaintBrushIcon,
   BookOpenIcon,
   ArrowTopRightOnSquareIcon,
+  LockClosedIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import type { CompanySettings } from '@/types/database';
@@ -203,6 +204,16 @@ export default function SettingsPage() {
                 {tab.label}
               </button>
             ))}
+            
+            {/* External Link to Fiscal Periods */}
+            <Link
+              href="/dashboard/settings/fiscal-periods"
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors text-gray-600 hover:bg-gray-100"
+            >
+              <LockClosedIcon className="w-5 h-5" />
+              <span>Fiscal Periods</span>
+              <ArrowTopRightOnSquareIcon className="w-4 h-4 ml-auto" />
+            </Link>
           </nav>
         </div>
 

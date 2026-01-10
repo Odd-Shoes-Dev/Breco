@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { createExpenseJournalEntry, getAccountByCode } from '@/lib/accounting/journal-entry-helpers';
+import { validatePeriodLock } from '@/lib/accounting/period-lock';
 
 // GET /api/expenses - List expenses
 export async function GET(request: NextRequest) {
@@ -82,6 +83,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if period is closed
+    const periodError = await validatePeriodLock(supabase, body.expense_date);
+    if (periodError) {
+      return NextResponse.json({ error: periodError }, { status: 403 });
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -105,6 +112,8 @@ export async function POST(request: NextRequest) {
         total: (body.amount || 0) + (body.tax_amount || 0),
         currency: body.currency || 'USD',
         description: body.description || null,
+        category: body.category || null,
+        department: body.department || null,
         payment_method: body.payment_method || 'cash',
         bank_account_id: body.bank_account_id || null,
         receipt_url: body.receipt_url || null,

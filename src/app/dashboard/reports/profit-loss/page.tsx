@@ -448,8 +448,8 @@ export default function ProfitLossReportPage() {
                 <p className="text-sm text-gray-500 italic pl-3 sm:pl-4">No revenue recorded</p>
               ) : (
                 <div className="space-y-1">
-                  {data.revenue.items.map((item) => (
-                    <div key={item.code} className="flex justify-between pl-3 sm:pl-4">
+                  {data.revenue.items.map((item, index) => (
+                    <div key={`revenue-${item.code}-${index}`} className="flex justify-between pl-3 sm:pl-4">
                       <span className="text-sm sm:text-base text-gray-700 min-w-0 flex-1 mr-2">
                         <span className="text-gray-400 font-mono text-xs sm:text-sm mr-1 sm:mr-2 block sm:inline">{item.code}</span>
                         <span>{item.name}</span>
@@ -472,8 +472,8 @@ export default function ProfitLossReportPage() {
                 <p className="text-sm text-gray-500 italic pl-3 sm:pl-4">No cost of sales recorded</p>
               ) : (
                 <div className="space-y-1">
-                  {data.costOfSales.items.map((item) => (
-                    <div key={item.code} className="flex justify-between pl-3 sm:pl-4">
+                  {data.costOfSales.items.map((item, index) => (
+                    <div key={`cogs-${item.code}-${index}`} className="flex justify-between pl-3 sm:pl-4">
                       <span className="text-sm sm:text-base text-gray-700 min-w-0 flex-1 mr-2">
                         <span className="text-gray-400 font-mono text-xs sm:text-sm mr-1 sm:mr-2 block sm:inline">{item.code}</span>
                         <span>{item.name}</span>
@@ -504,8 +504,8 @@ export default function ProfitLossReportPage() {
                 <p className="text-sm text-gray-500 italic pl-3 sm:pl-4">No operating expenses recorded</p>
               ) : (
                 <div className="space-y-1">
-                  {data.operatingExpenses.items.map((item) => (
-                    <div key={item.code} className="flex justify-between pl-3 sm:pl-4">
+                  {data.operatingExpenses.items.map((item, index) => (
+                    <div key={`opex-${item.code}-${index}`} className="flex justify-between pl-3 sm:pl-4">
                       <span className="text-sm sm:text-base text-gray-700 min-w-0 flex-1 mr-2">
                         <span className="text-gray-400 font-mono text-xs sm:text-sm mr-1 sm:mr-2 block sm:inline">{item.code}</span>
                         <span>{item.name}</span>
@@ -534,8 +534,8 @@ export default function ProfitLossReportPage() {
               <div className="mb-4 sm:mb-6">
                 <h3 className="text-base sm:text-lg font-semibold text-gray-900 border-b pb-2 mb-2 sm:mb-3">Other Expenses</h3>
                 <div className="space-y-1">
-                  {data.otherExpenses.items.map((item) => (
-                    <div key={item.code} className="flex justify-between pl-3 sm:pl-4">
+                  {data.otherExpenses.items.map((item, index) => (
+                    <div key={`other-${item.code}-${index}`} className="flex justify-between pl-3 sm:pl-4">
                       <span className="text-sm sm:text-base text-gray-700 min-w-0 flex-1 mr-2">
                         <span className="text-gray-400 font-mono text-xs sm:text-sm mr-1 sm:mr-2 block sm:inline">{item.code}</span>
                         <span>{item.name}</span>
