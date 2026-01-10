@@ -253,6 +253,59 @@ This document tracks features and improvements for the booking-invoice integrati
 - [ ] User guide: Recording payments
 - [ ] Developer docs: Booking-invoice data flow
 - [ ] API documentation updates
+- [ ] **Stripe Setup Guide**: Configure Stripe for online invoice payments
+
+---
+
+## 💳 Stripe Online Payment Integration (DEFERRED)
+
+### Current Status
+The system has Stripe integration code in place but needs configuration and testing:
+
+**Files Implemented:**
+- `/pay?id=invoice_id` - Customer payment page with Stripe Elements
+- `src/app/pay/PayClient.tsx` - Stripe payment form component
+- `src/app/api/webhooks/stripe/route.ts` - Auto-records payments via webhook
+- `src/lib/stripe.ts` - Stripe helper functions
+
+**What Works:**
+- Customer can visit payment link and see invoice details
+- Stripe payment form loads with card input fields
+- Webhook automatically records payment when received
+- Auto-updates invoice status to "paid"
+- Creates payment record, journal entry, and updates customer balance
+
+**What's Needed:**
+1. **Environment Variables:**
+   - `STRIPE_SECRET_KEY` - Your Stripe secret key
+   - `STRIPE_WEBHOOK_SECRET` - Webhook signing secret
+   - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` - Public key for client
+
+2. **Stripe Account Setup:**
+   - Create Stripe account at stripe.com
+   - Get API keys from dashboard
+   - Configure webhook endpoint: `https://yourdomain.com/api/webhooks/stripe`
+   - Subscribe to `payment_intent.succeeded` event
+
+3. **Testing:**
+   - Test with Stripe test mode first
+   - Use test card: 4242 4242 4242 4242
+   - Verify payment records correctly
+   - Test webhook delivery
+   - Confirm invoice status updates
+
+4. **Email Integration:**
+   - Add payment link to invoice emails
+   - Format: `Click here to pay: https://yourdomain.com/pay?id={invoice_id}`
+
+5. **Security:**
+   - Ensure HTTPS in production
+   - Verify webhook signatures
+   - Add payment page rate limiting
+
+**Priority:** LOW - Nice to have, not essential for launch  
+**Time Estimate:** 2-3 hours for configuration and testing  
+**Documentation:** Will create `STRIPE_SETUP_GUIDE.md` when ready to implement
 
 ---
 
@@ -269,6 +322,7 @@ This document tracks features and improvements for the booking-invoice integrati
 8. **Status Simplification** ✅ - Streamlined from 9 to 6 statuses
 
 ### 🟡 Deferred (Future Enhancements)
+- **Stripe Online Payments** - Configure and test customer payment portal
 - Invoice sequence tracking (Priority 3.2)
 - Direct booking payment endpoint (Priority 2.2)
 - Cost & profitability tracking (Priority 4)

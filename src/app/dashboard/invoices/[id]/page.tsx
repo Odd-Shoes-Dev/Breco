@@ -15,6 +15,7 @@ import {
   DocumentDuplicateIcon,
   TrashIcon,
   CheckCircleIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 
 interface Invoice {
@@ -641,6 +642,41 @@ export default function InvoiceDetailPage() {
     alert('Payment link copied to clipboard!');
   };
 
+  const handleConvertToInvoice = async () => {
+    if (!invoice) return;
+    
+    const docType = invoice.document_type === 'quotation' ? 'quotation' : 'proforma invoice';
+    if (!confirm(`Convert this ${docType} to a regular invoice? This action cannot be undone.`)) {
+      return;
+    }
+
+    setActionLoading('convert');
+    try {
+      const endpoint = invoice.document_type === 'quotation' 
+        ? `/api/quotations/${params.id}/convert`
+        : `/api/proformas/${params.id}/convert`;
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to convert');
+      }
+
+      alert(`${docType.charAt(0).toUpperCase() + docType.slice(1)} converted to invoice successfully!`);
+      // Refresh the page to show updated data
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Convert error:', error);
+      alert(error.message || `Failed to convert ${docType}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -706,6 +742,24 @@ export default function InvoiceDetailPage() {
             <PrinterIcon className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
             <span className="hidden sm:inline">Print / PDF</span>
           </Button>
+          
+          {/* Convert to Invoice button for Quotations and Proformas */}
+          {(invoice.document_type === 'quotation' || invoice.document_type === 'proforma') && 
+           invoice.status !== 'converted' && invoice.status !== 'posted' && (
+            <Button 
+              variant="primary" 
+              size="sm" 
+              onClick={handleConvertToInvoice}
+              disabled={actionLoading === 'convert'}
+              className="text-xs sm:text-sm bg-[#52b53b] hover:bg-[#52b53b]/90"
+            >
+              <ArrowPathIcon className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+              <span className="hidden sm:inline">
+                {actionLoading === 'convert' ? 'Converting...' : 'Convert to Invoice'}
+              </span>
+              <span className="sm:hidden">Convert</span>
+            </Button>
+          )}
           
           {invoice.status === 'draft' && (
             <Button 

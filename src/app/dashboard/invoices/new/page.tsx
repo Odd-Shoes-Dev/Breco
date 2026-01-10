@@ -53,6 +53,7 @@ export default function NewInvoicePage() {
   const prefilledInvoiceType = searchParams.get('invoice_type');
   const prefilledDeposit = searchParams.get('deposit_amount');
   const prefilledBalance = searchParams.get('balance_amount');
+  const prefilledDocType = searchParams.get('type') as DocumentType | null;
 
   const {
     register,
@@ -63,7 +64,7 @@ export default function NewInvoicePage() {
     formState: { errors },
   } = useForm<InvoiceFormData>({
     defaultValues: {
-      document_type: 'invoice',
+      document_type: prefilledDocType || 'invoice',
       currency: prefilledCurrency || 'USD',
       invoice_date: new Date().toISOString().split('T')[0],
       due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
