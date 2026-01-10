@@ -14,6 +14,8 @@ import {
   CreditCardIcon,
   CalendarIcon,
   TagIcon,
+  CheckCircleIcon,
+  XCircleIcon,
 } from '@heroicons/react/24/outline';
 import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
@@ -39,6 +41,7 @@ interface Expense {
   receipt_url: string | null;
   is_reimbursable: boolean;
   is_billable: boolean;
+  status: string;
   created_at: string;
   vendors?: {
     name: string;
@@ -403,6 +406,61 @@ export default function ExpenseDetailPage() {
     }
   };
 
+  const handleApprove = async () => {
+    if (!confirm('Approve this expense?')) return;
+    
+    setActionLoading(true);
+    try {
+      const response = await fetch(`/api/expenses/${params.id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error);
+      }
+      
+      // Reload expense
+      await loadExpenseDetails();
+      alert('Expense approved successfully');
+    } catch (error: any) {
+      console.error('Failed to approve expense:', error);
+      alert(error.message || 'Failed to approve expense');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReject = async () => {
+    const reason = prompt('Enter rejection reason:');
+    if (!reason) return;
+    
+    setActionLoading(true);
+    try {
+      const response = await fetch(`/api/expenses/${params.id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rejection_reason: reason }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error);
+      }
+      
+      // Reload expense
+      await loadExpenseDetails();
+      alert('Expense rejected');
+    } catch (error: any) {
+      console.error('Failed to reject expense:', error);
+      alert(error.message || 'Failed to reject expense');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!confirm('Permanently delete this expense? This action cannot be undone.')) return;
     
@@ -464,22 +522,47 @@ export default function ExpenseDetailPage() {
             <span className="hidden md:inline">Print</span>
           </button>
           
-          <Link 
-            href={`/dashboard/expenses/${params.id}/edit`}
-            className="btn-secondary inline-flex items-center flex-1 sm:flex-none"
-          >
-            <PencilIcon className="w-5 h-5 md:mr-2" />
-            <span className="hidden md:inline">Edit</span>
-          </Link>
+          {expense.status !== 'approved' && expense.status !== 'paid' && expense.status !== 'rejected' && (
+            <Link 
+              href={`/dashboard/expenses/${params.id}/edit`}
+              className="btn-secondary inline-flex items-center flex-1 sm:flex-none"
+            >
+              <PencilIcon className="w-5 h-5 md:mr-2" />
+              <span className="hidden md:inline">Edit</span>
+            </Link>
+          )}
           
-          <button 
-            onClick={handleDelete} 
-            disabled={actionLoading}
-            className="btn-secondary text-red-600 hover:bg-red-50 flex-1 sm:flex-none"
-          >
-            <TrashIcon className="w-5 h-5 md:mr-2" />
-            <span className="hidden md:inline">Delete</span>
-          </button>
+          {expense.status === 'pending' && (
+            <>
+              <button 
+                onClick={handleApprove} 
+                disabled={actionLoading}
+                className="btn-primary flex-1 sm:flex-none"
+              >
+                <CheckCircleIcon className="w-5 h-5 md:mr-2" />
+                <span className="hidden md:inline">Approve</span>
+              </button>
+              <button 
+                onClick={handleReject} 
+                disabled={actionLoading}
+                className="btn-secondary text-red-600 hover:bg-red-50 flex-1 sm:flex-none"
+              >
+                <XCircleIcon className="w-5 h-5 md:mr-2" />
+                <span className="hidden md:inline">Reject</span>
+              </button>
+            </>
+          )}
+          
+          {(expense.status === 'pending' || expense.status === 'rejected') && (
+            <button 
+              onClick={handleDelete} 
+              disabled={actionLoading}
+              className="btn-secondary text-red-600 hover:bg-red-50 flex-1 sm:flex-none"
+            >
+              <TrashIcon className="w-5 h-5 md:mr-2" />
+              <span className="hidden md:inline">Delete</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -497,6 +580,17 @@ export default function ExpenseDetailPage() {
               {expense.reference_number && (
                 <p className="text-sm md:text-base text-gray-600">Reference: {expense.reference_number}</p>
               )}
+              <div className="mt-2">
+                <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                  expense.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                  expense.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                  expense.status === 'paid' ? 'bg-green-100 text-green-800' :
+                  expense.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}>
+                  {expense.status.toUpperCase()}
+                </span>
+              </div>
             </div>
             <div className="text-left sm:text-right">
               <p className="text-xs md:text-sm text-gray-500 mb-1">Date</p>
