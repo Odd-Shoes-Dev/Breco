@@ -1,11 +1,14 @@
 # Breco Safaris Operations & Finance System
 ## Complete User Guide
 
-**Version:** 1.2  
-**Last Updated:** January 10, 2026  
+**Version:** 1.3  
+**Last Updated:** January 11, 2026  
 **System:** Breco Safaris Management Platform
 
 **Recent Updates:**
+- Added quotation and proforma invoice support with conversion workflow
+- Document type filtering on invoice list (Invoice, Quotation, Proforma)
+- One-click conversion from quotation/proforma to invoice
 - Enhanced booking-invoice integration with automated payment tracking
 - Multi-currency invoice support with automatic conversion
 - Smart invoice generation with validation and warnings
@@ -769,6 +772,102 @@ Stock after sending: 40 units (automatically reduced)
 - Use clear descriptions
 - Set realistic payment terms
 - Follow up on overdue invoices
+
+### 5.2.1 Document Types (Invoice, Quotation, Proforma)
+
+**Understanding Document Types**
+
+The system supports multiple document types for different stages of the sales process:
+
+1. **Quotation (QUO-2026-00001)**
+   - Price estimate or proposal for customer
+   - Reserves inventory (prevents overselling)
+   - Can be converted to invoice when accepted
+   - Separate numbering sequence
+   - Does not affect customer balance
+
+2. **Proforma Invoice (PRO-2026-00001)**
+   - Advance invoice sent before delivery/service
+   - Used for customs, down payments, or pre-approvals
+   - Can be converted to invoice upon delivery
+   - Separate numbering sequence
+   - Does not affect customer balance
+
+3. **Invoice (INV-2026-00001)**
+   - Final billing document
+   - Reduces inventory when sent
+   - Updates customer balance
+   - Can accept payments and generate receipts
+   - Standard invoice numbering
+
+**Creating a Quotation or Proforma**
+
+1. Go to **Finance → Invoices**
+2. Click **New Invoice**
+3. In the form, locate **Document Type** dropdown
+4. Select:
+   - **Quotation** for price estimates
+   - **Proforma** for advance invoices
+   - **Invoice** for standard billing
+5. Fill in customer details, line items, and amounts
+6. Click **Create**
+
+The document will have the appropriate number prefix (QUO-, PRO-, or INV-).
+
+**Filtering by Document Type**
+
+To view only quotations or proformas:
+
+1. Go to **Finance → Invoices**
+2. Look for **All Types** dropdown filter (top of list)
+3. Select:
+   - **Quotation** to see only quotations
+   - **Proforma** to see only proformas
+   - **Invoice** to see only invoices
+   - **All Types** to see everything
+
+**Converting Quotation or Proforma to Invoice**
+
+When a quotation is accepted or a proforma needs to be finalized:
+
+1. Go to **Finance → Invoices**
+2. Click on the quotation or proforma to open details
+3. In the actions section (top right), click **"Convert to Invoice"** button
+   - This button only appears for quotations and proformas
+   - Hidden if already converted or posted
+4. Confirm the conversion
+5. System automatically:
+   - Generates a new invoice number (INV-2026-00XXX)
+   - Changes document type to "Invoice"
+   - Releases reserved inventory (quotations only)
+   - Marks original as converted
+   - Sets status to "Draft"
+6. Page refreshes with new invoice number
+
+**Important Notes:**
+- Conversion is permanent and cannot be undone
+- Original quotation/proforma number is preserved in system
+- Inventory reservations are handled automatically
+- Customer can now make payments against the invoice
+- All line items, taxes, and amounts are preserved
+
+**Example Workflow:**
+
+```
+1. Customer requests quote
+   → Create Quotation (QUO-2026-00015)
+   → Inventory reserved: 10 Safari T-Shirts
+   
+2. Customer accepts quote
+   → Open QUO-2026-00015
+   → Click "Convert to Invoice"
+   → New Invoice created: INV-2026-00042
+   → Reservation released (will reduce when invoice sent)
+   
+3. Send invoice to customer
+   → Inventory reduced: 10 units
+   → Customer can pay
+```
 
 ### 5.3 Recording Payments (Receipts)
 
