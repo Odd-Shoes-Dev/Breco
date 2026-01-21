@@ -64,24 +64,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate vendor number
-    const { data: lastVendor } = await supabase
-      .from('vendors')
-      .select('vendor_number')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    // Generate vendor number using database function
+    const { data: numberData, error: numberError } = await supabase
+      .rpc('generate_vendor_number');
 
-    let nextNumber = 'VEND-0001';
-    if (lastVendor?.vendor_number) {
-      const num = parseInt(lastVendor.vendor_number.split('-')[1]) + 1;
-      nextNumber = `VEND-${num.toString().padStart(4, '0')}`;
+    if (numberError) {
+      return NextResponse.json(
+        { error: 'Failed to generate vendor number: ' + numberError.message },
+        { status: 500 }
+      );
     }
 
     const { data, error } = await supabase
       .from('vendors')
       .insert({
-        vendor_number: nextNumber,
+        vendor_number: numberData,
         name: body.name,
         company_name: body.company_name || null,
         email: body.email || null,

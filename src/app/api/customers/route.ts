@@ -80,24 +80,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate customer number
-    const { data: lastCustomer } = await supabase
-      .from('customers')
-      .select('customer_number')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    // Generate customer number using database function
+    const { data: numberData, error: numberError } = await supabase
+      .rpc('generate_customer_number');
 
-    let nextCode = 'CUST-0001';
-    if (lastCustomer?.customer_number) {
-      const num = parseInt(lastCustomer.customer_number.split('-')[1]) + 1;
-      nextCode = `CUST-${num.toString().padStart(4, '0')}`;
+    if (numberError) {
+      return NextResponse.json(
+        { error: 'Failed to generate customer number: ' + numberError.message },
+        { status: 500 }
+      );
     }
 
     const { data, error } = await supabase
       .from('customers')
       .insert({
-        customer_number: nextCode,
+        customer_number: numberData,
         name: body.name,
         company_name: body.company_name || null,
         email: body.email || null,
