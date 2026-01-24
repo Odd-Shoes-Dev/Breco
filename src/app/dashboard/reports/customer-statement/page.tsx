@@ -284,9 +284,9 @@ export default function CustomerStatementPage() {
             <img src="/assets/logo.jpg" alt="Breco Safaris Logo" class="logo" />
             <div class="company-info">
               <h1>Breco Safaris Ltd</h1>
-              <div class="address">121 Bedford Street, Waltham, MA 02453</div>
-              <div class="address">Phone: (857) 384-2899</div>
-              <div class="address">Director: N.Maureen</div>
+              <div class="address">Kampala Road Plot 14 Eagen House, Russel Street, P.O.Box 144011, Kampala, Uganda</div>
+              <div class="address">Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com</div>
+              <div class="address">URA TIN: 1014756280 • URSB Reg. No: 80020001634842</div>
             </div>
           </div>
           

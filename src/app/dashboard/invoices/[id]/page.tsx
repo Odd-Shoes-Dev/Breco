@@ -118,12 +118,24 @@ export default function InvoiceDetailPage() {
         .order('line_number');
 
       // Parse line item numeric fields
-      const parsedItems = (itemsData || []).map(item => ({
-        ...item,
-        quantity: parseFloat(item.quantity || 0),
-        unit_price: parseFloat(item.unit_price || 0),
-        amount: parseFloat(item.amount || 0),
-      }));
+      const parsedItems = (itemsData || []).map(item => {
+        const quantity = parseFloat(item.quantity || 0);
+        const unitPrice = parseFloat(item.unit_price || 0);
+        const lineTotal = parseFloat(item.line_total || 0);
+        const discountAmount = parseFloat(item.discount_amount || 0);
+        const taxAmount = parseFloat(item.tax_amount || 0);
+        
+        // Calculate amount if line_total is 0 (legacy data)
+        const calculatedAmount = lineTotal || (quantity * unitPrice - discountAmount + taxAmount);
+        
+        return {
+          ...item,
+          quantity,
+          unit_price: unitPrice,
+          line_total: lineTotal,
+          amount: calculatedAmount,
+        };
+      });
 
       setLineItems(parsedItems);
 
@@ -251,12 +263,13 @@ export default function InvoiceDetailPage() {
               font-size: 24px; 
               font-weight: bold; 
               color: #1e3a5f;
-              margin-bottom: 4px;
+              margin-bottom: 8px;
             }
             .company-info .address { 
-              font-size: 12px; 
+              font-size: 11px; 
               color: #6b7280;
-              margin-bottom: 2px;
+              margin-bottom: 3px;
+              line-height: 1.5;
             }
             .invoice-header { 
               text-align: right;
@@ -419,10 +432,11 @@ export default function InvoiceDetailPage() {
               <img src="/assets/logo.jpg" alt="Breco Safaris Logo" class="logo" />
               <div class="company-info">
                 <h1>Breco Safaris Ltd</h1>
-                <p class="address">121 Bedford Street</p>
-                <p class="address">Waltham, MA 02453</p>
-                <p class="address">Massachusetts, USA</p>
-                <p class="address" style="margin-top: 8px;">Director: N.Maureen</p>
+                <p class="address">Kampala Road Plot 14 Eagen House, Russel Street</p>
+                <p class="address">P.O.Box 144011, Kampala, Uganda</p>
+                <p class="address">Tel: +256 782 884 933 | +256 772 891 729 | +256 775 766 578</p>
+                <p class="address">Email: brecosafaris@gmail.com | Website: www.brecosafaris.com</p>
+                <p class="address">URA TIN: 1014756280 | URSB Reg. No: 80020001634842</p>
               </div>
             </div>
             <div class="invoice-header">

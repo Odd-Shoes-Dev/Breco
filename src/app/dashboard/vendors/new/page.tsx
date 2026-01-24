@@ -20,9 +20,9 @@ export default function NewVendorPage() {
     address_line1: '',
     address_line2: '',
     city: '',
-    state: 'MA',
+    state: '',
     zip_code: '',
-    country: 'USA',
+    country: 'Uganda',
     tax_id: '',
     payment_terms: 30,
     default_expense_account_id: '',
@@ -207,24 +207,16 @@ export default function NewVendorPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                State
+                State/Province/Region
               </label>
-              <select
+              <input
+                type="text"
                 name="state"
                 value={formData.state}
                 onChange={handleChange}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
-              >
-                <option value="MA">Massachusetts</option>
-                <option value="CT">Connecticut</option>
-                <option value="NH">New Hampshire</option>
-                <option value="RI">Rhode Island</option>
-                <option value="VT">Vermont</option>
-                <option value="ME">Maine</option>
-                <option value="NY">New York</option>
-                <option value="CA">California</option>
-                <option value="TX">Texas</option>
-              </select>
+                placeholder="e.g., Central Region, California, etc."
+              />
             </div>
 
             <div>
@@ -251,7 +243,7 @@ export default function NewVendorPage() {
                 value={formData.country}
                 onChange={handleChange}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
-                placeholder="USA"
+                placeholder="Uganda"
               />
             </div>
           </div>

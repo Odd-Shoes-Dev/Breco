@@ -290,13 +290,14 @@ export default function ExpenseDetailPage() {
           <!-- Header -->
           <div class="header">
             <div class="company-section">
-              <img src="/Breco Safaris%20assets/Breco Safaris_logo.png" alt="Breco Safaris Logo" class="logo" />
+              <img src="/assets/logo.jpg" alt="Breco Safaris Logo" class="logo" />
               <div class="company-info">
                 <h1>Breco Safaris Ltd</h1>
-                <p class="address">121 Bedford Street</p>
-                <p class="address">Waltham, MA 02453</p>
-                <p class="address">Massachusetts, USA</p>
-                <p class="address" style="margin-top: 8px;">Director: N.Maureen</p>
+                <p class="address">Kampala Road Plot 14 Eagen House, Russel Street</p>
+                <p class="address">P.O.Box 144011, Kampala, Uganda</p>
+                <p class="address">Tel: +256 782 884 933 | +256 772 891 729 | +256 775 766 578</p>
+                <p class="address">Email: brecosafaris@gmail.com | Website: www.brecosafaris.com</p>
+                <p class="address">URA TIN: 1014756280 | URSB Reg. No: 80020001634842</p>
               </div>
             </div>
             <div class="expense-header">

@@ -256,9 +256,9 @@ export default function ProfitLossReportPage() {
             <img src="/assets/logo.jpg" alt="Breco Safaris Ltd" class="logo">
             <div class="company-info">
               <div class="company-name">Breco Safaris Ltd</div>
-              <div class="company-address">121 Bedford Street, Waltham, MA 02453</div>
-              <div class="company-contact">Phone: 857-384-2899</div>
-              <div class="company-contact">Director: N.Maureen</div>
+              <div class="company-address">Kampala Road Plot 14 Eagen House, Russel Street, P.O.Box 144011, Kampala, Uganda</div>
+              <div class="company-contact">Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com</div>
+              <div class="company-contact">URA TIN: 1014756280 • URSB Reg. No: 80020001634842</div>
             </div>
           </div>
           <div class="report-info">

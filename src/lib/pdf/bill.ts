@@ -250,9 +250,12 @@ export function generateBillHTML(data: BillPDFData): string {
             <div class="company-info">
               <div class="company-name">Breco Safaris Ltd</div>
               <div class="company-details">
-                <p>Buzzi Close Kajjansi, Entebbe Road, Kampala, Uganda</p>
-                <p>Phone: +256 782 884 933 • Email: brecosafaris@gmail.com</p>
-                <p>TIN: 1014756280 • Reg: 80020001634842</p>
+                <p>Kampala Road Plot 14 Eagen House, Russel Street</p>
+                <p>P.O.Box 144011, Kampala, Uganda</p>
+                <p>Tel: +256 782 884 933, +256 772 891 729, +256 775 766 578</p>
+                <p>+256 746 757 53991, +256 702 834 511</p>
+                <p>Email: brecosafaris@gmail.com • Website: www.brecosafaris.com</p>
+                <p>URA TIN: 1014756280 • URSB Reg. No: 80020001634842</p>
               </div>
             </div>
           </div>
@@ -352,8 +355,9 @@ export function generateBillHTML(data: BillPDFData): string {
 
         <div class="footer">
           <p>Thank you for your business!</p>
-          <p style="margin-top: 8px;">Breco Safaris Ltd • Buzzi Close Kajjansi, Kampala, Uganda • +256 782 884 933</p>
-          <p>TIN: 1014756280 • www.brecosafaris.com</p>
+          <p style="margin-top: 8px;">Breco Safaris Ltd • Kampala Road Plot 14 Eagen House, Kampala, Uganda</p>
+          <p>Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com • www.brecosafaris.com</p>
+          <p>URA TIN: 1014756280 • URSB Reg. No: 80020001634842</p>
         </div>
       </div>
     </body>

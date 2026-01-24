@@ -240,9 +240,12 @@ export function generateInvoiceHTML(data: InvoicePDFData): string {
             <div class="company-info">
               <div class="company-name">Breco Safaris Ltd</div>
               <div class="company-details">
-                <p>Buzzi Close Kajjansi, Entebbe Road, Kampala, Uganda</p>
-                <p>Phone: +256 782 884 933 • Email: brecosafaris@gmail.com</p>
-                <p>TIN: 1014756280 • Reg: 80020001634842</p>
+                <p>Kampala Road Plot 14 Eagen House, Russel Street</p>
+                <p>P.O.Box 144011, Kampala, Uganda</p>
+                <p>Tel: +256 782 884 933, +256 772 891 729, +256 775 766 578</p>
+                <p>+256 746 757 53991, +256 702 834 511</p>
+                <p>Email: brecosafaris@gmail.com • Website: www.brecosafaris.com</p>
+                <p>URA TIN: 1014756280 • URSB Reg. No: 80020001634842</p>
               </div>
             </div>
           </div>
@@ -285,9 +288,10 @@ export function generateInvoiceHTML(data: InvoicePDFData): string {
         <div class="info-block" style="margin-bottom: 20px;">
           <h3>From</h3>
           <p><strong>Breco Safaris Ltd</strong></p>
-          <p>121 Bedford Street</p>
-          <p>Waltham, MA 02453</p>
-          <p>Phone: 857-384-2899</p>
+          <p>Kampala Road Plot 14 Eagen House, Russel Street</p>
+          <p>P.O.Box 144011, Kampala, Uganda</p>
+          <p>Tel: +256 782 884 933, +256 772 891 729</p>
+          <p>Email: brecosafaris@gmail.com</p>
         </div>
 
         <table class="items-table">
@@ -300,14 +304,17 @@ export function generateInvoiceHTML(data: InvoicePDFData): string {
             </tr>
           </thead>
           <tbody>
-            ${lineItems.map(item => `
+            ${lineItems.map(item => {
+              const lineTotal = item.line_total || (item.quantity * item.unit_price - (item.discount_amount || 0) + (item.tax_amount || 0));
+              return `
               <tr>
                 <td>${item.description}</td>
                 <td>${item.quantity}</td>
                 <td>${formatCurrency(Number(item.unit_price))}</td>
-                <td>${formatCurrency(Number(item.line_total))}</td>
+                <td>${formatCurrency(Number(lineTotal))}</td>
               </tr>
-            `).join('')}
+              `;
+            }).join('')}
           </tbody>
         </table>
 
@@ -367,8 +374,9 @@ export function generateInvoiceHTML(data: InvoicePDFData): string {
 
         <div class="footer">
           <p>Thank you for choosing Breco Safaris!</p>
-          <p style="margin-top: 8px;">Breco Safaris Ltd • Buzzi Close Kajjansi, Kampala, Uganda • +256 782 884 933</p>
-          <p>TIN: 1014756280 • www.brecosafaris.com</p>
+          <p style="margin-top: 8px;">Breco Safaris Ltd • Kampala Road Plot 14 Eagen House, Kampala, Uganda</p>
+          <p>Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com • www.brecosafaris.com</p>
+          <p>URA TIN: 1014756280 • URSB Reg. No: 80020001634842</p>
         </div>
       </div>
     </body>

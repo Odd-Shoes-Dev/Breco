@@ -210,6 +210,7 @@ export async function POST(request: NextRequest) {
         const lineDiscount = lineSubtotal * ((line.discount_percent || 0) / 100);
         const lineNet = lineSubtotal - lineDiscount;
         const lineTax = lineNet * (line.tax_rate || 0);
+        const lineTotal = lineNet + lineTax; // Total includes tax
 
         return {
           invoice_id: invoice.id,
@@ -222,7 +223,7 @@ export async function POST(request: NextRequest) {
           discount_amount: lineDiscount,
           tax_rate: line.tax_rate || 0,
           tax_amount: lineTax,
-          line_total: lineNet,
+          line_total: lineTotal,
         };
       });
 

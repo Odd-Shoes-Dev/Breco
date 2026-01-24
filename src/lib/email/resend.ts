@@ -129,7 +129,10 @@ export async function sendInvoiceEmail(params: SendInvoiceEmailParams) {
           <!-- Footer -->
           <div style="background: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
             <p style="margin: 0; font-size: 12px; color: #999;">
-              Breco Safaris Ltd • Buzzi Close Kajjansi, Kampala, Uganda • +256 782 884 933
+              Breco Safaris Ltd • Kampala Road Plot 14 Eagen House, Kampala, Uganda
+            </p>
+            <p style="margin: 4px 0 0 0; font-size: 12px; color: #999;">
+              Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com
             </p>
           </div>
         </div>
@@ -272,7 +275,10 @@ export async function sendPaymentReceiptEmail(params: SendPaymentReceiptParams) 
           <!-- Footer -->
           <div style="background: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
             <p style="margin: 0; font-size: 12px; color: #999;">
-              Breco Safaris Ltd • Buzzi Close Kajjansi, Kampala, Uganda • +256 782 884 933
+              Breco Safaris Ltd • Kampala Road Plot 14 Eagen House, Kampala, Uganda
+            </p>
+            <p style="margin: 4px 0 0 0; font-size: 12px; color: #999;">
+              Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com
             </p>
           </div>
         </div>

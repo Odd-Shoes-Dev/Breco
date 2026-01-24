@@ -43,12 +43,12 @@ function getDefaultSettings(): CompanySettings {
     id: '',
     name: 'Breco Safaris Ltd',
     legal_name: 'Breco Safaris Ltd',
-    ein: '1014756280', // TIN from invoice
-    address_line1: 'Buzzi Close Kajjansi',
-    address_line2: 'Entebbe Road',
+    ein: '1014756280', // URA TIN
+    address_line1: 'Kampala Road Plot 14 Eagen House',
+    address_line2: 'Russel Street',
     city: 'Kampala',
     state: null,
-    zip_code: 'P.O. Box 1440011',
+    zip_code: 'P.O.Box 144011',
     country: 'Uganda',
     phone: '+256 782 884 933',
     email: 'brecosafaris@gmail.com',

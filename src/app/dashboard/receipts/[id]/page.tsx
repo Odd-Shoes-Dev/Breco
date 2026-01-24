@@ -333,10 +333,11 @@ export default function ReceiptDetailPage() {
               <img src="/assets/logo.jpg" alt="Breco Safaris Logo" class="logo" />
               <div class="company-info">
                 <h1>Breco Safaris Ltd</h1>
-                <p class="address">121 Bedford Street</p>
-                <p class="address">Waltham, MA 02453</p>
-                <p class="address">Massachusetts, USA</p>
-                <p class="address" style="margin-top: 8px;">Director: N.Maureen</p>
+                <p class="address">Kampala Road Plot 14 Eagen House, Russel Street</p>
+                <p class="address">P.O.Box 144011, Kampala, Uganda</p>
+                <p class="address">Tel: +256 782 884 933 | +256 772 891 729 | +256 775 766 578</p>
+                <p class="address">Email: brecosafaris@gmail.com | Website: www.brecosafaris.com</p>
+                <p class="address">URA TIN: 1014756280 | URSB Reg. No: 80020001634842</p>
               </div>
             </div>
             <div class="receipt-header">
@@ -822,8 +823,9 @@ export default function ReceiptDetailPage() {
       <div className="card bg-gray-50">
         <div className="card-body text-center text-sm text-gray-600">
           <p className="font-semibold text-gray-900">Breco Safaris Ltd</p>
-          <p>121 Bedford Street, Waltham, MA 02453</p>
-          <p>Phone: 857-384-2899 • EIN: 99-3334108</p>
+          <p>Kampala Road Plot 14 Eagen House, Russel Street, P.O.Box 144011, Kampala, Uganda</p>
+          <p>Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com</p>
+          <p>URA TIN: 1014756280 • URSB Reg. No: 80020001634842</p>
           <p className="mt-2 text-xs">This is an official receipt for accounting purposes.</p>
         </div>
       </div>
