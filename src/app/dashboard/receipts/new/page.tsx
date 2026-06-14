@@ -54,7 +54,7 @@ export default function NewReceiptPage() {
   const [customerInvoices, setCustomerInvoices] = useState<CustomerInvoice[]>([]);
   const [loading, setLoading] = useState(false);
   const [isManualInvoiceEntry, setIsManualInvoiceEntry] = useState(false);
-  const [taxRate] = useState(0.0625); // MA sales tax
+  const [defaultTaxRate, setDefaultTaxRate] = useState(0);
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({
     USD: 1,
     EUR: 1,
@@ -84,7 +84,7 @@ export default function NewReceiptPage() {
           quantity: 1,
           unit_price: 0,
           discount_percent: 0,
-          tax_rate: taxRate,
+          tax_rate: defaultTaxRate,
         },
       ],
     },
@@ -139,13 +139,15 @@ export default function NewReceiptPage() {
 
   const loadData = async () => {
     try {
-      const [customersRes, productsRes] = await Promise.all([
+      const [customersRes, productsRes, settingsRes] = await Promise.all([
         supabase.from('customers').select('*').eq('is_active', true).order('name'),
         supabase.from('products').select('*').eq('is_active', true).order('name'),
+        supabase.from('company_settings').select('sales_tax_rate').single(),
       ]);
 
       setCustomers(customersRes.data || []);
       setProducts(productsRes.data || []);
+      setDefaultTaxRate(settingsRes.data?.sales_tax_rate || 0);
     } catch (error) {
       console.error('Failed to load data:', error);
     }
@@ -204,7 +206,7 @@ export default function NewReceiptPage() {
         quantity: 1,
         unit_price: 0,
         discount_percent: 0,
-        tax_rate: taxRate,
+        tax_rate: defaultTaxRate,
       }]);
       setValue('amount_paid', 0);
       return;
@@ -294,7 +296,7 @@ export default function NewReceiptPage() {
       setValue(`lines.${index}.product_name`, '');
       setValue(`lines.${index}.description`, '');
       setValue(`lines.${index}.unit_price`, 0);
-      setValue(`lines.${index}.tax_rate`, taxRate);
+      setValue(`lines.${index}.tax_rate`, defaultTaxRate);
       return;
     }
     
@@ -324,7 +326,7 @@ export default function NewReceiptPage() {
       setValue(`lines.${index}.product_name`, product.name);
       setValue(`lines.${index}.description`, product.name);
       setValue(`lines.${index}.unit_price`, Math.round(convertedPrice * 100) / 100);
-      setValue(`lines.${index}.tax_rate`, product.is_taxable ? taxRate : 0);
+      setValue(`lines.${index}.tax_rate`, product.is_taxable ? defaultTaxRate : 0);
     } else {
       // If not found, treat as manual entry
       setValue(`lines.${index}.product_id`, '');
@@ -703,7 +705,7 @@ export default function NewReceiptPage() {
                   quantity: 1,
                   unit_price: 0,
                   discount_percent: 0,
-                  tax_rate: taxRate,
+                  tax_rate: defaultTaxRate,
                 })
               }
               className="btn-secondary"
@@ -793,7 +795,7 @@ export default function NewReceiptPage() {
                         step="0.0001"
                         {...register(`lines.${index}.tax_rate`)}
                         className="input input-sm"
-                        placeholder="0.0625"
+                        placeholder="0.18"
                       />
                     </div>
                   </div>

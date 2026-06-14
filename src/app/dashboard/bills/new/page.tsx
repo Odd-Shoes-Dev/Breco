@@ -11,6 +11,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import { CurrencySelect } from '@/components/ui';
+import { supabase } from '@/lib/supabase/client';
 
 interface Vendor {
   id: string;
@@ -33,6 +34,7 @@ interface LineItem {
   unit_price: number;
   account_code: string;
   amount: number;
+  tax_rate: number;
 }
 
 export default function NewBillPage() {
@@ -41,6 +43,7 @@ export default function NewBillPage() {
   const [error, setError] = useState<string | null>(null);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [defaultTaxRate, setDefaultTaxRate] = useState(0);
 
   const [formData, setFormData] = useState({
     vendor_id: '',
@@ -53,7 +56,7 @@ export default function NewBillPage() {
   });
 
   const [lineItems, setLineItems] = useState<LineItem[]>([
-    { id: '1', product_id: '', description: '', quantity: 1, unit_price: 0, account_code: '5100', amount: 0 },
+    { id: '1', product_id: '', description: '', quantity: 1, unit_price: 0, account_code: '5100', amount: 0, tax_rate: 0 },
   ]);
 
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({
@@ -69,7 +72,19 @@ export default function NewBillPage() {
     fetchVendors();
     fetchProducts();
     fetchExchangeRates();
+    fetchDefaultTaxRate();
   }, []);
+
+  const fetchDefaultTaxRate = async () => {
+    try {
+      const { data } = await supabase.from('company_settings').select('sales_tax_rate').single();
+      const rate = (data?.sales_tax_rate || 0) * 100;
+      setDefaultTaxRate(rate);
+      setLineItems(prev => prev.map(item => ({ ...item, tax_rate: rate })));
+    } catch {
+      // use 0 if settings unavailable
+    }
+  };
 
   const fetchExchangeRates = async () => {
     try {
@@ -186,7 +201,7 @@ export default function NewBillPage() {
   const addLineItem = () => {
     setLineItems((prev) => [
       ...prev,
-      { id: Date.now().toString(), product_id: '', description: '', quantity: 1, unit_price: 0, account_code: '5100', amount: 0 },
+      { id: Date.now().toString(), product_id: '', description: '', quantity: 1, unit_price: 0, account_code: '5100', amount: 0, tax_rate: defaultTaxRate },
     ]);
   };
 
@@ -196,7 +211,18 @@ export default function NewBillPage() {
   };
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
-  const total = subtotal;
+  const taxAmount = lineItems.reduce((sum, item) => sum + item.amount * ((item.tax_rate || 0) / 100), 0);
+  const total = subtotal + taxAmount;
+
+  const getTaxLabel = () => {
+    const rates = lineItems.map(l => l.tax_rate || 0).filter(r => r > 0);
+    const unique = [...new Set(rates)];
+    if (unique.length === 1) {
+      const r = unique[0];
+      return `Tax (${r % 1 === 0 ? r : parseFloat(r.toFixed(2))}%)`;
+    }
+    return 'Tax';
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -218,8 +244,12 @@ export default function NewBillPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
-          line_items: validLineItems,
+          line_items: validLineItems.map(item => ({
+            ...item,
+            tax_rate: (item.tax_rate || 0) / 100,
+          })),
           subtotal,
+          tax_amount: taxAmount,
           total,
         }),
       });
@@ -423,6 +453,7 @@ export default function NewBillPage() {
                   <th className="pb-2 px-2 w-24">Account</th>
                   <th className="pb-2 px-2 w-20 text-right">Qty</th>
                   <th className="pb-2 px-2 w-28 text-right">Price</th>
+                  <th className="pb-2 px-2 w-20 text-right">Tax %</th>
                   <th className="pb-2 px-2 w-28 text-right">Amount</th>
                   <th className="pb-2 pl-2 w-10"></th>
                 </tr>
@@ -487,6 +518,17 @@ export default function NewBillPage() {
                         className="w-full rounded border border-gray-200 px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-[#1e3a5f]"
                       />
                     </td>
+                    <td className="py-2 px-2">
+                      <input
+                        type="number"
+                        value={item.tax_rate}
+                        onChange={(e) => handleLineItemChange(item.id, 'tax_rate', Number(e.target.value))}
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        className="w-full rounded border border-gray-200 px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-[#1e3a5f]"
+                      />
+                    </td>
                     <td className="py-2 px-2 text-right text-sm font-medium tabular-nums">
                       {currencyFormatter(item.amount, formData.currency as any)}
                     </td>
@@ -513,6 +555,10 @@ export default function NewBillPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Subtotal</span>
                   <span className="font-medium tabular-nums">{currencyFormatter(subtotal, formData.currency as any)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">{getTaxLabel()}</span>
+                  <span className="font-medium tabular-nums">{currencyFormatter(taxAmount, formData.currency as any)}</span>
                 </div>
                 <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-200">
                   <span>Total</span>

@@ -36,7 +36,7 @@ export function calculateInvoiceTotals(
     discount_percent?: number;
     tax_rate?: number;
   }[],
-  taxRate: number = 0.0625 // MA sales tax default
+  taxRate: number = 0
 ): {
   subtotal: Decimal;
   discountAmount: Decimal;
@@ -102,7 +102,7 @@ export async function createInvoice(
     }[];
   },
   userId: string,
-  taxRate: number = 0.0625
+  taxRate: number = 0
 ): Promise<InvoiceWithLines> {
   const invoiceNumber = await generateInvoiceNumber();
 

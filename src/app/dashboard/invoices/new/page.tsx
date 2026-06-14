@@ -42,7 +42,7 @@ export default function NewInvoicePage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
-  const [taxRate] = useState(0.0625); // MA sales tax
+  const [defaultTaxRate, setDefaultTaxRate] = useState(0);
 
   // Get query parameters from URL (for booking-generated invoices)
   const bookingId = searchParams.get('booking_id');
@@ -61,6 +61,7 @@ export default function NewInvoicePage() {
     handleSubmit,
     watch,
     setValue,
+    getValues,
     formState: { errors },
   } = useForm<InvoiceFormData>({
     defaultValues: {
@@ -76,7 +77,7 @@ export default function NewInvoicePage() {
           quantity: 1,
           unit_price: prefilledAmount ? parseFloat(prefilledAmount) : 0,
           discount_percent: 0,
-          tax_rate: taxRate,
+          tax_rate: 0,
         },
       ],
     },
@@ -125,13 +126,22 @@ export default function NewInvoicePage() {
 
   const loadData = async () => {
     try {
-      const [customersRes, productsRes] = await Promise.all([
+      const [customersRes, productsRes, settingsRes] = await Promise.all([
         supabase.from('customers').select('*').eq('is_active', true).order('name'),
         supabase.from('products').select('*').eq('is_active', true).order('name'),
+        supabase.from('company_settings').select('sales_tax_rate').single(),
       ]);
 
       setCustomers(customersRes.data || []);
       setProducts(productsRes.data || []);
+
+      const rate = (settingsRes.data?.sales_tax_rate || 0) * 100;
+      setDefaultTaxRate(rate);
+      if (rate > 0) {
+        getValues('lines').forEach((line, index) => {
+          if (!line.tax_rate) setValue(`lines.${index}.tax_rate`, rate);
+        });
+      }
     } catch (error) {
       console.error('Failed to load data:', error);
     }
@@ -166,7 +176,7 @@ export default function NewInvoicePage() {
       }
       
       setValue(`lines.${index}.unit_price`, convertedPrice);
-      setValue(`lines.${index}.tax_rate`, product.is_taxable ? taxRate : 0);
+      setValue(`lines.${index}.tax_rate`, product.is_taxable ? defaultTaxRate : 0);
     }
   };
 
@@ -177,7 +187,17 @@ export default function NewInvoicePage() {
   };
 
   const calculateLineTax = (line: InvoiceLineInput) => {
-    return calculateLineTotal(line) * line.tax_rate;
+    return calculateLineTotal(line) * ((line.tax_rate || 0) / 100);
+  };
+
+  const getTaxLabel = () => {
+    const rates = (watchLines || []).map(l => l.tax_rate || 0).filter(r => r > 0);
+    const unique = [...new Set(rates)];
+    if (unique.length === 1) {
+      const r = unique[0];
+      return `Tax (${r % 1 === 0 ? r : parseFloat(r.toFixed(2))}%)`;
+    }
+    return 'Tax';
   };
 
   const calculateSubtotal = () => {
@@ -205,10 +225,14 @@ export default function NewInvoicePage() {
 
     setLoading(true);
     try {
-      // Use the API route to create invoice with proper document type handling
+      // Convert tax_rate from percentage to decimal before sending to API
       const payload = {
         ...data,
-        ...(bookingId && { booking_id: bookingId }), // Include booking_id if present
+        lines: data.lines.map(line => ({
+          ...line,
+          tax_rate: (line.tax_rate || 0) / 100,
+        })),
+        ...(bookingId && { booking_id: bookingId }),
       };
 
       const response = await fetch('/api/invoices', {
@@ -398,7 +422,7 @@ export default function NewInvoicePage() {
                   />
                 </div>
 
-                <div className="col-span-4 md:col-span-1">
+                <div className="col-span-3 md:col-span-1">
                   <label className="label text-xs">Qty</label>
                   <input
                     type="number"
@@ -408,7 +432,7 @@ export default function NewInvoicePage() {
                   />
                 </div>
 
-                <div className="col-span-4 md:col-span-2">
+                <div className="col-span-3 md:col-span-2">
                   <label className="label text-xs">Unit Price</label>
                   <input
                     type="number"
@@ -418,12 +442,22 @@ export default function NewInvoicePage() {
                   />
                 </div>
 
-                <div className="col-span-4 md:col-span-1">
+                <div className="col-span-3 md:col-span-1">
                   <label className="label text-xs">Disc %</label>
                   <input
                     type="number"
                     step="0.01"
                     {...register(`lines.${index}.discount_percent`, { valueAsNumber: true, min: 0, max: 100 })}
+                    className="input text-sm"
+                  />
+                </div>
+
+                <div className="col-span-3 md:col-span-1">
+                  <label className="label text-xs">Tax %</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    {...register(`lines.${index}.tax_rate`, { valueAsNumber: true, min: 0, max: 100 })}
                     className="input text-sm"
                   />
                 </div>
@@ -462,7 +496,7 @@ export default function NewInvoicePage() {
                   quantity: 1,
                   unit_price: 0,
                   discount_percent: 0,
-                  tax_rate: taxRate,
+                  tax_rate: defaultTaxRate,
                 })
               }
               className="btn-secondary"
@@ -493,7 +527,7 @@ export default function NewInvoicePage() {
                 <span className="font-medium">{formatCurrency(calculateSubtotal())}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Tax (6.25%)</span>
+                <span className="text-gray-600">{getTaxLabel()}</span>
                 <span className="font-medium">{formatCurrency(calculateTax())}</span>
               </div>
               <div className="border-t pt-3 flex justify-between">

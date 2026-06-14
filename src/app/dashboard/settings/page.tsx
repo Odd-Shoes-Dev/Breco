@@ -89,7 +89,7 @@ export default function SettingsPage() {
         financialForm.reset({
           fiscal_year_start_month: data.fiscal_year_start_month || 1,
           default_payment_terms: data.default_payment_terms || 30,
-          sales_tax_rate: Number(data.sales_tax_rate) || 6.25,
+          sales_tax_rate: (Number(data.sales_tax_rate) || 0.18) * 100,
           base_currency: data.base_currency || 'UGX',
         });
       }
@@ -129,7 +129,7 @@ export default function SettingsPage() {
           id: settings?.id,
           fiscal_year_start_month: data.fiscal_year_start_month,
           default_payment_terms: data.default_payment_terms,
-          sales_tax_rate: data.sales_tax_rate,
+          sales_tax_rate: (data.sales_tax_rate || 0) / 100,
           base_currency: data.base_currency,
         });
 
@@ -400,7 +400,7 @@ export default function SettingsPage() {
                     className="input max-w-xs"
                   />
                   <p className="text-sm text-gray-500 mt-1">
-                    Massachusetts sales tax is 6.25%
+                    Enter the percentage value (e.g. 18 for 18% Uganda VAT)
                   </p>
                 </div>
 

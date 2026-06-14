@@ -245,7 +245,7 @@ export default function NewInventoryItemPage() {
                   onChange={handleChange}
                   className="rounded border-gray-300 text-[#52b53b] focus:ring-[#52b53b]"
                 />
-                <span className="text-sm text-gray-700">Taxable (6.25% MA)</span>
+                <span className="text-sm text-gray-700">Taxable</span>
               </label>
 
               <label className="flex items-center gap-2 cursor-pointer">
