@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getCompanySettings } from '@/lib/company-settings';
 
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency;
+
     const { searchParams } = new URL(request.url);
 
     const startDate = searchParams.get('startDate') || new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
@@ -24,20 +28,23 @@ export async function GET(request: NextRequest) {
         .lt('transaction_date', startDate);
 
       const accountBeginningBalance = beginningTransactions?.reduce((sum, t) => sum + t.amount, 0) || 0;
-      
-      // Convert to USD
-      let balanceInUSD = accountBeginningBalance;
-      const currency = account.currency || 'USD';
-      if (currency !== 'USD' && accountBeginningBalance !== 0) {
+
+      let balanceInBase = accountBeginningBalance;
+      const currency = account.currency || baseCurrency;
+      if (currency !== baseCurrency && accountBeginningBalance !== 0) {
         const { data: convertedValue } = await supabase.rpc('convert_currency', {
           p_amount: Math.abs(accountBeginningBalance),
           p_from_currency: currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: startDate,
         });
-        balanceInUSD = accountBeginningBalance < 0 ? -(convertedValue || Math.abs(accountBeginningBalance)) : (convertedValue || Math.abs(accountBeginningBalance));
+        if (convertedValue !== null) {
+          balanceInBase = accountBeginningBalance < 0 ? -convertedValue : convertedValue;
+        } else {
+          balanceInBase = 0;
+        }
       }
-      beginningCash += balanceInUSD;
+      beginningCash += balanceInBase;
     }
 
     // Get period transactions for cash flow calculation
@@ -51,20 +58,23 @@ export async function GET(request: NextRequest) {
         .lte('transaction_date', endDate);
 
       const accountPeriodChange = periodTransactions?.reduce((sum, t) => sum + t.amount, 0) || 0;
-      
-      // Convert to USD
-      let changeInUSD = accountPeriodChange;
-      const currency = account.currency || 'USD';
-      if (currency !== 'USD' && accountPeriodChange !== 0) {
+
+      let changeInBase = accountPeriodChange;
+      const currency = account.currency || baseCurrency;
+      if (currency !== baseCurrency && accountPeriodChange !== 0) {
         const { data: convertedValue } = await supabase.rpc('convert_currency', {
           p_amount: Math.abs(accountPeriodChange),
           p_from_currency: currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: endDate,
         });
-        changeInUSD = accountPeriodChange < 0 ? -(convertedValue || Math.abs(accountPeriodChange)) : (convertedValue || Math.abs(accountPeriodChange));
+        if (convertedValue !== null) {
+          changeInBase = accountPeriodChange < 0 ? -convertedValue : convertedValue;
+        } else {
+          changeInBase = 0;
+        }
       }
-      netChangeInCash += changeInUSD;
+      netChangeInCash += changeInBase;
     }
 
     // Get revenue for period (from invoices)
@@ -76,18 +86,18 @@ export async function GET(request: NextRequest) {
 
     let totalRevenue = 0;
     for (const invoice of invoices || []) {
-      let amountInUSD = invoice.total;
-      const currency = invoice.currency || 'USD';
-      if (currency !== 'USD') {
+      let amountInBase = invoice.total;
+      const currency = invoice.currency || baseCurrency;
+      if (currency !== baseCurrency) {
         const { data: convertedValue } = await supabase.rpc('convert_currency', {
           p_amount: invoice.total,
           p_from_currency: currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: invoice.invoice_date,
         });
-        amountInUSD = convertedValue || invoice.total;
+        amountInBase = convertedValue ?? 0;
       }
-      totalRevenue += amountInUSD;
+      totalRevenue += amountInBase;
     }
 
     // Get expenses for period (from bills and expenses)
@@ -105,33 +115,33 @@ export async function GET(request: NextRequest) {
 
     let totalExpenses = 0;
     for (const bill of bills || []) {
-      let amountInUSD = bill.total;
-      const currency = bill.currency || 'USD';
-      if (currency !== 'USD') {
+      let amountInBase = bill.total;
+      const currency = bill.currency || baseCurrency;
+      if (currency !== baseCurrency) {
         const { data: convertedValue } = await supabase.rpc('convert_currency', {
           p_amount: bill.total,
           p_from_currency: currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: bill.bill_date,
         });
-        amountInUSD = convertedValue || bill.total;
+        amountInBase = convertedValue ?? 0;
       }
-      totalExpenses += amountInUSD;
+      totalExpenses += amountInBase;
     }
 
     for (const expense of expenses || []) {
-      let amountInUSD = expense.amount;
-      const currency = expense.currency || 'USD';
-      if (currency !== 'USD') {
+      let amountInBase = expense.amount;
+      const currency = expense.currency || baseCurrency;
+      if (currency !== baseCurrency) {
         const { data: convertedValue } = await supabase.rpc('convert_currency', {
           p_amount: expense.amount,
           p_from_currency: currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: expense.date,
         });
-        amountInUSD = convertedValue || expense.amount;
+        amountInBase = convertedValue ?? 0;
       }
-      totalExpenses += amountInUSD;
+      totalExpenses += amountInBase;
     }
 
     const netIncome = totalRevenue - totalExpenses;
@@ -143,7 +153,6 @@ export async function GET(request: NextRequest) {
       .eq('status', 'active')
       .lte('depreciation_start_date', endDate);
 
-    // Calculate depreciation for the period
     let depreciation = 0;
     for (const asset of assets || []) {
       const monthlyDepreciation = (asset.purchase_price - asset.residual_value) / asset.useful_life_months;
@@ -162,18 +171,18 @@ export async function GET(request: NextRequest) {
 
     let beginningAR = 0;
     for (const invoice of beginningInvoices || []) {
-      let amountInUSD = invoice.total;
-      const currency = invoice.currency || 'USD';
-      if (currency !== 'USD') {
+      let amountInBase = invoice.total;
+      const currency = invoice.currency || baseCurrency;
+      if (currency !== baseCurrency) {
         const { data: convertedValue } = await supabase.rpc('convert_currency', {
           p_amount: invoice.total,
           p_from_currency: currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: invoice.invoice_date,
         });
-        amountInUSD = convertedValue || invoice.total;
+        amountInBase = convertedValue ?? 0;
       }
-      beginningAR += amountInUSD;
+      beginningAR += amountInBase;
     }
 
     const { data: endingInvoices } = await supabase
@@ -184,18 +193,18 @@ export async function GET(request: NextRequest) {
 
     let endingAR = 0;
     for (const invoice of endingInvoices || []) {
-      let amountInUSD = invoice.total;
-      const currency = invoice.currency || 'USD';
-      if (currency !== 'USD') {
+      let amountInBase = invoice.total;
+      const currency = invoice.currency || baseCurrency;
+      if (currency !== baseCurrency) {
         const { data: convertedValue } = await supabase.rpc('convert_currency', {
           p_amount: invoice.total,
           p_from_currency: currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: invoice.invoice_date,
         });
-        amountInUSD = convertedValue || invoice.total;
+        amountInBase = convertedValue ?? 0;
       }
-      endingAR += amountInUSD;
+      endingAR += amountInBase;
     }
 
     const arChange = endingAR - beginningAR;
@@ -209,18 +218,18 @@ export async function GET(request: NextRequest) {
 
     let beginningAP = 0;
     for (const bill of beginningBills || []) {
-      let amountInUSD = bill.total;
-      const currency = bill.currency || 'USD';
-      if (currency !== 'USD') {
+      let amountInBase = bill.total;
+      const currency = bill.currency || baseCurrency;
+      if (currency !== baseCurrency) {
         const { data: convertedValue } = await supabase.rpc('convert_currency', {
           p_amount: bill.total,
           p_from_currency: currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: bill.bill_date,
         });
-        amountInUSD = convertedValue || bill.total;
+        amountInBase = convertedValue ?? 0;
       }
-      beginningAP += amountInUSD;
+      beginningAP += amountInBase;
     }
 
     const { data: endingBills } = await supabase
@@ -231,23 +240,23 @@ export async function GET(request: NextRequest) {
 
     let endingAP = 0;
     for (const bill of endingBills || []) {
-      let amountInUSD = bill.total;
-      const currency = bill.currency || 'USD';
-      if (currency !== 'USD') {
+      let amountInBase = bill.total;
+      const currency = bill.currency || baseCurrency;
+      if (currency !== baseCurrency) {
         const { data: convertedValue } = await supabase.rpc('convert_currency', {
           p_amount: bill.total,
           p_from_currency: currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: bill.bill_date,
         });
-        amountInUSD = convertedValue || bill.total;
+        amountInBase = convertedValue ?? 0;
       }
-      endingAP += amountInUSD;
+      endingAP += amountInBase;
     }
 
     const apChange = endingAP - beginningAP;
 
-    // Get fixed asset purchases
+    // Get fixed asset purchases (convert to base currency)
     const { data: assetPurchases } = await supabase
       .from('fixed_assets')
       .select('purchase_price, currency, purchase_date')
@@ -256,26 +265,26 @@ export async function GET(request: NextRequest) {
 
     let assetPurchaseTotal = 0;
     for (const asset of assetPurchases || []) {
-      let amountInUSD = asset.purchase_price;
-      const currency = asset.currency || 'USD';
-      if (currency !== 'USD') {
+      let amountInBase = asset.purchase_price;
+      const currency = asset.currency || baseCurrency;
+      if (currency !== baseCurrency) {
         const { data: convertedValue } = await supabase.rpc('convert_currency', {
           p_amount: asset.purchase_price,
           p_from_currency: currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: asset.purchase_date,
         });
-        amountInUSD = convertedValue || asset.purchase_price;
+        amountInBase = convertedValue ?? 0;
       }
-      assetPurchaseTotal += amountInUSD;
+      assetPurchaseTotal += amountInBase;
     }
 
-    // Build the response
     const cashFlowStatement = {
       period: {
         startDate,
         endDate,
       },
+      currency: baseCurrency,
       operatingActivities: {
         netIncome,
         adjustments: [

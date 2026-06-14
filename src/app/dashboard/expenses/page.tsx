@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
+import { ScaledNumber } from '@/components/ui/scaled-number';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -176,25 +177,25 @@ export default function ExpensesPage() {
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">This Month (USD)</p>
-            <p className="text-base sm:text-lg lg:text-2xl font-bold text-gray-900 mt-1">{formatCurrency(stats.thisMonth)}</p>
+            <ScaledNumber value={formatCurrency(stats.thisMonth)} className="text-gray-900 mt-1" />
           </div>
         </div>
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Pending Approval</p>
-            <p className="text-base sm:text-lg lg:text-2xl font-bold text-amber-600 mt-1">{stats.pendingApproval}</p>
+            <ScaledNumber value={String(stats.pendingApproval)} className="text-amber-600 mt-1" />
           </div>
         </div>
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Approved</p>
-            <p className="text-base sm:text-lg lg:text-2xl font-bold text-blue-600 mt-1">{stats.approved}</p>
+            <ScaledNumber value={String(stats.approved)} className="text-blue-600 mt-1" />
           </div>
         </div>
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Paid</p>
-            <p className="text-base sm:text-lg lg:text-2xl font-bold text-green-600 mt-1">{stats.paid}</p>
+            <ScaledNumber value={String(stats.paid)} className="text-green-600 mt-1" />
           </div>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
+import { ScaledNumber } from '@/components/ui/scaled-number';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -133,19 +134,19 @@ export default function AssetsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="card p-3 sm:p-4 lg:p-6">
           <p className="text-sm text-gray-500">Active Assets</p>
-          <p className="text-base sm:text-lg lg:text-2xl font-bold text-gray-900 mt-0.5">{stats.totalAssets}</p>
+          <ScaledNumber value={String(stats.totalAssets)} className="text-gray-900 mt-0.5" />
         </div>
         <div className="card p-3 sm:p-4 lg:p-6">
           <p className="text-sm text-gray-500">Total Cost</p>
-          <p className="text-base sm:text-lg lg:text-2xl font-bold text-gray-900 mt-0.5">{formatCurrency(stats.totalCost)}</p>
+          <ScaledNumber value={formatCurrency(stats.totalCost)} className="text-gray-900 mt-0.5" />
         </div>
         <div className="card p-3 sm:p-4 lg:p-6">
           <p className="text-sm text-gray-500">Accumulated Depreciation</p>
-          <p className="text-base sm:text-lg lg:text-2xl font-bold text-amber-600 mt-0.5">{formatCurrency(stats.totalDepreciation)}</p>
+          <ScaledNumber value={formatCurrency(stats.totalDepreciation)} className="text-amber-600 mt-0.5" />
         </div>
         <div className="card p-3 sm:p-4 lg:p-6">
           <p className="text-sm text-gray-500">Net Book Value</p>
-          <p className="text-base sm:text-lg lg:text-2xl font-bold text-green-600 mt-0.5">{formatCurrency(stats.totalBookValue)}</p>
+          <ScaledNumber value={formatCurrency(stats.totalBookValue)} className="text-green-600 mt-0.5" />
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
+import { ScaledNumber } from '@/components/ui/scaled-number';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -122,25 +123,25 @@ export default function InventoryPage() {
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Total Items</p>
-            <p className="text-base sm:text-lg lg:text-2xl font-bold text-gray-900 mt-1">{stats.totalItems}</p>
+            <ScaledNumber value={String(stats.totalItems)} className="text-gray-900 mt-1" />
           </div>
         </div>
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Total Value</p>
-            <p className="text-base sm:text-lg lg:text-2xl font-bold text-gray-900 mt-1">{formatCurrency(stats.totalValue)}</p>
+            <ScaledNumber value={formatCurrency(stats.totalValue)} className="text-gray-900 mt-1" />
           </div>
         </div>
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Low Stock</p>
-            <p className="text-base sm:text-lg lg:text-2xl font-bold text-amber-600 mt-1">{stats.lowStock}</p>
+            <ScaledNumber value={String(stats.lowStock)} className="text-amber-600 mt-1" />
           </div>
         </div>
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Out of Stock</p>
-            <p className="text-base sm:text-lg lg:text-2xl font-bold text-red-600 mt-1">{stats.outOfStock}</p>
+            <ScaledNumber value={String(stats.outOfStock)} className="text-red-600 mt-1" />
           </div>
         </div>
       </div>

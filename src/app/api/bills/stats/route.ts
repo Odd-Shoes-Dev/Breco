@@ -1,9 +1,12 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { getCompanySettings } from '@/lib/company-settings';
 
 export async function GET() {
   try {
     const supabase = await createClient();
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency;
 
     // Fetch all bills with their currencies
     const { data: bills, error } = await supabase
@@ -18,6 +21,7 @@ export async function GET() {
         dueThisWeek: 0,
         overdue: 0,
         paidThisMonth: 0,
+        currency: baseCurrency,
       });
     }
 
@@ -26,7 +30,6 @@ export async function GET() {
     weekFromNow.setDate(weekFromNow.getDate() + 7);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    // Convert all amounts to USD
     let totalUnpaid = 0;
     let dueThisWeek = 0;
     let overdue = 0;
@@ -37,45 +40,42 @@ export async function GET() {
       const dueDate = new Date(bill.due_date);
       const billDate = new Date(bill.bill_date);
 
-      // Convert to USD
-      let amountInUSD = bill.total;
-      let remainingInUSD = remaining;
+      let amountInBase = bill.total;
+      let remainingInBase = remaining;
 
-      if (bill.currency !== 'USD') {
-        // Use RPC function to convert
+      if (bill.currency !== baseCurrency) {
         const { data: convertedTotal } = await supabase.rpc('convert_currency', {
           p_amount: bill.total,
           p_from_currency: bill.currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: bill.bill_date,
         });
 
         const { data: convertedRemaining } = await supabase.rpc('convert_currency', {
           p_amount: remaining,
           p_from_currency: bill.currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: bill.bill_date,
         });
 
-        amountInUSD = convertedTotal || bill.total;
-        remainingInUSD = convertedRemaining || remaining;
+        amountInBase = convertedTotal ?? 0;
+        remainingInBase = convertedRemaining ?? 0;
       }
 
-      // Calculate totals in USD
       if (bill.status !== 'paid' && bill.status !== 'void') {
-        totalUnpaid += remainingInUSD;
+        totalUnpaid += remainingInBase;
 
         if (dueDate >= now && dueDate <= weekFromNow) {
-          dueThisWeek += remainingInUSD;
+          dueThisWeek += remainingInBase;
         }
 
         if (dueDate < now) {
-          overdue += remainingInUSD;
+          overdue += remainingInBase;
         }
       }
 
       if (bill.status === 'paid' && billDate >= startOfMonth) {
-        paidThisMonth += amountInUSD;
+        paidThisMonth += amountInBase;
       }
     }
 
@@ -84,6 +84,7 @@ export async function GET() {
       dueThisWeek,
       overdue,
       paidThisMonth,
+      currency: baseCurrency,
     });
   } catch (error: any) {
     console.error('Failed to calculate bill stats:', error);

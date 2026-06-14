@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
+import { ScaledNumber } from '@/components/ui/scaled-number';
 import {
   ArrowUpIcon,
   ArrowDownIcon,
@@ -25,6 +26,7 @@ interface DashboardStats {
   overdueInvoices: number;
   overdueBills: number;
   inventoryValue: number;
+  currency: string;
 }
 
 export default function DashboardPage() {
@@ -87,7 +89,9 @@ export default function DashboardPage() {
     }
   };
 
-  const formatCurrency = (amount: number, currency: string = 'USD') => {
+  const baseCurrency = stats?.currency || 'UGX';
+
+  const formatCurrency = (amount: number, currency: string = baseCurrency) => {
     return currencyFormatter(amount, currency as any);
   };
 
@@ -315,9 +319,7 @@ export default function DashboardPage() {
               <CubeIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-purple-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-base sm:text-lg lg:text-2xl font-bold text-gray-900 truncate">
-                {formatCurrency(stats?.inventoryValue || 0)}
-              </p>
+              <ScaledNumber value={formatCurrency(stats?.inventoryValue || 0)} className="text-gray-900" />
               <p className="text-xs text-gray-500 truncate">Inventory Value</p>
             </div>
           </div>
@@ -328,9 +330,7 @@ export default function DashboardPage() {
               <ArrowTrendingUpIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-orange-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-base sm:text-lg lg:text-2xl font-bold text-gray-900 truncate">
-                {formatCurrency(stats?.totalRevenue || 0)}
-              </p>
+              <ScaledNumber value={formatCurrency(stats?.totalRevenue || 0)} className="text-gray-900" />
               <p className="text-xs text-gray-500 truncate">Total Revenue</p>
             </div>
           </div>
@@ -367,7 +367,7 @@ function StatCard({
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <p className="text-xs text-gray-500 truncate">{title}</p>
-          <p className="text-base sm:text-lg lg:text-2xl font-bold text-gray-900 mt-0.5 truncate">{value}</p>
+          <ScaledNumber value={value} className="text-gray-900 mt-0.5" />
           {trend !== undefined && (
             <div className="flex items-center gap-1 mt-1">
               {trend >= 0 ? (

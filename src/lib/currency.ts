@@ -87,9 +87,11 @@ export async function updateExchangeRates(supabase: any): Promise<boolean> {
     // Prepare exchange rate records
     const exchangeRates = [];
     
+    const nonUsdCurrencies: string[] = [];
+
     for (const currency of Object.keys(SUPPORTED_CURRENCIES)) {
       if (currency === 'USD') continue;
-      
+
       if (rates[currency]) {
         // USD to other currency
         exchangeRates.push({
@@ -99,7 +101,7 @@ export async function updateExchangeRates(supabase: any): Promise<boolean> {
           effective_date: today,
           source: 'exchangerate-api.com',
         });
-        
+
         // Other currency to USD
         exchangeRates.push({
           from_currency: currency,
@@ -108,6 +110,35 @@ export async function updateExchangeRates(supabase: any): Promise<boolean> {
           effective_date: today,
           source: 'exchangerate-api.com',
         });
+
+        nonUsdCurrencies.push(currency);
+      }
+    }
+
+    // Cross-pairs computed via USD triangulation (e.g. EUR→UGX = USD→UGX / USD→EUR)
+    for (let i = 0; i < nonUsdCurrencies.length; i++) {
+      for (let j = i + 1; j < nonUsdCurrencies.length; j++) {
+        const from = nonUsdCurrencies[i];
+        const to = nonUsdCurrencies[j];
+        const fromRate = rates[from]; // USD → from
+        const toRate = rates[to];     // USD → to
+        if (fromRate && toRate) {
+          const crossRate = toRate / fromRate; // from → to
+          exchangeRates.push({
+            from_currency: from,
+            to_currency: to,
+            rate: crossRate,
+            effective_date: today,
+            source: 'exchangerate-api.com',
+          });
+          exchangeRates.push({
+            from_currency: to,
+            to_currency: from,
+            rate: 1 / crossRate,
+            effective_date: today,
+            source: 'exchangerate-api.com',
+          });
+        }
       }
     }
 

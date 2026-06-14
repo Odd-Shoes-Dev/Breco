@@ -1,16 +1,18 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { getCompanySettings } from '@/lib/company-settings';
 
 // GET /api/reports/profit-loss
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency;
+
     const { searchParams } = new URL(request.url);
-    
+
     const startDate = searchParams.get('start_date') || new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
     const endDate = searchParams.get('end_date') || new Date().toISOString().split('T')[0];
-    const compareStart = searchParams.get('compare_start');
-    const compareEnd = searchParams.get('compare_end');
 
     // Get all revenue accounts (4xxx)
     const { data: revenueAccounts } = await supabase
@@ -63,7 +65,7 @@ export async function GET(request: NextRequest) {
 
     // Calculate totals by account
     const accountTotals: Record<string, { debit: number; credit: number }> = {};
-    
+
     entries?.forEach((entry: any) => {
       if (!accountTotals[entry.account_id]) {
         accountTotals[entry.account_id] = { debit: 0, credit: 0 };
@@ -78,7 +80,6 @@ export async function GET(request: NextRequest) {
 
     revenueAccounts?.forEach((account) => {
       const totals = accountTotals[account.id] || { debit: 0, credit: 0 };
-      // Revenue accounts have credit balance
       const balance = totals.credit - totals.debit;
       if (balance !== 0) {
         revenue.push({
@@ -90,22 +91,22 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Add invoice revenue (convert to USD)
+    // Add invoice revenue (convert to base currency)
     for (const invoice of invoices || []) {
-      let amountInUSD = invoice.total;
-      const currency = invoice.currency || 'USD';
-      
-      if (currency !== 'USD') {
+      let amountInBase = invoice.total;
+      const currency = invoice.currency || baseCurrency;
+
+      if (currency !== baseCurrency) {
         const { data: convertedValue } = await supabase.rpc('convert_currency', {
           p_amount: invoice.total,
           p_from_currency: currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: invoice.invoice_date,
         });
-        amountInUSD = convertedValue || invoice.total;
+        amountInBase = convertedValue ?? 0;
       }
-      
-      totalRevenue += amountInUSD;
+
+      totalRevenue += amountInBase;
     }
 
     if (totalRevenue > 0 && invoices && invoices.length > 0) {
@@ -126,7 +127,6 @@ export async function GET(request: NextRequest) {
 
     expenseAccounts?.forEach((account) => {
       const totals = accountTotals[account.id] || { debit: 0, credit: 0 };
-      // Expense accounts have debit balance
       const balance = totals.debit - totals.credit;
       if (balance !== 0) {
         const item = {
@@ -148,40 +148,40 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Add bills to operating expenses (convert to USD)
+    // Add bills to operating expenses (convert to base currency)
     for (const bill of bills || []) {
-      let amountInUSD = bill.total;
-      const currency = bill.currency || 'USD';
-      
-      if (currency !== 'USD') {
+      let amountInBase = bill.total;
+      const currency = bill.currency || baseCurrency;
+
+      if (currency !== baseCurrency) {
         const { data: convertedValue } = await supabase.rpc('convert_currency', {
           p_amount: bill.total,
           p_from_currency: currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: bill.bill_date,
         });
-        amountInUSD = convertedValue || bill.total;
+        amountInBase = convertedValue ?? 0;
       }
-      
-      totalOperatingExpenses += amountInUSD;
+
+      totalOperatingExpenses += amountInBase;
     }
 
-    // Add expenses to operating expenses (convert to USD)
+    // Add expenses to operating expenses (convert to base currency)
     for (const expense of expenses || []) {
-      let amountInUSD = expense.amount;
-      const currency = expense.currency || 'USD';
-      
-      if (currency !== 'USD') {
+      let amountInBase = expense.amount;
+      const currency = expense.currency || baseCurrency;
+
+      if (currency !== baseCurrency) {
         const { data: convertedValue } = await supabase.rpc('convert_currency', {
           p_amount: expense.amount,
           p_from_currency: currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: expense.date,
         });
-        amountInUSD = convertedValue || expense.amount;
+        amountInBase = convertedValue ?? 0;
       }
-      
-      totalOperatingExpenses += amountInUSD;
+
+      totalOperatingExpenses += amountInBase;
     }
 
     if (bills && bills.length > 0) {
@@ -209,6 +209,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       data: {
         period: { startDate, endDate },
+        currency: baseCurrency,
         revenue: {
           items: revenue,
           total: totalRevenue,

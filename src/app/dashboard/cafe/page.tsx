@@ -16,6 +16,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { supabase } from '@/lib/supabase/client';
 import { formatCurrency } from '@/lib/currency';
+import { ScaledNumber } from '@/components/ui/scaled-number';
 
 interface CafeStats {
   revenue: number;
@@ -264,9 +265,7 @@ export default function CafeDashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">Revenue (This Month)</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">
-                  {formatCurrency(stats.revenue)}
-                </p>
+                <ScaledNumber value={formatCurrency(stats.revenue)} className="text-gray-900 mt-1" />
               </div>
               <div className="p-3 bg-green-100 rounded-lg">
                 <CurrencyDollarIcon className="w-6 h-6 text-green-600" />
@@ -281,9 +280,7 @@ export default function CafeDashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">Expenses (This Month)</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">
-                  {formatCurrency(stats.expenses)}
-                </p>
+                <ScaledNumber value={formatCurrency(stats.expenses)} className="text-gray-900 mt-1" />
               </div>
               <div className="p-3 bg-red-100 rounded-lg">
                 <BanknotesIcon className="w-6 h-6 text-red-600" />
@@ -298,9 +295,10 @@ export default function CafeDashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">Profit (This Month)</p>
-                <p className={`text-2xl font-bold mt-1 ${stats.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(stats.profit)}
-                </p>
+                <ScaledNumber
+                  value={formatCurrency(stats.profit)}
+                  className={`mt-1 ${stats.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                />
                 <p className="text-xs text-gray-500 mt-1">
                   {stats.profitMargin.toFixed(1)}% margin
                 </p>
@@ -322,7 +320,7 @@ export default function CafeDashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">Cafe Staff</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{stats.employeeCount}</p>
+                <ScaledNumber value={String(stats.employeeCount)} className="text-gray-900 mt-1" />
                 <p className="text-xs text-gray-500 mt-1">
                   Payroll: {formatCurrency(stats.totalPayroll)}/mo
                 </p>

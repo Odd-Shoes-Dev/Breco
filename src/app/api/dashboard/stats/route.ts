@@ -1,9 +1,12 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { getCompanySettings } from '@/lib/company-settings';
 
 export async function GET() {
   try {
     const supabase = await createClient();
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency;
 
     // Fetch all financial data
     const [
@@ -27,34 +30,34 @@ export async function GET() {
     // Process invoices
     if (invoices) {
       for (const invoice of invoices) {
-        let amountInUSD = invoice.total;
-        let remainingInUSD = invoice.total - (invoice.amount_paid || 0);
+        let amountInBase = invoice.total;
+        let remainingInBase = invoice.total - (invoice.amount_paid || 0);
 
-        if (invoice.currency !== 'USD') {
+        if (invoice.currency !== baseCurrency) {
           const { data: convertedTotal } = await supabase.rpc('convert_currency', {
             p_amount: invoice.total,
             p_from_currency: invoice.currency,
-            p_to_currency: 'USD',
+            p_to_currency: baseCurrency,
             p_date: invoice.invoice_date,
           });
 
           const { data: convertedRemaining } = await supabase.rpc('convert_currency', {
             p_amount: invoice.total - (invoice.amount_paid || 0),
             p_from_currency: invoice.currency,
-            p_to_currency: 'USD',
+            p_to_currency: baseCurrency,
             p_date: invoice.invoice_date,
           });
 
-          amountInUSD = convertedTotal || invoice.total;
-          remainingInUSD = convertedRemaining || (invoice.total - (invoice.amount_paid || 0));
+          amountInBase = convertedTotal ?? 0;
+          remainingInBase = convertedRemaining ?? 0;
         }
 
         if (invoice.status === 'paid') {
-          totalRevenue += amountInUSD;
+          totalRevenue += amountInBase;
         }
-        
+
         if (invoice.status !== 'paid' && invoice.status !== 'void' && invoice.status !== 'cancelled') {
-          accountsReceivable += remainingInUSD;
+          accountsReceivable += remainingInBase;
         }
       }
     }
@@ -62,21 +65,21 @@ export async function GET() {
     // Process bills
     if (bills) {
       for (const bill of bills) {
-        let remainingInUSD = bill.total - (bill.amount_paid || 0);
+        let remainingInBase = bill.total - (bill.amount_paid || 0);
 
-        if (bill.currency !== 'USD') {
+        if (bill.currency !== baseCurrency) {
           const { data: convertedRemaining } = await supabase.rpc('convert_currency', {
             p_amount: bill.total - (bill.amount_paid || 0),
             p_from_currency: bill.currency,
-            p_to_currency: 'USD',
+            p_to_currency: baseCurrency,
             p_date: bill.bill_date,
           });
 
-          remainingInUSD = convertedRemaining || (bill.total - (bill.amount_paid || 0));
+          remainingInBase = convertedRemaining ?? 0;
         }
 
         if (bill.status !== 'paid' && bill.status !== 'void') {
-          accountsPayable += remainingInUSD;
+          accountsPayable += remainingInBase;
         }
       }
     }
@@ -84,47 +87,49 @@ export async function GET() {
     // Process expenses
     if (expenses) {
       for (const expense of expenses) {
-        let amountInUSD = expense.total;
+        let amountInBase = expense.total;
 
-        if (expense.currency !== 'USD') {
+        if (expense.currency !== baseCurrency) {
           const { data: converted } = await supabase.rpc('convert_currency', {
             p_amount: expense.total,
             p_from_currency: expense.currency,
-            p_to_currency: 'USD',
+            p_to_currency: baseCurrency,
             p_date: expense.expense_date,
           });
 
-          amountInUSD = converted || expense.total;
+          amountInBase = converted ?? 0;
         }
 
-        totalExpenses += amountInUSD;
+        totalExpenses += amountInBase;
       }
     }
 
     // Process bank transactions for cash balance
     if (bankTransactions) {
       for (const transaction of bankTransactions) {
-        const bankAccount = Array.isArray(transaction.bank_accounts) 
-          ? transaction.bank_accounts[0] 
+        const bankAccount = Array.isArray(transaction.bank_accounts)
+          ? transaction.bank_accounts[0]
           : transaction.bank_accounts;
-        const currency = bankAccount?.currency || 'USD';
-        
-        let amountInUSD = transaction.amount || 0;
+        const currency = bankAccount?.currency || baseCurrency;
 
-        // Convert to USD if not already
-        if (currency !== 'USD') {
+        let amountInBase = transaction.amount || 0;
+
+        if (currency !== baseCurrency) {
           const { data: converted } = await supabase.rpc('convert_currency', {
             p_amount: Math.abs(transaction.amount),
             p_from_currency: currency,
-            p_to_currency: 'USD',
+            p_to_currency: baseCurrency,
             p_date: transaction.transaction_date,
           });
 
-          // Preserve the sign (positive or negative)
-          amountInUSD = transaction.amount < 0 ? -(converted || Math.abs(transaction.amount)) : (converted || Math.abs(transaction.amount));
+          if (converted !== null) {
+            amountInBase = transaction.amount < 0 ? -converted : converted;
+          } else {
+            amountInBase = 0;
+          }
         }
 
-        cashBalance += amountInUSD;
+        cashBalance += amountInBase;
       }
     }
 
@@ -142,20 +147,20 @@ export async function GET() {
         const itemValue = quantity * cost;
 
         if (itemValue > 0) {
-          let valueInUSD = itemValue;
+          let valueInBase = itemValue;
 
-          if (item.currency && item.currency !== 'USD') {
+          if (item.currency && item.currency !== baseCurrency) {
             const { data: converted } = await supabase.rpc('convert_currency', {
               p_amount: itemValue,
               p_from_currency: item.currency,
-              p_to_currency: 'USD',
+              p_to_currency: baseCurrency,
               p_date: new Date().toISOString().split('T')[0],
             });
 
-            valueInUSD = converted || itemValue;
+            valueInBase = converted ?? 0;
           }
 
-          inventoryValue += valueInUSD;
+          inventoryValue += valueInBase;
         }
       }
     }
@@ -170,6 +175,7 @@ export async function GET() {
       accountsPayable,
       cashBalance,
       inventoryValue,
+      currency: baseCurrency,
     });
   } catch (error: any) {
     console.error('Failed to calculate dashboard stats:', error);

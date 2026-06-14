@@ -16,7 +16,9 @@ import {
   BookOpenIcon,
   ArrowTopRightOnSquareIcon,
   LockClosedIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
+import { SUPPORTED_CURRENCIES } from '@/lib/currency';
 import Link from 'next/link';
 import type { CompanySettings } from '@/types/database';
 
@@ -41,6 +43,7 @@ interface FinancialFormData {
   fiscal_year_start_month: number;
   default_payment_terms: number;
   sales_tax_rate: number;
+  base_currency: string;
 }
 
 export default function SettingsPage() {
@@ -87,6 +90,7 @@ export default function SettingsPage() {
           fiscal_year_start_month: data.fiscal_year_start_month || 1,
           default_payment_terms: data.default_payment_terms || 30,
           sales_tax_rate: Number(data.sales_tax_rate) || 6.25,
+          base_currency: data.base_currency || 'UGX',
         });
       }
     } catch (error) {
@@ -126,6 +130,7 @@ export default function SettingsPage() {
           fiscal_year_start_month: data.fiscal_year_start_month,
           default_payment_terms: data.default_payment_terms,
           sales_tax_rate: data.sales_tax_rate,
+          base_currency: data.base_currency,
         });
 
       if (error) throw error;
@@ -399,11 +404,27 @@ export default function SettingsPage() {
                   </p>
                 </div>
 
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <h4 className="font-medium text-blue-900">Base Currency</h4>
-                  <p className="text-sm text-blue-700 mt-1">
-                    USD (US Dollar) - Contact support to change base currency
-                  </p>
+                <div className="space-y-2">
+                  <div className="form-group">
+                    <label className="label">Base Currency</label>
+                    <select
+                      {...financialForm.register('base_currency')}
+                      className="input max-w-xs"
+                    >
+                      {Object.entries(SUPPORTED_CURRENCIES).map(([code, info]) => (
+                        <option key={code} value={code}>
+                          {info.symbol} - {info.name} ({code})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-sm text-gray-500 mt-1">
+                      The currency used for all financial reports and conversions.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                    <ExclamationTriangleIcon className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+                    <span>Changing the base currency affects how historical transactions are displayed in reports. Ensure exchange rates are up to date after changing.</span>
+                  </div>
                 </div>
 
                 <div className="p-4 bg-green-50 border border-green-200 rounded-lg">

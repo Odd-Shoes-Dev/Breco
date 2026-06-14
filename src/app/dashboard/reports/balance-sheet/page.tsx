@@ -8,10 +8,11 @@ import {
   ArrowLeftIcon,
   CalendarIcon,
 } from '@heroicons/react/24/outline';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency as fmtCurrency, formatDate } from '@/lib/utils';
 
 interface BalanceSheetData {
   asOfDate: string;
+  currency: string;
   assets: {
     current: Array<{ account: string; balance: number }>;
     fixed: Array<{ account: string; balance: number }>;
@@ -55,9 +56,11 @@ export default function BalanceSheetPage() {
     }
   };
 
+  const formatCurrency = (amount: number) => fmtCurrency(amount, data?.currency || 'UGX');
+
   const exportToPDF = () => {
     if (!data) return;
-    
+
     // Generate clean HTML for printing
     const printHTML = `
       <!DOCTYPE html>

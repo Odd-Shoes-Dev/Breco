@@ -1,9 +1,12 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { getCompanySettings } from '@/lib/company-settings';
 
 export async function GET() {
   try {
     const supabase = await createClient();
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency;
 
     // Get current month date range
     const now = new Date();
@@ -22,34 +25,29 @@ export async function GET() {
     let approvedCount = 0;
     let paidCount = 0;
 
-    // Process each expense with currency conversion
     for (const expense of allExpenses || []) {
       const amount = parseFloat(expense.amount) || 0;
-      
-      // Convert to USD if needed
-      let amountUSD = amount;
-      if (expense.currency && expense.currency !== 'USD') {
+
+      let amountInBase = amount;
+      if (expense.currency && expense.currency !== baseCurrency) {
         const { data: converted, error: conversionError } = await supabase.rpc('convert_currency', {
           p_amount: amount,
           p_from_currency: expense.currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: expense.expense_date,
         });
 
         if (conversionError) {
           console.error('Currency conversion error:', conversionError);
-          amountUSD = amount; // Fallback
         } else {
-          amountUSD = converted || amount;
+          amountInBase = converted ?? 0;
         }
       }
 
-      // Check if this month
       if (expense.expense_date >= firstDayOfMonth && expense.expense_date <= lastDayOfMonth) {
-        thisMonthTotal += amountUSD;
+        thisMonthTotal += amountInBase;
       }
 
-      // Count by status
       const status = expense.status?.toLowerCase() || 'pending';
       if (status === 'pending' || status === 'pending_approval') {
         pendingCount++;
@@ -65,6 +63,7 @@ export async function GET() {
       pendingApproval: pendingCount,
       approved: approvedCount,
       paid: paidCount,
+      currency: baseCurrency,
     });
   } catch (error) {
     console.error('Error calculating expense stats:', error);

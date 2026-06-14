@@ -10,13 +10,14 @@ import {
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline';
-import { formatCurrency, cn } from '@/lib/utils';
+import { formatCurrency as fmtCurrency, cn } from '@/lib/utils';
 
 interface CashFlowData {
   period: {
     startDate: string;
     endDate: string;
   };
+  currency: string;
   operatingActivities: {
     netIncome: number;
     adjustments: Array<{ label: string; amount: number }>;
@@ -62,6 +63,8 @@ export default function CashFlowPage() {
       setIsLoading(false);
     }
   };
+
+  const formatCurrency = (amount: number) => fmtCurrency(amount, data?.currency || 'UGX');
 
   const exportToPDF = () => {
     if (!data) return;

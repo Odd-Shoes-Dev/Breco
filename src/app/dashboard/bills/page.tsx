@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
+import { ScaledNumber } from '@/components/ui/scaled-number';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -136,33 +137,25 @@ export default function BillsPage() {
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Total Unpaid</p>
-            <p className="text-base sm:text-lg lg:text-2xl font-bold text-gray-900 mt-1">
-              {formatCurrency(stats.totalUnpaid)}
-            </p>
+            <ScaledNumber value={formatCurrency(stats.totalUnpaid)} className="text-gray-900 mt-1" />
           </div>
         </div>
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Due This Week</p>
-            <p className="text-base sm:text-lg lg:text-2xl font-bold text-amber-600 mt-1">
-              {formatCurrency(stats.dueThisWeek)}
-            </p>
+            <ScaledNumber value={formatCurrency(stats.dueThisWeek)} className="text-amber-600 mt-1" />
           </div>
         </div>
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Overdue</p>
-            <p className="text-base sm:text-lg lg:text-2xl font-bold text-red-600 mt-1">
-              {formatCurrency(stats.overdue)}
-            </p>
+            <ScaledNumber value={formatCurrency(stats.overdue)} className="text-red-600 mt-1" />
           </div>
         </div>
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Paid This Month</p>
-            <p className="text-base sm:text-lg lg:text-2xl font-bold text-green-600 mt-1">
-              {formatCurrency(stats.paidThisMonth)}
-            </p>
+            <ScaledNumber value={formatCurrency(stats.paidThisMonth)} className="text-green-600 mt-1" />
           </div>
         </div>
       </div>

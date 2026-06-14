@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
+import { ScaledNumber } from '@/components/ui/scaled-number';
 import {
   PlusIcon,
   BanknotesIcon,
@@ -119,14 +120,14 @@ export default function BankPage() {
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Total Cash Balance</p>
-            <p className="text-3xl font-bold mt-1">{formatCurrency(stats.totalBalance)}</p>
+            <ScaledNumber value={formatCurrency(stats.totalBalance)} className="mt-1" />
             <p className="text-sm text-gray-500 mt-2">Across {accounts.length} accounts</p>
           </div>
         </div>
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Unreconciled</p>
-            <p className="text-2xl font-bold text-amber-600 mt-1">{stats.unreconciledCount}</p>
+            <ScaledNumber value={String(stats.unreconciledCount)} className="text-amber-600 mt-1" />
             <p className="text-sm text-gray-500 mt-2">transactions pending</p>
           </div>
         </div>
@@ -137,14 +138,14 @@ export default function BankPage() {
               <div>
                 <div className="flex items-center gap-1 text-green-600">
                   <ArrowUpIcon className="w-4 h-4" />
-                  <span className="text-lg font-bold">$0</span>
+                  <ScaledNumber value="$0" as="span" className="text-green-600" />
                 </div>
                 <p className="text-xs text-gray-500">In</p>
               </div>
               <div>
                 <div className="flex items-center gap-1 text-red-600">
                   <ArrowDownIcon className="w-4 h-4" />
-                  <span className="text-lg font-bold">$0</span>
+                  <ScaledNumber value="$0" as="span" className="text-red-600" />
                 </div>
                 <p className="text-xs text-gray-500">Out</p>
               </div>

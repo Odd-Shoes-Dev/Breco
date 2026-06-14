@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter, type SupportedCurrency } from '@/lib/currency';
+import { ScaledNumber } from '@/components/ui/scaled-number';
 import type { PayrollPeriod, Payslip, Employee } from '@/types/breco';
 import {
   PlusIcon,
@@ -635,19 +636,18 @@ export default function PayrollPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="card p-4">
-          <p className="text-2xl font-bold text-gray-900">{employees.length}</p>
+          <ScaledNumber value={String(employees.length)} className="text-gray-900" />
           <p className="text-sm text-gray-500">Active Employees</p>
         </div>
         <div className="card p-4">
-          <p className="text-2xl font-bold text-breco-navy">
-            {formatCurrency(currentPeriod?.total_net || employees.reduce((sum, e) => sum + (e.basic_salary || 0), 0))}
-          </p>
+          <ScaledNumber
+            value={formatCurrency(currentPeriod?.total_net || employees.reduce((sum, e) => sum + (e.basic_salary || 0), 0))}
+            className="text-breco-navy"
+          />
           <p className="text-sm text-gray-500">This Month Payroll</p>
         </div>
         <div className="card p-4">
-          <p className="text-2xl font-bold text-red-600">
-            {formatCurrency(currentPeriod?.total_deductions || 0)}
-          </p>
+          <ScaledNumber value={formatCurrency(currentPeriod?.total_deductions || 0)} className="text-red-600" />
           <p className="text-sm text-gray-500">Total Deductions</p>
         </div>
       </div>

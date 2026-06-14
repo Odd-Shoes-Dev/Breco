@@ -1,12 +1,16 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { getCompanySettings } from '@/lib/company-settings';
 
 // GET /api/reports/balance-sheet
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency;
+
     const { searchParams } = new URL(request.url);
-    
+
     const asOfDate = searchParams.get('asOfDate') || searchParams.get('as_of_date') || new Date().toISOString().split('T')[0];
 
     // Get all accounts
@@ -33,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     // Calculate balances by account
     const accountBalances: Record<string, number> = {};
-    
+
     entries?.forEach((entry: any) => {
       if (!accountBalances[entry.account_id]) {
         accountBalances[entry.account_id] = 0;
@@ -90,8 +94,7 @@ export async function GET(request: NextRequest) {
 
     accounts?.forEach((account) => {
       let balance = accountBalances[account.id] || 0;
-      
-      // Adjust for normal balance (liabilities/equity have credit normal)
+
       if (account.normal_balance === 'credit') {
         balance = -balance;
       }
@@ -106,7 +109,6 @@ export async function GET(request: NextRequest) {
 
       const code = account.code;
 
-      // Assets (1xxx)
       if (code.startsWith('1')) {
         if (code < '1500') {
           currentAssets.push(item);
@@ -118,9 +120,7 @@ export async function GET(request: NextRequest) {
           otherAssets.push(item);
           totalOtherAssets += balance;
         }
-      }
-      // Liabilities (2xxx)
-      else if (code.startsWith('2')) {
+      } else if (code.startsWith('2')) {
         if (code < '2500') {
           currentLiabilities.push(item);
           totalCurrentLiabilities += balance;
@@ -128,59 +128,56 @@ export async function GET(request: NextRequest) {
           longTermLiabilities.push(item);
           totalLongTermLiabilities += balance;
         }
-      }
-      // Equity (3xxx)
-      else if (code.startsWith('3')) {
+      } else if (code.startsWith('3')) {
         equity.push(item);
         totalEquity += balance;
       }
     });
 
-    // Add fixed assets from fixed_assets table (convert to USD)
+    // Add fixed assets from fixed_assets table (convert to base currency)
     for (const asset of assets || []) {
       const bookValue = asset.purchase_price - (asset.accumulated_depreciation || 0);
       if (bookValue <= 0) continue;
 
-      // Convert to USD if needed
-      let bookValueInUSD = bookValue;
-      const currency = asset.currency || 'USD';
-      
-      if (currency !== 'USD') {
+      let bookValueInBase = bookValue;
+      const currency = asset.currency || baseCurrency;
+
+      if (currency !== baseCurrency) {
         const { data: convertedValue } = await supabase.rpc('convert_currency', {
           p_amount: bookValue,
           p_from_currency: currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: asOfDate,
         });
-        bookValueInUSD = convertedValue || bookValue;
+        bookValueInBase = convertedValue ?? 0;
       }
 
       fixedAssets.push({
         code: '',
         name: asset.name,
-        amount: bookValueInUSD,
+        amount: bookValueInBase,
       });
-      totalFixedAssets += bookValueInUSD;
+      totalFixedAssets += bookValueInBase;
     }
 
-    // Add inventory (convert to USD)
+    // Add inventory (convert to base currency)
     let inventoryTotal = 0;
     for (const item of inventory || []) {
       const inventoryValue = item.quantity_on_hand * item.cost;
-      let valueInUSD = inventoryValue;
-      const currency = item.currency || 'USD';
-      
-      if (currency !== 'USD') {
+      let valueInBase = inventoryValue;
+      const currency = item.currency || baseCurrency;
+
+      if (currency !== baseCurrency) {
         const { data: convertedValue } = await supabase.rpc('convert_currency', {
           p_amount: inventoryValue,
           p_from_currency: currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: asOfDate,
         });
-        valueInUSD = convertedValue || inventoryValue;
+        valueInBase = convertedValue ?? 0;
       }
-      
-      inventoryTotal += valueInUSD;
+
+      inventoryTotal += valueInBase;
     }
 
     if (inventoryTotal > 0) {
@@ -192,9 +189,8 @@ export async function GET(request: NextRequest) {
       totalCurrentAssets += inventoryTotal;
     }
 
-    // Add bank account balances from transactions (convert to USD)
+    // Add bank account balances from transactions (convert to base currency)
     for (const account of bankAccounts || []) {
-      // Get transactions for this account up to the date
       const { data: transactions } = await supabase
         .from('bank_transactions')
         .select('amount, transaction_date')
@@ -203,22 +199,25 @@ export async function GET(request: NextRequest) {
 
       if (!transactions || transactions.length === 0) continue;
 
-      // Calculate balance (amounts are already signed)
       let balance = 0;
       for (const txn of transactions) {
-        let amountInUSD = txn.amount;
-        const currency = account.currency || 'USD';
-        
-        if (currency !== 'USD') {
+        let amountInBase = txn.amount;
+        const currency = account.currency || baseCurrency;
+
+        if (currency !== baseCurrency) {
           const { data: convertedValue } = await supabase.rpc('convert_currency', {
             p_amount: Math.abs(txn.amount),
             p_from_currency: currency,
-            p_to_currency: 'USD',
+            p_to_currency: baseCurrency,
             p_date: txn.transaction_date,
           });
-          amountInUSD = txn.amount < 0 ? -(convertedValue || Math.abs(txn.amount)) : (convertedValue || Math.abs(txn.amount));
+          if (convertedValue !== null) {
+            amountInBase = txn.amount < 0 ? -convertedValue : convertedValue;
+          } else {
+            amountInBase = 0;
+          }
         }
-        balance += amountInUSD;
+        balance += amountInBase;
       }
 
       if (balance === 0) continue;
@@ -231,23 +230,23 @@ export async function GET(request: NextRequest) {
       totalCurrentAssets += balance;
     }
 
-    // Add accounts receivable (convert to USD)
+    // Add accounts receivable (convert to base currency)
     let totalAR = 0;
     for (const invoice of invoices || []) {
-      let amountInUSD = invoice.total;
-      const currency = invoice.currency || 'USD';
-      
-      if (currency !== 'USD') {
+      let amountInBase = invoice.total;
+      const currency = invoice.currency || baseCurrency;
+
+      if (currency !== baseCurrency) {
         const { data: convertedValue } = await supabase.rpc('convert_currency', {
           p_amount: invoice.total,
           p_from_currency: currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: invoice.invoice_date,
         });
-        amountInUSD = convertedValue || invoice.total;
+        amountInBase = convertedValue ?? 0;
       }
-      
-      totalAR += amountInUSD;
+
+      totalAR += amountInBase;
     }
 
     if (totalAR > 0) {
@@ -259,23 +258,23 @@ export async function GET(request: NextRequest) {
       totalCurrentAssets += totalAR;
     }
 
-    // Add accounts payable (convert to USD)
+    // Add accounts payable (convert to base currency)
     let totalAP = 0;
     for (const bill of bills || []) {
-      let amountInUSD = bill.total;
-      const currency = bill.currency || 'USD';
-      
-      if (currency !== 'USD') {
+      let amountInBase = bill.total;
+      const currency = bill.currency || baseCurrency;
+
+      if (currency !== baseCurrency) {
         const { data: convertedValue } = await supabase.rpc('convert_currency', {
           p_amount: bill.total,
           p_from_currency: currency,
-          p_to_currency: 'USD',
+          p_to_currency: baseCurrency,
           p_date: bill.bill_date,
         });
-        amountInUSD = convertedValue || bill.total;
+        amountInBase = convertedValue ?? 0;
       }
-      
-      totalAP += amountInUSD;
+
+      totalAP += amountInBase;
     }
 
     if (totalAP > 0) {
@@ -288,7 +287,6 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate retained earnings (net income for all time)
-    // This is a simplified calculation - in production you'd close periods
     const { data: incomeEntries } = await supabase
       .from('journal_lines')
       .select(`
@@ -306,10 +304,8 @@ export async function GET(request: NextRequest) {
     incomeEntries?.forEach((entry: any) => {
       const code = entry.accounts.code;
       if (code >= '4000' && code < '5000') {
-        // Revenue - credit increases
         retainedEarnings += (entry.credit || 0) - (entry.debit || 0);
       } else {
-        // Expenses - debit increases
         retainedEarnings -= (entry.debit || 0) - (entry.credit || 0);
       }
     });
@@ -330,6 +326,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       data: {
         asOfDate,
+        currency: baseCurrency,
         assets: {
           current: currentAssets.map(item => ({ account: item.name, balance: item.amount })),
           fixed: fixedAssets.map(item => ({ account: item.name, balance: item.amount })),
