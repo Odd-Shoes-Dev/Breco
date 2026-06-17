@@ -490,7 +490,7 @@ export default function InvoiceDetailPage() {
                 const lineSubtotal = Number(item.line_total);
                 const lineTaxAmt = Number(item.tax_amount);
                 const lineTotal = lineSubtotal + lineTaxAmt;
-                const taxPct = parseFloat(item.tax_rate || 0) * 100;
+                const taxPct = (item.tax_rate || 0) * 100;
                 const taxPctLabel = taxPct > 0 ? `${taxPct % 1 === 0 ? taxPct : taxPct.toFixed(2)}%` : '—';
                 return `
                 <tr>
@@ -732,7 +732,7 @@ export default function InvoiceDetailPage() {
 
   const getTaxLabel = () => {
     const rates = lineItems
-      .map(l => parseFloat(l.tax_rate || 0) * 100)
+      .map(l => (l.tax_rate || 0) * 100)
       .filter(r => r > 0);
     const unique = [...new Set(rates)];
     if (unique.length === 1) {
@@ -911,7 +911,7 @@ export default function InvoiceDetailPage() {
                       const lineSubtotal = Number(item.line_total);
                       const lineTaxAmt = Number(item.tax_amount);
                       const lineTotal = lineSubtotal + lineTaxAmt;
-                      const taxPct = parseFloat(item.tax_rate || 0) * 100;
+                      const taxPct = (item.tax_rate || 0) * 100;
                       return (
                       <tr key={item.id} className="border-b">
                         <td className="py-2 sm:py-3 px-2 text-xs sm:text-sm text-gray-500">{item.line_number}</td>
