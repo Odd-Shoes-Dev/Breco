@@ -473,21 +473,33 @@ export default function InvoiceDetailPage() {
               <tr>
                 <th>#</th>
                 <th>Description</th>
-                <th class="text-right">Quantity</th>
+                <th class="text-right">Qty</th>
                 <th class="text-right">Unit Price</th>
-                <th class="text-right">Amount</th>
+                <th class="text-right">Subtotal</th>
+                <th class="text-right">Tax %</th>
+                <th class="text-right">Tax Amt</th>
+                <th class="text-right">Line Total</th>
               </tr>
             </thead>
             <tbody>
-              ${lineItems.map(item => `
+              ${lineItems.map(item => {
+                const lineSubtotal = Number(item.line_total);
+                const lineTaxAmt = Number(item.tax_amount);
+                const lineTotal = lineSubtotal + lineTaxAmt;
+                const taxPct = parseFloat(item.tax_rate || 0) * 100;
+                const taxPctLabel = taxPct > 0 ? `${taxPct % 1 === 0 ? taxPct : taxPct.toFixed(2)}%` : '—';
+                return `
                 <tr>
                   <td>${item.line_number}</td>
                   <td>${item.description}</td>
                   <td class="text-right">${item.quantity}</td>
                   <td class="text-right">${formatCurrency(Number(item.unit_price))}</td>
-                  <td class="text-right"><strong>${formatCurrency(Number(item.amount))}</strong></td>
+                  <td class="text-right">${formatCurrency(lineSubtotal)}</td>
+                  <td class="text-right">${taxPctLabel}</td>
+                  <td class="text-right">${lineTaxAmt > 0 ? formatCurrency(lineTaxAmt) : '—'}</td>
+                  <td class="text-right"><strong>${formatCurrency(lineTotal)}</strong></td>
                 </tr>
-              `).join('')}
+              `}).join('')}
             </tbody>
           </table>
 
@@ -884,19 +896,31 @@ export default function InvoiceDetailPage() {
                       <th className="text-left py-2 sm:py-3 px-2 text-xs sm:text-sm font-medium text-gray-500">Description</th>
                       <th className="text-right py-2 sm:py-3 px-2 text-xs sm:text-sm font-medium text-gray-500">Qty</th>
                       <th className="text-right py-2 sm:py-3 px-2 text-xs sm:text-sm font-medium text-gray-500 hidden sm:table-cell">Unit Price</th>
-                      <th className="text-right py-2 sm:py-3 px-2 text-xs sm:text-sm font-medium text-gray-500">Amount</th>
+                      <th className="text-right py-2 sm:py-3 px-2 text-xs sm:text-sm font-medium text-gray-500 hidden md:table-cell">Subtotal</th>
+                      <th className="text-right py-2 sm:py-3 px-2 text-xs sm:text-sm font-medium text-gray-500 hidden md:table-cell">Tax %</th>
+                      <th className="text-right py-2 sm:py-3 px-2 text-xs sm:text-sm font-medium text-gray-500 hidden md:table-cell">Tax Amt</th>
+                      <th className="text-right py-2 sm:py-3 px-2 text-xs sm:text-sm font-medium text-gray-500">Line Total</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {lineItems.map((item) => (
+                    {lineItems.map((item) => {
+                      const lineSubtotal = Number(item.line_total);
+                      const lineTaxAmt = Number(item.tax_amount);
+                      const lineTotal = lineSubtotal + lineTaxAmt;
+                      const taxPct = parseFloat(item.tax_rate || 0) * 100;
+                      return (
                       <tr key={item.id} className="border-b">
                         <td className="py-2 sm:py-3 px-2 text-xs sm:text-sm text-gray-500">{item.line_number}</td>
                         <td className="py-2 sm:py-3 px-2 text-xs sm:text-sm">{item.description}</td>
                         <td className="py-2 sm:py-3 px-2 text-right text-xs sm:text-sm">{item.quantity}</td>
                         <td className="py-2 sm:py-3 px-2 text-right text-xs sm:text-sm hidden sm:table-cell">{formatCurrency(Number(item.unit_price))}</td>
-                        <td className="py-2 sm:py-3 px-2 text-right font-medium text-xs sm:text-sm">{formatCurrency(Number(item.amount))}</td>
+                        <td className="py-2 sm:py-3 px-2 text-right text-xs sm:text-sm hidden md:table-cell">{formatCurrency(lineSubtotal)}</td>
+                        <td className="py-2 sm:py-3 px-2 text-right text-xs sm:text-sm hidden md:table-cell text-gray-500">{taxPct > 0 ? `${taxPct % 1 === 0 ? taxPct : taxPct.toFixed(2)}%` : '—'}</td>
+                        <td className="py-2 sm:py-3 px-2 text-right text-xs sm:text-sm hidden md:table-cell text-gray-500">{lineTaxAmt > 0 ? formatCurrency(lineTaxAmt) : '—'}</td>
+                        <td className="py-2 sm:py-3 px-2 text-right font-medium text-xs sm:text-sm">{formatCurrency(lineTotal)}</td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
