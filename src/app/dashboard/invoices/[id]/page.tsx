@@ -505,7 +505,7 @@ export default function InvoiceDetailPage() {
               </div>
               ` : ''}
               <div class="total-row subtotal">
-                <span>Tax (${invoice.tax_rate}%)</span>
+                <span>${getTaxLabel()}</span>
                 <span>${formatCurrency(Number(invoice.tax_amount))}</span>
               </div>
               <div class="total-row total">
@@ -714,6 +714,19 @@ export default function InvoiceDetailPage() {
 
   const balanceDue = Number(invoice.total_amount) - Number(invoice.amount_paid);
 
+  const getTaxLabel = () => {
+    const rates = lineItems
+      .map(l => parseFloat(l.tax_rate || 0) * 100)
+      .filter(r => r > 0);
+    const unique = [...new Set(rates)];
+    if (unique.length === 1) {
+      const r = unique[0];
+      return `Tax (${r % 1 === 0 ? r : parseFloat(r.toFixed(2))}%)`;
+    }
+    if (unique.length > 1) return 'Tax (mixed)';
+    return `Tax (${invoice.tax_rate}%)`;
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
       {/* Header */}
@@ -901,7 +914,7 @@ export default function InvoiceDetailPage() {
                   </div>
                 )}
                 <div className="flex justify-between text-xs sm:text-sm">
-                  <span className="text-gray-500">Tax ({invoice.tax_rate}%)</span>
+                  <span className="text-gray-500">{getTaxLabel()}</span>
                   <span>{formatCurrency(Number(invoice.tax_amount))}</span>
                 </div>
                 <div className="flex justify-between text-base sm:text-lg font-semibold pt-1.5 sm:pt-2 border-t">
