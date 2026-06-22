@@ -40,7 +40,6 @@ interface CompanyFormData {
 
 interface FinancialFormData {
   fiscal_year_start_month: number;
-  default_payment_terms: number;
   sales_tax_rate: number;
   base_currency: string;
 }
@@ -84,7 +83,6 @@ export default function SettingsPage() {
         });
         financialForm.reset({
           fiscal_year_start_month: data.fiscal_year_start_month || 1,
-          default_payment_terms: data.default_payment_terms || 30,
           sales_tax_rate: (Number(data.sales_tax_rate) || 0.18) * 100,
           base_currency: data.base_currency || 'UGX',
         });
@@ -123,7 +121,6 @@ export default function SettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fiscal_year_start_month: data.fiscal_year_start_month,
-          default_payment_terms: data.default_payment_terms,
           sales_tax_rate: (data.sales_tax_rate || 0) / 100,
           base_currency: data.base_currency,
         }),
@@ -376,14 +373,6 @@ export default function SettingsPage() {
                       <option value={11}>November</option>
                       <option value={12}>December</option>
                     </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="label">Default Payment Terms (days)</label>
-                    <input
-                      type="number"
-                      {...financialForm.register('default_payment_terms', { valueAsNumber: true })}
-                      className="input"
-                    />
                   </div>
                 </div>
 

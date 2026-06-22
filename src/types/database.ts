@@ -52,7 +52,6 @@ export interface CompanySettings {
   base_currency: string;
   fiscal_year_start_month: number;
   inventory_method: InventoryMethod;
-  default_payment_terms: number;
   sales_tax_rate: number;
   created_at: string;
   updated_at: string;

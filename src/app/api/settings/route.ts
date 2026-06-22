@@ -25,7 +25,7 @@ export async function PATCH(request: NextRequest) {
         INSERT INTO company_settings (
           name, legal_name, ein, address_line1, address_line2,
           city, state, zip_code, country, phone, email, website,
-          base_currency, fiscal_year_start_month, default_payment_terms, sales_tax_rate
+          base_currency, fiscal_year_start_month, sales_tax_rate
         ) VALUES (
           ${body.name || 'Breco Safaris Ltd'},
           ${body.legal_name || null},
@@ -41,7 +41,6 @@ export async function PATCH(request: NextRequest) {
           ${body.website || null},
           ${body.base_currency || 'UGX'},
           ${body.fiscal_year_start_month || 1},
-          ${body.default_payment_terms || 30},
           ${body.sales_tax_rate || 0.18}
         )
         RETURNING *
@@ -49,12 +48,11 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json(result[0]);
     }
 
-    const setClauses: string[] = [];
     const allowedFields = [
       'name', 'legal_name', 'ein', 'address_line1', 'address_line2',
       'city', 'state', 'zip_code', 'country', 'phone', 'email', 'website',
       'logo_url', 'base_currency', 'fiscal_year_start_month',
-      'inventory_method', 'default_payment_terms', 'sales_tax_rate',
+      'inventory_method', 'sales_tax_rate',
     ];
 
     const updates: Record<string, any> = {};
@@ -88,7 +86,6 @@ export async function PATCH(request: NextRequest) {
         base_currency = COALESCE(${updates.base_currency ?? null}, base_currency),
         fiscal_year_start_month = COALESCE(${updates.fiscal_year_start_month ?? null}, fiscal_year_start_month),
         inventory_method = COALESCE(${updates.inventory_method ?? null}, inventory_method),
-        default_payment_terms = COALESCE(${updates.default_payment_terms ?? null}, default_payment_terms),
         sales_tax_rate = COALESCE(${updates.sales_tax_rate ?? null}, sales_tax_rate),
         updated_at = NOW()
       WHERE id = ${id}

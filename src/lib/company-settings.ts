@@ -34,7 +34,6 @@ function getDefaultSettings(): CompanySettings {
     base_currency: 'UGX',
     fiscal_year_start_month: 1,
     inventory_method: 'fifo',
-    default_payment_terms: 30,
     sales_tax_rate: 0.18, // 18% VAT in Uganda
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
