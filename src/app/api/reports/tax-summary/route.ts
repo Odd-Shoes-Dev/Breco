@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
     // Fetch assets for depreciation calculation
     const assets = await sql`
       SELECT purchase_price, depreciation_method, useful_life_months, accumulated_depreciation, purchase_date
-      FROM assets
+      FROM fixed_assets
       WHERE purchase_date <= ${endDate} AND status = 'active'
     `;
 

@@ -41,7 +41,7 @@ export async function PATCH(
       const nssfExpenseRows = await sql`SELECT id FROM accounts WHERE code = '5120' LIMIT 1`;
       const payePayableRows = await sql`SELECT id FROM accounts WHERE code = '2200' LIMIT 1`;
       const nssfPayableRows = await sql`SELECT id FROM accounts WHERE code = '2210' LIMIT 1`;
-      const bankRows = await sql`SELECT id, name, gl_account_id FROM bank_accounts WHERE is_primary = true LIMIT 1`;
+      const bankRows = await sql`SELECT id, name, gl_account_id FROM bank_accounts ORDER BY created_at ASC LIMIT 1`;
 
       const salaryExpenseAccount = salaryExpenseRows[0];
       const nssfExpenseAccount = nssfExpenseRows[0];

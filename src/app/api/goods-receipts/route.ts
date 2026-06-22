@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
     }
     const po = pos[0];
 
-    const poLines = await sql`SELECT * FROM purchase_order_lines WHERE purchase_order_id = ${body.purchase_order_id}`;
+    const poLines = await sql`SELECT * FROM purchase_order_lines WHERE po_id = ${body.purchase_order_id}`;
     po.purchase_order_lines = poLines;
 
     if (po.status !== 'approved') {
@@ -249,7 +249,7 @@ export async function POST(request: NextRequest) {
     if (allLinesReceived) {
       await sql`
         UPDATE purchase_orders
-        SET status = 'received', received_date = ${body.receipt_date}, received_by = ${user.id}
+        SET status = 'received'
         WHERE id = ${body.purchase_order_id}
       `;
     }

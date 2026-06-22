@@ -19,31 +19,31 @@ export async function GET(request: NextRequest) {
       const s = `%${search}%`;
       data = await sql`
         SELECT * FROM vendors
-        WHERE (name ILIKE ${s} OR email ILIKE ${s} OR company_name ILIKE ${s})
+        WHERE (name ILIKE ${s} OR email ILIKE ${s})
           AND is_active = true
         ORDER BY name
         LIMIT ${limit} OFFSET ${offset}
       `;
-      countRows = await sql`SELECT COUNT(*) AS count FROM vendors WHERE (name ILIKE ${s} OR email ILIKE ${s} OR company_name ILIKE ${s}) AND is_active = true`;
+      countRows = await sql`SELECT COUNT(*) AS count FROM vendors WHERE (name ILIKE ${s} OR email ILIKE ${s}) AND is_active = true`;
     } else if (search && active === 'false') {
       const s = `%${search}%`;
       data = await sql`
         SELECT * FROM vendors
-        WHERE (name ILIKE ${s} OR email ILIKE ${s} OR company_name ILIKE ${s})
+        WHERE (name ILIKE ${s} OR email ILIKE ${s})
           AND is_active = false
         ORDER BY name
         LIMIT ${limit} OFFSET ${offset}
       `;
-      countRows = await sql`SELECT COUNT(*) AS count FROM vendors WHERE (name ILIKE ${s} OR email ILIKE ${s} OR company_name ILIKE ${s}) AND is_active = false`;
+      countRows = await sql`SELECT COUNT(*) AS count FROM vendors WHERE (name ILIKE ${s} OR email ILIKE ${s}) AND is_active = false`;
     } else if (search) {
       const s = `%${search}%`;
       data = await sql`
         SELECT * FROM vendors
-        WHERE name ILIKE ${s} OR email ILIKE ${s} OR company_name ILIKE ${s}
+        WHERE name ILIKE ${s} OR email ILIKE ${s}
         ORDER BY name
         LIMIT ${limit} OFFSET ${offset}
       `;
-      countRows = await sql`SELECT COUNT(*) AS count FROM vendors WHERE name ILIKE ${s} OR email ILIKE ${s} OR company_name ILIKE ${s}`;
+      countRows = await sql`SELECT COUNT(*) AS count FROM vendors WHERE name ILIKE ${s} OR email ILIKE ${s}`;
     } else if (active === 'true') {
       data = await sql`SELECT * FROM vendors WHERE is_active = true ORDER BY name LIMIT ${limit} OFFSET ${offset}`;
       countRows = await sql`SELECT COUNT(*) AS count FROM vendors WHERE is_active = true`;
@@ -97,16 +97,16 @@ export async function POST(request: NextRequest) {
 
     const rows = await sql`
       INSERT INTO vendors (
-        vendor_number, name, company_name, email, phone, tax_id,
-        address_line1, address_line2, city, state, zip_code, country,
-        payment_terms, default_expense_account_id, notes, is_active
+        vendor_number, name, email, phone,
+        address, city, country,
+        payment_terms, currency, notes, is_active
       ) VALUES (
-        ${vendorNumber}, ${body.name}, ${body.company_name || null},
-        ${body.email || null}, ${body.phone || null}, ${body.tax_id || null},
-        ${body.address_line1 || null}, ${body.address_line2 || null},
-        ${body.city || null}, ${body.state || null}, ${body.postal_code || null},
+        ${vendorNumber}, ${body.name},
+        ${body.email || null}, ${body.phone || null},
+        ${body.address || null},
+        ${body.city || null},
         ${body.country || 'USA'}, ${body.payment_terms || 30},
-        ${body.default_expense_account_id || null}, ${body.notes || null},
+        ${body.currency || 'USD'}, ${body.notes || null},
         ${body.is_active !== false}
       )
       RETURNING *

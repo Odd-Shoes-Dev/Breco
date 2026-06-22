@@ -258,8 +258,7 @@ export function generateQuotationHTML(data: QuotationPDFData): string {
           <div class="info-block">
             <h3>Prepared For</h3>
             <p><strong>${customer.name}</strong></p>
-            ${customer.address_line1 ? `<p>${customer.address_line1}</p>` : ''}
-            ${customer.address_line2 ? `<p>${customer.address_line2}</p>` : ''}
+            ${customer.address ? `<p>${customer.address}</p>` : ''}
             ${customer.city || customer.state || customer.zip_code ? 
               `<p>${[customer.city, customer.state, customer.zip_code].filter(Boolean).join(', ')}</p>` : ''}
             ${customer.email ? `<p>${customer.email}</p>` : ''}

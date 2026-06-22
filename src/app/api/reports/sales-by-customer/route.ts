@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     // Fetch invoices with customer data for the period
     const invoices = await sql`
       SELECT i.id, i.customer_id, i.invoice_date, i.total, i.currency,
-             c.id AS c_id, c.name AS c_name, c.company_name AS c_company_name, c.customer_type AS c_customer_type
+             c.id AS c_id, c.name AS c_name, c.customer_type AS c_customer_type
       FROM invoices i
       LEFT JOIN customers c ON c.id = i.customer_id
       WHERE i.invoice_date >= ${startDate}
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
       if (!invoice.customer_id) continue;
 
       const customerId = invoice.customer_id;
-      const customerName = invoice.c_company_name || invoice.c_name;
+      const customerName = invoice.c_name;
       if (!customerName) continue;
 
       const customerTypeRaw = invoice.c_customer_type || 'Individual';

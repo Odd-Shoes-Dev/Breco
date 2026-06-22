@@ -46,9 +46,10 @@ export async function GET(request: NextRequest) {
 
     // Get inventory as of date
     const inventory = await sql`
-      SELECT id, name, quantity_on_hand, cost, currency
-      FROM products
-      WHERE quantity_on_hand > 0
+      SELECT p.id, p.name, p.purchase_price,
+             COALESCE((SELECT SUM(im.quantity) FROM inventory_movements im WHERE im.product_id = p.id), 0) AS quantity_on_hand
+      FROM products p
+      WHERE p.track_inventory = true
     `;
 
     // Get bank accounts and their transactions
@@ -153,18 +154,9 @@ export async function GET(request: NextRequest) {
     // Add inventory (convert to base currency)
     let inventoryTotal = 0;
     for (const item of inventory) {
-      const inventoryValue = item.quantity_on_hand * item.cost;
-      let valueInBase = inventoryValue;
-      const currency = item.currency || baseCurrency;
-
-      if (currency !== baseCurrency) {
-        const convertRows = await sql`
-          SELECT convert_currency(${inventoryValue}, ${currency}, ${baseCurrency}, ${asOfDate}) AS result
-        `;
-        valueInBase = convertRows[0]?.result ?? 0;
-      }
-
-      inventoryTotal += valueInBase;
+      if ((item.quantity_on_hand || 0) <= 0) continue;
+      const inventoryValue = item.quantity_on_hand * (item.purchase_price || 0);
+      inventoryTotal += inventoryValue;
     }
 
     if (inventoryTotal > 0) {

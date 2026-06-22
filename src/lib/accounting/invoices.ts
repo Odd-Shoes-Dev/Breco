@@ -278,18 +278,11 @@ export async function postInvoice(
   for (const line of invoiceLines) {
     if (line.product_id) {
       const productRows = await sql`
-        SELECT track_inventory, quantity_on_hand FROM products WHERE id = ${line.product_id} LIMIT 1
+        SELECT track_inventory FROM products WHERE id = ${line.product_id} LIMIT 1
       `;
       const product = productRows[0];
 
       if (product?.track_inventory) {
-        // Reduce inventory
-        await sql`
-          UPDATE products
-          SET quantity_on_hand = ${product.quantity_on_hand - line.quantity}
-          WHERE id = ${line.product_id}
-        `;
-
         // Record movement
         await sql`
           INSERT INTO inventory_movements (product_id, movement_type, quantity, reference_type, reference_id, created_by)

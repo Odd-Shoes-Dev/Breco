@@ -4,9 +4,10 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   try {
     const allItems = await sql`
-      SELECT quantity_on_hand, cost_price, currency, reorder_point
-      FROM products
-      WHERE track_inventory = true
+      SELECT p.purchase_price, p.reorder_point,
+             COALESCE((SELECT SUM(im.quantity) FROM inventory_movements im WHERE im.product_id = p.id), 0) AS quantity_on_hand
+      FROM products p
+      WHERE p.track_inventory = true
     `;
 
     if (!allItems || allItems.length === 0) {
@@ -24,31 +25,11 @@ export async function GET() {
     // Convert each item's value to USD
     for (const item of allItems) {
       const quantity = item.quantity_on_hand || 0;
-      const cost = item.cost_price || 0;
+      const cost = item.purchase_price || 0;
       const itemValue = quantity * cost;
 
       if (itemValue > 0) {
-        let valueInUSD = itemValue;
-
-        // Convert to USD if not already
-        if (item.currency && item.currency !== 'USD') {
-          try {
-            const convertedRows = await sql`
-              SELECT convert_currency(
-                ${itemValue},
-                ${item.currency},
-                'USD',
-                ${new Date().toISOString().split('T')[0]}
-              ) AS result
-            `;
-            valueInUSD = convertedRows[0]?.result ?? itemValue;
-          } catch (conversionError) {
-            console.error('Currency conversion error:', conversionError);
-            // Fallback to unconverted value
-          }
-        }
-
-        totalValue += valueInUSD;
+        totalValue += itemValue;
       }
     }
 

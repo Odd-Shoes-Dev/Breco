@@ -61,7 +61,7 @@ export async function getAssetsDueForDepreciation(
   const assets = await sql`
     SELECT * FROM fixed_assets
     WHERE status = 'active'
-      AND depreciation_start_date <= ${periodEndDate}
+      AND purchase_date <= ${periodEndDate}
   `;
 
   if (!assets || assets.length === 0) return [];
@@ -362,7 +362,7 @@ export function generateDepreciationSchedule(
     salvage_value: number;
     useful_life_months: number;
     depreciation_method: string;
-    depreciation_start_date: string;
+    purchase_date: string;
     accumulated_depreciation: number;
   }
 ): {
@@ -382,7 +382,7 @@ export function generateDepreciationSchedule(
   const cost = new Decimal(asset.purchase_price);
   const residual = new Decimal(asset.salvage_value || 0);
 
-  const startDate = new Date(asset.depreciation_start_date);
+  const startDate = new Date(asset.purchase_date);
 
   for (let i = 0; i < asset.useful_life_months; i++) {
     const currentDate = new Date(startDate);

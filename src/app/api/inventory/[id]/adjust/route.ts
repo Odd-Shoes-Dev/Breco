@@ -30,32 +30,34 @@ export async function POST(
     }
     const item = itemRows[0];
 
-    // Calculate new quantity
-    let newQuantity = item.quantity_on_hand;
+    // Get current quantity from inventory_movements
+    const qtyRows = await sql`
+      SELECT COALESCE(SUM(quantity), 0) AS qty FROM inventory_movements WHERE product_id = ${id}
+    `;
+    const currentQuantity = parseFloat(qtyRows[0]?.qty || '0');
+
+    // Calculate movement quantity
     let movementQuantity = body.quantity;
 
     switch (body.adjustment_type) {
       case 'add':
       case 'receive':
       case 'return':
-        newQuantity += body.quantity;
         break;
       case 'remove':
       case 'sell':
       case 'damage':
       case 'shrinkage':
-        if (body.quantity > item.quantity_on_hand) {
+        if (body.quantity > currentQuantity) {
           return NextResponse.json(
             { error: 'Insufficient quantity on hand' },
             { status: 400 }
           );
         }
-        newQuantity -= body.quantity;
         movementQuantity = -body.quantity;
         break;
       case 'adjustment':
-        newQuantity = body.quantity;
-        movementQuantity = body.quantity - item.quantity_on_hand;
+        movementQuantity = body.quantity - currentQuantity;
         break;
       default:
         return NextResponse.json(
@@ -70,20 +72,15 @@ export async function POST(
         product_id, movement_type, quantity, unit_cost, notes, created_by
       ) VALUES (
         ${id}, ${body.adjustment_type}, ${movementQuantity},
-        ${body.unit_cost || item.cost_price || null}, ${body.notes || null}, ${user.id}
+        ${body.unit_cost || item.purchase_price || null}, ${body.notes || null}, ${user.id}
       )
       RETURNING *
     `;
     const movement = movementRows[0];
 
-    // Update product quantity
+    // Fetch updated product
     const updatedItemRows = await sql`
-      UPDATE products
-      SET
-        quantity_on_hand = ${newQuantity},
-        cost_price = ${body.update_cost ? body.unit_cost : item.cost_price}
-      WHERE id = ${id}
-      RETURNING *
+      SELECT * FROM products WHERE id = ${id}
     `;
     const updatedItem = updatedItemRows[0];
 

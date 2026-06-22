@@ -97,11 +97,11 @@ export async function createBill(
   // Create bill
   const billRows = await sql`
     INSERT INTO bills (
-      bill_number, vendor_id, vendor_invoice_number, bill_date, due_date,
+      bill_number, vendor_id, bill_date, due_date,
       payment_terms, notes, subtotal, tax_amount, total, amount_paid,
       status, ap_account_id, created_by
     ) VALUES (
-      ${billNumber}, ${input.vendor_id}, ${input.vendor_invoice_number ?? null},
+      ${billNumber}, ${input.vendor_id},
       ${input.bill_date}, ${input.due_date}, ${input.payment_terms || 30},
       ${input.notes ?? null}, ${totals.subtotal.toNumber()}, ${totals.taxAmount.toNumber()},
       ${totals.total.toNumber()}, 0, 'draft', ${apAccountId}, ${userId}
@@ -201,24 +201,12 @@ export async function postBill(
     // If this is an inventory purchase, update inventory
     if (line.product_id) {
       const productRows = await sql`
-        SELECT track_inventory, quantity_on_hand, cost_price
+        SELECT track_inventory
         FROM products WHERE id = ${line.product_id} LIMIT 1
       `;
       const product = productRows[0];
 
       if (product?.track_inventory) {
-        // Update product quantity and weighted average cost
-        const newQty = product.quantity_on_hand + line.quantity;
-        const newCost =
-          (product.quantity_on_hand * product.cost_price +
-            line.quantity * line.unit_cost) /
-          newQty;
-
-        await sql`
-          UPDATE products SET quantity_on_hand = ${newQty}, cost_price = ${newCost}
-          WHERE id = ${line.product_id}
-        `;
-
         // Record inventory movement
         await sql`
           INSERT INTO inventory_movements (
@@ -293,7 +281,7 @@ export async function recordBillPayment(
     amount: number;
     payment_method: string;
     reference_number?: string;
-    pay_from_account_id: string;
+    bank_account_id: string;
     notes?: string;
     applications: {
       bill_id: string;
@@ -334,7 +322,7 @@ export async function recordBillPayment(
           vendor_id: input.vendor_id,
         },
         {
-          account_id: input.pay_from_account_id,
+          account_id: input.bank_account_id,
           description: `Payment ${paymentNumber}`,
           debit: 0,
           credit: input.amount,
@@ -351,10 +339,10 @@ export async function recordBillPayment(
   const paymentRows = await sql`
     INSERT INTO bill_payments (
       payment_number, vendor_id, payment_date, amount, payment_method,
-      reference_number, pay_from_account_id, journal_entry_id, notes, created_by
+      reference_number, bank_account_id, journal_entry_id, notes, created_by
     ) VALUES (
       ${paymentNumber}, ${input.vendor_id}, ${input.payment_date}, ${input.amount},
-      ${input.payment_method}, ${input.reference_number ?? null}, ${input.pay_from_account_id},
+      ${input.payment_method}, ${input.reference_number ?? null}, ${input.bank_account_id},
       ${journalEntry.id}, ${input.notes ?? null}, ${userId}
     )
     RETURNING *
@@ -365,7 +353,7 @@ export async function recordBillPayment(
   // Create payment applications and update bills
   for (const app of input.applications) {
     await sql`
-      INSERT INTO bill_payment_applications (bill_payment_id, bill_id, amount_applied)
+      INSERT INTO bill_payment_applications (payment_id, bill_id, amount_applied)
       VALUES (${payment.id}, ${app.bill_id}, ${app.amount_applied})
     `;
 

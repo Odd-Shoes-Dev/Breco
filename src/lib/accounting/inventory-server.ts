@@ -28,7 +28,7 @@ export async function reduceInventoryForInvoice(
 
       // Get product
       const productRows = await sql`
-        SELECT track_inventory, quantity_on_hand, quantity_reserved, name
+        SELECT track_inventory, name
         FROM products WHERE id = ${line.product_id} LIMIT 1
       `;
       const product = productRows[0];
@@ -39,22 +39,6 @@ export async function reduceInventoryForInvoice(
       }
 
       if (!product.track_inventory) continue;
-
-      // Check if enough inventory available
-      const available = product.quantity_on_hand - (product.quantity_reserved || 0);
-      if (available < line.quantity) {
-        return {
-          success: false,
-          error: `Insufficient inventory for ${product.name}. Available: ${available}, Required: ${line.quantity}`,
-        };
-      }
-
-      // Reduce inventory
-      await sql`
-        UPDATE products
-        SET quantity_on_hand = ${product.quantity_on_hand - line.quantity}
-        WHERE id = ${line.product_id}
-      `;
 
       // Record inventory movement
       await sql`
@@ -90,28 +74,12 @@ export async function reserveInventoryForQuotation(
       if (!line.product_id) continue;
 
       const productRows = await sql`
-        SELECT track_inventory, quantity_on_hand, quantity_reserved, name
+        SELECT track_inventory, name
         FROM products WHERE id = ${line.product_id} LIMIT 1
       `;
       const product = productRows[0];
 
       if (!product?.track_inventory) continue;
-
-      // Check availability
-      const available = product.quantity_on_hand - (product.quantity_reserved || 0);
-      if (available < line.quantity) {
-        return {
-          success: false,
-          error: `Insufficient inventory for ${product.name}. Available: ${available}, Required: ${line.quantity}`,
-        };
-      }
-
-      // Reserve inventory
-      await sql`
-        UPDATE products
-        SET quantity_reserved = ${(product.quantity_reserved || 0) + line.quantity}
-        WHERE id = ${line.product_id}
-      `;
 
       // Record reservation movement
       await sql`
@@ -143,18 +111,13 @@ export async function releaseReservedInventory(
     for (const line of lines) {
       if (!line.product_id) continue;
 
-      const productRows = await sql`
-        SELECT quantity_reserved FROM products WHERE id = ${line.product_id} LIMIT 1
-      `;
-      const product = productRows[0];
-
-      if (!product) continue;
-
-      // Release reservation
+      // Release reservation - record movement
       await sql`
-        UPDATE products
-        SET quantity_reserved = ${Math.max(0, (product.quantity_reserved || 0) - line.quantity)}
-        WHERE id = ${line.product_id}
+        INSERT INTO inventory_movements (
+          product_id, movement_type, quantity, reference_type, reference_id, created_by
+        ) VALUES (
+          ${line.product_id}, 'release', ${line.quantity}, 'quotation_cancel', ${documentId}, 'system'
+        )
       `;
     }
 
@@ -185,26 +148,12 @@ export async function increaseInventoryForBill(
 
       // Get product
       const productRows = await sql`
-        SELECT track_inventory, quantity_on_hand, cost_price
+        SELECT track_inventory
         FROM products WHERE id = ${line.product_id} LIMIT 1
       `;
       const product = productRows[0];
 
       if (!product?.track_inventory) continue;
-
-      // Calculate new weighted average cost
-      const newQty = product.quantity_on_hand + line.quantity;
-      const newCost =
-        newQty > 0
-          ? (product.quantity_on_hand * (product.cost_price || 0) + line.quantity * line.unit_cost) / newQty
-          : line.unit_cost;
-
-      // Increase inventory
-      await sql`
-        UPDATE products
-        SET quantity_on_hand = ${newQty}, cost_price = ${newCost}
-        WHERE id = ${line.product_id}
-      `;
 
       // Record inventory movement
       await sql`
@@ -250,18 +199,11 @@ export async function restoreInventoryForInvoice(
       if (!line.product_id) continue;
 
       const productRows = await sql`
-        SELECT track_inventory, quantity_on_hand FROM products WHERE id = ${line.product_id} LIMIT 1
+        SELECT track_inventory FROM products WHERE id = ${line.product_id} LIMIT 1
       `;
       const product = productRows[0];
 
       if (!product?.track_inventory) continue;
-
-      // Restore inventory
-      await sql`
-        UPDATE products
-        SET quantity_on_hand = ${product.quantity_on_hand + line.quantity}
-        WHERE id = ${line.product_id}
-      `;
 
       // Record movement
       await sql`

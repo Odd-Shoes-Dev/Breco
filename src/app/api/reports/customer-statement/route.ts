@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch customer data
     const customerRows = await sql`
-      SELECT id, name, company_name, email, phone, address_line1, address_line2, city, state, zip_code
+      SELECT id, name, email, phone, address, city, state, zip_code
       FROM customers WHERE id = ${customerId}
     `;
     const customer = customerRows[0];
@@ -66,14 +66,13 @@ export async function GET(request: NextRequest) {
 
     // Build customer address
     const addressParts = [
-      customer.address_line1,
-      customer.address_line2,
+      customer.address,
       [customer.city, customer.state, customer.zip_code].filter(Boolean).join(', ')
     ].filter(Boolean);
 
     const customerData: CustomerData = {
       id: customer.id,
-      name: customer.company_name || customer.name,
+      name: customer.name,
       address: addressParts.join(', '),
       phone: customer.phone,
       email: customer.email

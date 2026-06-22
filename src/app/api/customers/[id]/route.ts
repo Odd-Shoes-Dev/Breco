@@ -59,7 +59,7 @@ export async function PATCH(request: NextRequest, context: any) {
         name = COALESCE(${body.name ?? null}, name),
         email = CASE WHEN ${body.email !== undefined} THEN ${body.email ?? null} ELSE email END,
         phone = CASE WHEN ${body.phone !== undefined} THEN ${body.phone ?? null} ELSE phone END,
-        address = CASE WHEN ${body.address !== undefined || body.address_line1 !== undefined} THEN ${body.address ?? body.address_line1 ?? null} ELSE address END,
+        address = CASE WHEN ${body.address !== undefined} THEN ${body.address ?? null} ELSE address END,
         city = CASE WHEN ${body.city !== undefined} THEN ${body.city ?? null} ELSE city END,
         state = CASE WHEN ${body.state !== undefined} THEN ${body.state ?? null} ELSE state END,
         zip_code = CASE WHEN ${body.postal_code !== undefined} THEN ${body.postal_code ?? null} ELSE zip_code END,

@@ -262,7 +262,6 @@ export function generateBillHTML(data: BillPDFData): string {
           <div class="bill-title">
             <h1>BILL</h1>
             <p class="bill-number">${bill.bill_number}</p>
-            ${bill.vendor_invoice_number ? `<p class="bill-number" style="margin-top: 4px;">Vendor Invoice: ${bill.vendor_invoice_number}</p>` : ''}
             <span class="status-badge status-${bill.status}">${bill.status.replace('_', ' ')}</span>
           </div>
         </div>
@@ -270,9 +269,8 @@ export function generateBillHTML(data: BillPDFData): string {
         <div class="info-section">
           <div class="info-block">
             <h3>Vendor</h3>
-            <p><strong>${vendor.company_name || vendor.name}</strong></p>
-            ${vendor.address_line1 ? `<p>${vendor.address_line1}</p>` : ''}
-            ${vendor.address_line2 ? `<p>${vendor.address_line2}</p>` : ''}
+            <p><strong>${vendor.name}</strong></p>
+            ${vendor.address ? `<p>${vendor.address}</p>` : ''}
             ${vendor.city || vendor.state || vendor.zip_code ? `<p>${vendor.city}${vendor.city && vendor.state ? ', ' : ''}${vendor.state} ${vendor.zip_code || ''}</p>` : ''}
             ${vendor.country && vendor.country !== 'USA' ? `<p>${vendor.country}</p>` : ''}
             ${vendor.email ? `<p>${vendor.email}</p>` : ''}

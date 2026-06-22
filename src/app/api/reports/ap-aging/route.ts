@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       SELECT
         b.id, b.bill_number, b.bill_date, b.due_date, b.total,
         b.amount_paid, b.currency, b.status, b.payment_terms,
-        json_build_object('id', v.id, 'name', v.name, 'company_name', v.company_name) AS vendor
+        json_build_object('id', v.id, 'name', v.name) AS vendor
       FROM bills b
       LEFT JOIN vendors v ON v.id = b.vendor_id
       WHERE b.status IN ('pending_approval', 'approved', 'partial')
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
       if (!vendorMap.has(vendorId)) {
         vendorMap.set(vendorId, {
           vendorId: vendorId,
-          vendorName: vendor.company_name || vendor.name,
+          vendorName: vendor.name,
           vendorType: 'Supplier',
           totalAmount: 0,
           current: 0,

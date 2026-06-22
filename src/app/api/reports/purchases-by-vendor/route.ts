@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     // Fetch bills with vendor data for the period
     const bills = await sql`
       SELECT b.id, b.vendor_id, b.bill_date, b.total, b.currency, b.payment_terms,
-             v.id AS v_id, v.name AS v_name, v.company_name AS v_company_name
+             v.id AS v_id, v.name AS v_name
       FROM bills b
       LEFT JOIN vendors v ON v.id = b.vendor_id
       WHERE b.bill_date >= ${startDate}
@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
       if (!bill.vendor_id) continue;
 
       const vendorId = bill.vendor_id;
-      const vendorName = bill.v_company_name || bill.v_name;
+      const vendorName = bill.v_name;
       if (!vendorName) continue;
 
       const vendorTypeRaw = 'Supplier';

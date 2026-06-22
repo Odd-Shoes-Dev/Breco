@@ -10,7 +10,7 @@ export async function GET(request: NextRequest, context: any) {
     const rows = await sql`
       SELECT
         e.*,
-        json_build_object('id', v.id, 'name', v.name, 'company_name', v.company_name) AS vendor,
+        json_build_object('id', v.id, 'name', v.name) AS vendor,
         json_build_object('id', ea.id, 'name', ea.name, 'code', ea.code) AS expense_account,
         json_build_object('id', pa.id, 'name', pa.name, 'code', pa.code) AS payment_account,
         json_build_object('id', ba.id, 'account_name', ba.account_name, 'account_number', ba.account_number) AS bank_account,

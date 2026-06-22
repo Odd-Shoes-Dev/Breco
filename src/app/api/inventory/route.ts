@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
       if (search && category) {
         const q = `%${search}%`;
         allRows = await sql`
-          SELECT * FROM products
+          SELECT p.*, COALESCE((SELECT SUM(im.quantity) FROM inventory_movements im WHERE im.product_id = p.id), 0) AS quantity_on_hand FROM products p
           WHERE (name ILIKE ${q} OR sku ILIKE ${q} OR description ILIKE ${q})
             AND category_id = ${category}
           ORDER BY name
@@ -27,14 +27,14 @@ export async function GET(request: NextRequest) {
       } else if (search) {
         const q = `%${search}%`;
         allRows = await sql`
-          SELECT * FROM products
+          SELECT p.*, COALESCE((SELECT SUM(im.quantity) FROM inventory_movements im WHERE im.product_id = p.id), 0) AS quantity_on_hand FROM products p
           WHERE name ILIKE ${q} OR sku ILIKE ${q} OR description ILIKE ${q}
           ORDER BY name
         `;
       } else if (category) {
-        allRows = await sql`SELECT * FROM products WHERE category_id = ${category} ORDER BY name`;
+        allRows = await sql`SELECT p.*, COALESCE((SELECT SUM(im.quantity) FROM inventory_movements im WHERE im.product_id = p.id), 0) AS quantity_on_hand FROM products p WHERE category_id = ${category} ORDER BY name`;
       } else {
-        allRows = await sql`SELECT * FROM products ORDER BY name`;
+        allRows = await sql`SELECT p.*, COALESCE((SELECT SUM(im.quantity) FROM inventory_movements im WHERE im.product_id = p.id), 0) AS quantity_on_hand FROM products p ORDER BY name`;
       }
 
       const filtered = allRows.filter(
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     if (search && category) {
       const q = `%${search}%`;
       rows = await sql`
-        SELECT * FROM products
+        SELECT p.*, COALESCE((SELECT SUM(im.quantity) FROM inventory_movements im WHERE im.product_id = p.id), 0) AS quantity_on_hand FROM products p
         WHERE (name ILIKE ${q} OR sku ILIKE ${q} OR description ILIKE ${q})
           AND category_id = ${category}
         ORDER BY name
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
     } else if (search) {
       const q = `%${search}%`;
       rows = await sql`
-        SELECT * FROM products
+        SELECT p.*, COALESCE((SELECT SUM(im.quantity) FROM inventory_movements im WHERE im.product_id = p.id), 0) AS quantity_on_hand FROM products p
         WHERE name ILIKE ${q} OR sku ILIKE ${q} OR description ILIKE ${q}
         ORDER BY name
         LIMIT ${limit} OFFSET ${offset}
@@ -84,11 +84,11 @@ export async function GET(request: NextRequest) {
       `;
     } else if (category) {
       rows = await sql`
-        SELECT * FROM products WHERE category_id = ${category} ORDER BY name LIMIT ${limit} OFFSET ${offset}
+        SELECT p.*, COALESCE((SELECT SUM(im.quantity) FROM inventory_movements im WHERE im.product_id = p.id), 0) AS quantity_on_hand FROM products p WHERE category_id = ${category} ORDER BY name LIMIT ${limit} OFFSET ${offset}
       `;
       countRows = await sql`SELECT COUNT(*) FROM products WHERE category_id = ${category}`;
     } else {
-      rows = await sql`SELECT * FROM products ORDER BY name LIMIT ${limit} OFFSET ${offset}`;
+      rows = await sql`SELECT p.*, COALESCE((SELECT SUM(im.quantity) FROM inventory_movements im WHERE im.product_id = p.id), 0) AS quantity_on_hand FROM products p ORDER BY name LIMIT ${limit} OFFSET ${offset}`;
       countRows = await sql`SELECT COUNT(*) FROM products`;
     }
 

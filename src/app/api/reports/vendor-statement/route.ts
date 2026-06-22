@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch vendor data
     const vendorRows = await sql`
-      SELECT id, name, company_name, email, phone, address_line1, address_line2, city, state, zip_code
+      SELECT id, name, email, phone, address, city, country
       FROM vendors WHERE id = ${vendorId}
     `;
     const vendor = vendorRows[0];
@@ -65,14 +65,13 @@ export async function GET(request: NextRequest) {
     }
 
     const addressParts = [
-      vendor.address_line1,
-      vendor.address_line2,
-      [vendor.city, vendor.state, vendor.zip_code].filter(Boolean).join(', ')
+      vendor.address,
+      [vendor.city, vendor.country].filter(Boolean).join(', ')
     ].filter(Boolean);
 
     const vendorData: VendorData = {
       id: vendor.id,
-      name: vendor.company_name || vendor.name,
+      name: vendor.name,
       address: addressParts.join(', '),
       phone: vendor.phone,
       email: vendor.email
@@ -90,7 +89,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch bills in the period
     const bills = await sql`
-      SELECT id, bill_number, bill_date, due_date, total, amount_paid, status, notes, vendor_invoice_number
+      SELECT id, bill_number, bill_date, due_date, total, amount_paid, status, notes
       FROM bills
       WHERE vendor_id = ${vendorId}
         AND bill_date >= ${startDate}
@@ -118,7 +117,7 @@ export async function GET(request: NextRequest) {
         id: bill.id,
         date: bill.bill_date,
         type: 'Bill',
-        reference: bill.vendor_invoice_number || bill.bill_number,
+        reference: bill.bill_number,
         description: bill.notes || 'Bill',
         amount: parseFloat(bill.total),
         balance: 0

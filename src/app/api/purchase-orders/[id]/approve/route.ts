@@ -50,7 +50,7 @@ export async function POST(
         COALESCE(json_agg(row_to_json(pol.*)) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
       FROM purchase_orders po
       LEFT JOIN vendors v ON v.id = po.vendor_id
-      LEFT JOIN purchase_order_lines pol ON pol.purchase_order_id = po.id
+      LEFT JOIN purchase_order_lines pol ON pol.po_id = po.id
       WHERE po.id = ${id}
       GROUP BY po.id, v.id, v.name, v.email
     `;

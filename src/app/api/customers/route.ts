@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
       ) VALUES (
         ${numberData}, ${body.name}, ${body.email ?? null},
         ${body.phone ?? null},
-        ${body.address ?? body.address_line1 ?? null},
+        ${body.address ?? null},
         ${body.city ?? null}, ${body.state ?? null}, ${body.postal_code ?? null},
         ${body.country || 'USA'},
         ${body.payment_terms || 30}, ${body.credit_limit || 0},

@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
           ) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
         FROM purchase_orders po
         LEFT JOIN vendors v ON v.id = po.vendor_id
-        LEFT JOIN purchase_order_lines pol ON pol.purchase_order_id = po.id
+        LEFT JOIN purchase_order_lines pol ON pol.po_id = po.id
         WHERE po.vendor_id = ${vendorId} AND po.status = ${status}
         GROUP BY po.id, v.id, v.name, v.email, v.phone
         ORDER BY po.po_date DESC
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
           ) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
         FROM purchase_orders po
         LEFT JOIN vendors v ON v.id = po.vendor_id
-        LEFT JOIN purchase_order_lines pol ON pol.purchase_order_id = po.id
+        LEFT JOIN purchase_order_lines pol ON pol.po_id = po.id
         WHERE po.vendor_id = ${vendorId}
         GROUP BY po.id, v.id, v.name, v.email, v.phone
         ORDER BY po.po_date DESC
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
           ) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
         FROM purchase_orders po
         LEFT JOIN vendors v ON v.id = po.vendor_id
-        LEFT JOIN purchase_order_lines pol ON pol.purchase_order_id = po.id
+        LEFT JOIN purchase_order_lines pol ON pol.po_id = po.id
         WHERE po.status = ${status}
         GROUP BY po.id, v.id, v.name, v.email, v.phone
         ORDER BY po.po_date DESC
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
           ) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
         FROM purchase_orders po
         LEFT JOIN vendors v ON v.id = po.vendor_id
-        LEFT JOIN purchase_order_lines pol ON pol.purchase_order_id = po.id
+        LEFT JOIN purchase_order_lines pol ON pol.po_id = po.id
         GROUP BY po.id, v.id, v.name, v.email, v.phone
         ORDER BY po.po_date DESC
         LIMIT ${limit} OFFSET ${offset}
@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
       for (const line of lines) {
         await sql`
           INSERT INTO purchase_order_lines (
-            purchase_order_id, product_id, description, quantity, unit_price, line_total
+            po_id, product_id, description, quantity, unit_price, line_total
           ) VALUES (
             ${po.id}, ${line.product_id ?? null}, ${line.description ?? null},
             ${line.quantity}, ${line.unit_price}, ${line.line_total}
@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
         COALESCE(json_agg(row_to_json(pol.*)) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
       FROM purchase_orders po
       LEFT JOIN vendors v ON v.id = po.vendor_id
-      LEFT JOIN purchase_order_lines pol ON pol.purchase_order_id = po.id
+      LEFT JOIN purchase_order_lines pol ON pol.po_id = po.id
       WHERE po.id = ${po.id}
       GROUP BY po.id, v.id, v.name, v.email, v.phone
     `;

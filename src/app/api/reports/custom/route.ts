@@ -97,7 +97,7 @@ const fetchCustomerData = async (config: CustomReportConfig) => {
 
     return {
       customer_name: customer.name,
-      customer_type: customer.company_name ? 'Business' : 'Individual',
+      customer_type: 'Individual',
       total_sales: totalSales,
       invoice_count: invoiceCount,
       first_sale_date: firstSale,
@@ -137,17 +137,18 @@ const fetchVendorData = async (config: CustomReportConfig) => {
 
 const fetchInventoryData = async (config: CustomReportConfig) => {
   const products = await sql`
-    SELECT id, sku, name, quantity_on_hand, cost_price, reorder_point, updated_at
-    FROM products
-    WHERE track_inventory = true
+    SELECT p.id, p.sku, p.name, p.purchase_price, p.reorder_point, p.updated_at,
+           COALESCE((SELECT SUM(im.quantity) FROM inventory_movements im WHERE im.product_id = p.id), 0) AS quantity_on_hand
+    FROM products p
+    WHERE p.track_inventory = true
   `;
 
   return products.map((product: any) => ({
     item_name: product.name,
     sku: product.sku || 'N/A',
     quantity_on_hand: product.quantity_on_hand || 0,
-    unit_cost: product.cost_price || 0,
-    total_value: (product.quantity_on_hand || 0) * (product.cost_price || 0),
+    unit_cost: product.purchase_price || 0,
+    total_value: (product.quantity_on_hand || 0) * (product.purchase_price || 0),
     reorder_point: product.reorder_point || 0,
     last_movement_date: product.updated_at,
   }));

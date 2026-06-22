@@ -64,11 +64,12 @@ export async function GET(request: NextRequest) {
 
     // Fetch inventory items from products table
     const inventory = await sql`
-      SELECT p.id, p.sku, p.name, p.quantity_on_hand, p.cost_price, p.currency,
+      SELECT p.id, p.sku, p.name, p.purchase_price,
              p.reorder_point, p.unit_of_measure,
-             pc.name AS category_name
+             pc.name AS category_name,
+             COALESCE((SELECT SUM(im.quantity) FROM inventory_movements im WHERE im.product_id = p.id), 0) AS quantity_on_hand
       FROM products p
-      LEFT JOIN product_categories pc ON pc.id = p.product_category_id
+      LEFT JOIN product_categories pc ON pc.id = p.category_id
       WHERE p.track_inventory = true
       ORDER BY p.id
     `;
@@ -78,14 +79,9 @@ export async function GET(request: NextRequest) {
 
     for (const item of inventory) {
       const quantityOnHand = item.quantity_on_hand || 0;
-      const unitCost = item.cost_price || 0;
+      const unitCost = item.purchase_price || 0;
 
       let unitCostUSD = unitCost;
-      const itemCurrency = item.currency || 'USD';
-      if (itemCurrency !== 'USD') {
-        const res = await sql`SELECT convert_currency(${unitCost}, ${itemCurrency}, 'USD', ${today}) AS val`;
-        unitCostUSD = res[0]?.val ?? unitCost;
-      }
 
       const totalValue = quantityOnHand * unitCostUSD;
       const reorderLevel = item.reorder_point || 0;

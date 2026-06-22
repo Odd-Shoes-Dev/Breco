@@ -14,16 +14,16 @@ export async function GET(
       SELECT po.*,
         json_build_object(
           'id', v.id, 'name', v.name, 'email', v.email, 'phone', v.phone,
-          'address_line1', v.address_line1, 'city', v.city, 'country', v.country
+          'address', v.address, 'city', v.city, 'country', v.country
         ) AS vendor,
         COALESCE(json_agg(DISTINCT row_to_json(pol.*)) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines,
         COALESCE(json_agg(DISTINCT row_to_json(gr.*)) FILTER (WHERE gr.id IS NOT NULL), '[]') AS goods_receipts
       FROM purchase_orders po
       LEFT JOIN vendors v ON v.id = po.vendor_id
-      LEFT JOIN purchase_order_lines pol ON pol.purchase_order_id = po.id
-      LEFT JOIN goods_receipts gr ON gr.purchase_order_id = po.id
+      LEFT JOIN purchase_order_lines pol ON pol.po_id = po.id
+      LEFT JOIN goods_receipts gr ON gr.po_id = po.id
       WHERE po.id = ${id}
-      GROUP BY po.id, v.id, v.name, v.email, v.phone, v.address_line1, v.city, v.country
+      GROUP BY po.id, v.id, v.name, v.email, v.phone, v.address, v.city, v.country
     `;
 
     const data = rows[0];
@@ -86,7 +86,7 @@ export async function PATCH(
         COALESCE(json_agg(row_to_json(pol.*)) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
       FROM purchase_orders po
       LEFT JOIN vendors v ON v.id = po.vendor_id
-      LEFT JOIN purchase_order_lines pol ON pol.purchase_order_id = po.id
+      LEFT JOIN purchase_order_lines pol ON pol.po_id = po.id
       WHERE po.id = ${id}
       GROUP BY po.id, v.id, v.name, v.email
     `;

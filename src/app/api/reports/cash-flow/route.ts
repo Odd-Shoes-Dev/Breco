@@ -118,15 +118,15 @@ export async function GET(request: NextRequest) {
 
     // Get depreciation from fixed assets
     const assets = await sql`
-      SELECT accumulated_depreciation, depreciation_start_date, useful_life_months, purchase_price, residual_value
+      SELECT accumulated_depreciation, purchase_date, useful_life_months, purchase_price, salvage_value
       FROM fixed_assets
-      WHERE status = 'active' AND depreciation_start_date <= ${endDate}
+      WHERE status = 'active' AND purchase_date <= ${endDate}
     `;
 
     let depreciation = 0;
     for (const asset of assets) {
-      const monthlyDepreciation = (asset.purchase_price - asset.residual_value) / asset.useful_life_months;
-      const startMonth = new Date(Math.max(new Date(startDate).getTime(), new Date(asset.depreciation_start_date).getTime()));
+      const monthlyDepreciation = (asset.purchase_price - asset.salvage_value) / asset.useful_life_months;
+      const startMonth = new Date(Math.max(new Date(startDate).getTime(), new Date(asset.purchase_date).getTime()));
       const endMonth = new Date(endDate);
       const monthsInPeriod = Math.max(0, Math.floor((endMonth.getTime() - startMonth.getTime()) / (30 * 24 * 60 * 60 * 1000)));
       depreciation += monthlyDepreciation * Math.min(monthsInPeriod, asset.useful_life_months);
