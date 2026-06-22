@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/assets/[id]/dispose - Dispose/sell fixed asset
@@ -7,14 +8,13 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { id } = await context.params;
-    const body = await request.json();
-
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const { id } = await context.params;
+    const body = await request.json();
 
     // Validate required fields
     if (!body.disposal_date || !body.disposal_method) {
@@ -25,15 +25,17 @@ export async function POST(
     }
 
     // Get asset details
-    const { data: asset, error: assetError } = await supabase
-      .from('fixed_assets')
-      .select('*, account:accounts(*)')
-      .eq('id', id)
-      .single();
+    const assetRows = await sql`
+      SELECT fa.*, a.* FROM fixed_assets fa
+      LEFT JOIN accounts a ON a.id = fa.account_id
+      WHERE fa.id = ${id}
+    `;
 
-    if (assetError || !asset) {
+    if (assetRows.length === 0) {
       return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
     }
+
+    const asset = assetRows[0];
 
     if (asset.status === 'disposed') {
       return NextResponse.json({ error: 'Asset already disposed' }, { status: 400 });
@@ -45,15 +47,14 @@ export async function POST(
     const gainLoss = disposalAmount - bookValue;
 
     // Get accounts needed for disposal
-    const { data: accounts } = await supabase
-      .from('accounts')
-      .select('*')
-      .in('code', ['1800', '1900', '4500', '5500']); // Cash, Accum Depr, Gain on Sale, Loss on Sale
+    const accounts = await sql`
+      SELECT * FROM accounts WHERE code IN ('1800', '1900', '4500', '5500')
+    `;
 
-    const cashAccount = accounts?.find(a => a.code === '1800');
-    const accumDeprAccount = accounts?.find(a => a.code === '1900');
-    const gainAccount = accounts?.find(a => a.code === '4500');
-    const lossAccount = accounts?.find(a => a.code === '5500');
+    const cashAccount = accounts.find((a: any) => a.code === '1800');
+    const accumDeprAccount = accounts.find((a: any) => a.code === '1900');
+    const gainAccount = accounts.find((a: any) => a.code === '4500');
+    const lossAccount = accounts.find((a: any) => a.code === '5500');
 
     if (!cashAccount || !accumDeprAccount) {
       return NextResponse.json(
@@ -64,21 +65,12 @@ export async function POST(
 
     // Create journal entry for disposal
     const description = `Asset disposal - ${asset.name} (${body.disposal_method})`;
-    const { data: journalEntry, error: jeError } = await supabase
-      .from('journal_entries')
-      .insert({
-        entry_date: body.disposal_date,
-        description,
-        reference_type: 'asset_disposal',
-        reference_id: id,
-        created_by: user.id,
-      })
-      .select()
-      .single();
-
-    if (jeError) {
-      return NextResponse.json({ error: jeError.message }, { status: 400 });
-    }
+    const jeRows = await sql`
+      INSERT INTO journal_entries (entry_date, description, reference_type, reference_id, created_by)
+      VALUES (${body.disposal_date}, ${description}, 'asset_disposal', ${id}, ${user.id})
+      RETURNING *
+    `;
+    const journalEntry = jeRows[0];
 
     // Create journal lines
     const lines: any[] = [];
@@ -133,37 +125,35 @@ export async function POST(
       description: 'Remove asset from books',
     });
 
-    const { error: linesError } = await supabase
-      .from('journal_entry_lines')
-      .insert(lines);
-
-    if (linesError) {
+    try {
+      for (const line of lines) {
+        await sql`
+          INSERT INTO journal_entry_lines (journal_entry_id, account_id, debit, credit, description)
+          VALUES (${line.journal_entry_id}, ${line.account_id}, ${line.debit}, ${line.credit}, ${line.description})
+        `;
+      }
+    } catch (linesError: any) {
       // Rollback journal entry
-      await supabase.from('journal_entries').delete().eq('id', journalEntry.id);
+      await sql`DELETE FROM journal_entries WHERE id = ${journalEntry.id}`;
       return NextResponse.json({ error: linesError.message }, { status: 400 });
     }
 
     // Update asset status
-    const { data: updatedAsset, error: updateError } = await supabase
-      .from('fixed_assets')
-      .update({
-        status: 'disposed',
-        disposal_date: body.disposal_date,
-        disposal_method: body.disposal_method,
-        disposal_amount: disposalAmount,
-        disposal_journal_entry_id: journalEntry.id,
-        disposal_notes: body.disposal_notes,
-      })
-      .eq('id', id)
-      .select('*, account:accounts(*)')
-      .single();
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
-    }
+    const updatedRows = await sql`
+      UPDATE fixed_assets
+      SET
+        status = 'disposed',
+        disposal_date = ${body.disposal_date},
+        disposal_method = ${body.disposal_method},
+        disposal_amount = ${disposalAmount},
+        disposal_journal_entry_id = ${journalEntry.id},
+        disposal_notes = ${body.disposal_notes}
+      WHERE id = ${id}
+      RETURNING *
+    `;
 
     return NextResponse.json({
-      asset: updatedAsset,
+      asset: updatedRows[0],
       disposal_summary: {
         original_cost: asset.cost,
         accumulated_depreciation: asset.accumulated_depreciation,

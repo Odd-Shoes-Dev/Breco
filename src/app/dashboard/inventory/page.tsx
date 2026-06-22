@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import { ScaledNumber } from '@/components/ui/scaled-number';
 import {
@@ -39,31 +39,17 @@ export default function InventoryPage() {
   const loadInventory = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('products')
-        .select('*', { count: 'exact' })
-        .eq('track_inventory', true)
-        .order('name');
+      const params = new URLSearchParams({
+        page: String(currentPage),
+        limit: String(pageSize),
+      });
+      if (searchQuery) params.set('search', searchQuery);
+      if (stockFilter !== 'all') params.set('stock_filter', stockFilter);
 
-      if (searchQuery) {
-        query = query.or(`name.ilike.%${searchQuery}%,sku.ilike.%${searchQuery}%`);
-      }
-
-      if (stockFilter === 'low') {
-        query = query.gt('quantity_on_hand', 0).lte('quantity_on_hand', 10); // Low stock threshold
-      } else if (stockFilter === 'out') {
-        query = query.eq('quantity_on_hand', 0);
-      }
-
-      const from = (currentPage - 1) * pageSize;
-      const to = from + pageSize - 1;
-      query = query.range(from, to);
-
-      const { data, count, error } = await query;
-      if (error) throw error;
-
-      setItems(data || []);
-      setTotalCount(count || 0);
+      const res = await fetch(`/api/inventory?${params}`);
+      const result = await res.json();
+      setItems(result.data || result || []);
+      setTotalCount(result.total || result.count || 0);
     } catch (error) {
       console.error('Failed to load inventory:', error);
     } finally {

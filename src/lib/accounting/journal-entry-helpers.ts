@@ -3,7 +3,7 @@
  * Implements double-entry bookkeeping for transactions
  */
 
-import { SupabaseClient } from '@supabase/supabase-js';
+import { sql } from '@/lib/db';
 
 interface JournalLineInput {
   account_id: string;
@@ -13,7 +13,6 @@ interface JournalLineInput {
 }
 
 interface CreateJournalEntryParams {
-  supabase: SupabaseClient;
   entry_date: string;
   description: string;
   reference?: string; // This will be incorporated into description/memo
@@ -28,7 +27,6 @@ interface CreateJournalEntryParams {
  * Create a journal entry with lines
  */
 export async function createJournalEntry({
-  supabase,
   entry_date,
   description,
   reference,
@@ -50,55 +48,44 @@ export async function createJournalEntry({
     }
 
     // Generate journal entry number
-    const { data: entryNumber, error: numError } = await supabase.rpc(
-      'generate_journal_entry_number'
-    );
-
-    if (numError) throw numError;
+    const numRows = await sql`SELECT generate_journal_entry_number() AS entry_number`;
+    const entryNumber = numRows[0]?.entry_number;
+    if (!entryNumber) throw new Error('Failed to generate journal entry number');
 
     // Combine description and reference for display
     const fullDescription = reference ? `${description} - Ref: ${reference}` : description;
 
     // Create journal entry
-    const { data: journalEntry, error: entryError } = await supabase
-      .from('journal_entries')
-      .insert({
-        entry_number: entryNumber,
-        entry_date,
-        description: fullDescription,
-        source_module: source_module,
-        source_document_id,
-        status,
-        created_by,
-      })
-      .select()
-      .single();
-
-    if (entryError) throw entryError;
+    const entryRows = await sql`
+      INSERT INTO journal_entries (
+        entry_number, entry_date, description, source_module,
+        source_document_id, status, created_by
+      ) VALUES (
+        ${entryNumber}, ${entry_date}, ${fullDescription}, ${source_module},
+        ${source_document_id ?? null}, ${status}, ${created_by}
+      )
+      RETURNING *
+    `;
+    const journalEntry = entryRows[0];
+    if (!journalEntry) throw new Error('Failed to create journal entry');
 
     // Create journal lines
-    const journalLines = lines.map((line, index) => ({
-      journal_entry_id: journalEntry.id,
-      line_number: index + 1,
-      account_id: line.account_id,
-      debit: line.debit,
-      credit: line.credit,
-      description: line.description,
-    }));
-
-    const { error: linesError } = await supabase
-      .from('journal_lines')
-      .insert(journalLines);
-
-    if (linesError) {
-      // Rollback journal entry if lines fail
-      await supabase.from('journal_entries').delete().eq('id', journalEntry.id);
-      throw linesError;
+    for (let index = 0; index < lines.length; index++) {
+      const line = lines[index];
+      await sql`
+        INSERT INTO journal_lines (
+          journal_entry_id, line_number, account_id, debit, credit, description
+        ) VALUES (
+          ${journalEntry.id}, ${index + 1}, ${line.account_id},
+          ${line.debit}, ${line.credit}, ${line.description}
+        )
+      `;
     }
 
     return { success: true, journalEntry };
   } catch (error) {
     console.error('Error creating journal entry:', error);
+    // Attempt rollback if we have the entry
     return { success: false, error };
   }
 }
@@ -107,21 +94,19 @@ export async function createJournalEntry({
  * Get account ID by account code
  */
 export async function getAccountByCode(
-  supabase: SupabaseClient,
   code: string
 ): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('code', code)
-    .single();
-
-  if (error || !data) {
+  try {
+    const rows = await sql`SELECT id FROM accounts WHERE code = ${code} LIMIT 1`;
+    if (!rows[0]) {
+      console.error(`Account with code ${code} not found`);
+      return null;
+    }
+    return rows[0].id;
+  } catch (error) {
     console.error(`Account with code ${code} not found:`, error);
     return null;
   }
-
-  return data.id;
 }
 
 /**
@@ -130,7 +115,6 @@ export async function getAccountByCode(
  * Credit: Revenue (4000)
  */
 export async function createInvoiceJournalEntry(
-  supabase: SupabaseClient,
   invoice: {
     id: string;
     invoice_number: string;
@@ -140,15 +124,14 @@ export async function createInvoiceJournalEntry(
   },
   created_by: string
 ) {
-  const arAccountId = await getAccountByCode(supabase, '1200'); // Accounts Receivable
-  const revenueAccountId = await getAccountByCode(supabase, '4000'); // Sales Revenue
+  const arAccountId = await getAccountByCode('1200'); // Accounts Receivable
+  const revenueAccountId = await getAccountByCode('4000'); // Sales Revenue
 
   if (!arAccountId || !revenueAccountId) {
     throw new Error('Required accounts not found for invoice journal entry');
   }
 
   return createJournalEntry({
-    supabase,
     entry_date: invoice.invoice_date,
     description: `Invoice ${invoice.invoice_number}`,
     source_module: 'invoice',
@@ -178,7 +161,6 @@ export async function createInvoiceJournalEntry(
  * Credit: Accounts Payable (2000)
  */
 export async function createBillJournalEntry(
-  supabase: SupabaseClient,
   bill: {
     id: string;
     bill_number: string;
@@ -188,7 +170,7 @@ export async function createBillJournalEntry(
   billLines: Array<{ account_code: string; amount: number; description: string }>,
   created_by: string
 ) {
-  const apAccountId = await getAccountByCode(supabase, '2000'); // Accounts Payable
+  const apAccountId = await getAccountByCode('2000'); // Accounts Payable
 
   if (!apAccountId) {
     throw new Error('Accounts Payable account not found');
@@ -197,7 +179,7 @@ export async function createBillJournalEntry(
   // Build debit lines from bill lines
   const debitLines = await Promise.all(
     billLines.map(async (line) => {
-      const accountId = await getAccountByCode(supabase, line.account_code);
+      const accountId = await getAccountByCode(line.account_code);
       if (!accountId) {
         throw new Error(`Account ${line.account_code} not found`);
       }
@@ -222,7 +204,6 @@ export async function createBillJournalEntry(
   ];
 
   return createJournalEntry({
-    supabase,
     entry_date: bill.bill_date,
     description: `Bill ${bill.bill_number}`,
     source_module: 'bill',
@@ -239,7 +220,6 @@ export async function createBillJournalEntry(
  * Credit: Accounts Receivable (1200)
  */
 export async function createReceiptJournalEntry(
-  supabase: SupabaseClient,
   receipt: {
     id: string;
     receipt_number: string;
@@ -249,22 +229,21 @@ export async function createReceiptJournalEntry(
   },
   created_by: string
 ) {
-  const arAccountId = await getAccountByCode(supabase, '1200'); // Accounts Receivable
-  
+  const arAccountId = await getAccountByCode('1200'); // Accounts Receivable
+
   // Determine cash account based on payment method
   let cashAccountCode = '1000'; // Default to Cash
   if (receipt.payment_method === 'bank_transfer' || receipt.payment_method === 'check') {
     cashAccountCode = '1010'; // Bank Account
   }
-  
-  const cashAccountId = await getAccountByCode(supabase, cashAccountCode);
+
+  const cashAccountId = await getAccountByCode(cashAccountCode);
 
   if (!arAccountId || !cashAccountId) {
     throw new Error('Required accounts not found for receipt journal entry');
   }
 
   return createJournalEntry({
-    supabase,
     entry_date: receipt.receipt_date,
     description: `Receipt ${receipt.receipt_number}`,
     source_module: 'receipt',
@@ -294,7 +273,6 @@ export async function createReceiptJournalEntry(
  * Credit: Cash/Bank Account
  */
 export async function createExpenseJournalEntry(
-  supabase: SupabaseClient,
   expense: {
     id: string;
     expense_number: string;
@@ -306,27 +284,24 @@ export async function createExpenseJournalEntry(
   },
   created_by: string
 ) {
-  const expenseAccountId = await getAccountByCode(supabase, expense.account_code);
-  
+  const expenseAccountId = await getAccountByCode(expense.account_code);
+
   // Get the cash/bank account
   let cashAccountId: string | null = null;
-  
+
   if (expense.bank_account_id) {
     // Get the GL account linked to the bank account
-    const { data: bankAccount } = await supabase
-      .from('bank_accounts')
-      .select('gl_account_id')
-      .eq('id', expense.bank_account_id)
-      .single();
-    
-    if (bankAccount?.gl_account_id) {
-      cashAccountId = bankAccount.gl_account_id;
+    const rows = await sql`
+      SELECT gl_account_id FROM bank_accounts WHERE id = ${expense.bank_account_id} LIMIT 1
+    `;
+    if (rows[0]?.gl_account_id) {
+      cashAccountId = rows[0].gl_account_id;
     }
   }
-  
+
   // Fallback to default cash account
   if (!cashAccountId) {
-    cashAccountId = await getAccountByCode(supabase, '1000');
+    cashAccountId = await getAccountByCode('1000');
   }
 
   if (!expenseAccountId || !cashAccountId) {
@@ -334,7 +309,6 @@ export async function createExpenseJournalEntry(
   }
 
   return createJournalEntry({
-    supabase,
     entry_date: expense.expense_date,
     description: `Expense: ${expense.description}`,
     source_module: 'expense',

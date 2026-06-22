@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
 import {
   PlusIcon,
   BanknotesIcon,
@@ -24,22 +23,13 @@ export default function BankAccountsPage() {
   const loadAccounts = async () => {
     try {
       setLoading(true);
+      const params = new URLSearchParams();
+      if (filter === 'active') params.append('active', 'true');
+      else if (filter === 'inactive') params.append('active', 'false');
 
-      let query = supabase
-        .from('bank_accounts')
-        .select('*')
-        .order('name');
-
-      if (filter === 'active') {
-        query = query.eq('is_active', true);
-      } else if (filter === 'inactive') {
-        query = query.eq('is_active', false);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setAccounts(data || []);
+      const res = await fetch(`/api/bank-accounts?${params.toString()}`);
+      const result = await res.json();
+      setAccounts(result.data || []);
     } catch (error) {
       console.error('Error loading bank accounts:', error);
     } finally {

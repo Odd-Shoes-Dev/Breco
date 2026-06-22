@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { createExpenseJournalEntry } from '@/lib/accounting/journal-entry-helpers';
 
@@ -6,27 +7,20 @@ import { createExpenseJournalEntry } from '@/lib/accounting/journal-entry-helper
 export async function POST(request: NextRequest, context: any) {
   const { params } = context || {};
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
-    // Get current user
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get expense
-    const { data: expense, error: fetchError } = await supabase
-      .from('expenses')
-      .select('*')
-      .eq('id', params.id)
-      .single();
+    const expenseRows = await sql`SELECT * FROM expenses WHERE id = ${params.id}`;
+    const expense = (expenseRows as any[])[0];
 
-    if (fetchError) {
+    if (!expense) {
       return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
     }
 
-    // Check if expense is approved
     if (expense.status !== 'approved') {
       return NextResponse.json(
         { error: 'Only approved expenses can be marked as paid' },
@@ -36,61 +30,38 @@ export async function POST(request: NextRequest, context: any) {
 
     // Validate bank account if provided
     if (body.bank_account_id) {
-      const { data: bankAccount } = await supabase
-        .from('bank_accounts')
-        .select('id')
-        .eq('id', body.bank_account_id)
-        .single();
-
-      if (!bankAccount) {
-        return NextResponse.json(
-          { error: 'Invalid bank account' },
-          { status: 400 }
-        );
+      const bankRows = await sql`SELECT id FROM bank_accounts WHERE id = ${body.bank_account_id} LIMIT 1`;
+      if ((bankRows as any[]).length === 0) {
+        return NextResponse.json({ error: 'Invalid bank account' }, { status: 400 });
       }
     }
 
-    // Update expense to paid
-    const updateData: any = {
-      status: 'paid',
-      paid_by: user.id,
-      paid_at: new Date().toISOString(),
-    };
+    await sql`
+      UPDATE expenses SET
+        status = 'paid',
+        paid_by = ${user.id},
+        paid_at = ${new Date().toISOString()},
+        bank_account_id = CASE WHEN ${body.bank_account_id !== undefined} THEN ${body.bank_account_id ?? null} ELSE bank_account_id END,
+        payment_method = COALESCE(${body.payment_method ?? null}, payment_method),
+        reference = COALESCE(${body.reference_number ?? null}, reference)
+      WHERE id = ${params.id}
+    `;
 
-    // Update bank account if provided
-    if (body.bank_account_id) {
-      updateData.bank_account_id = body.bank_account_id;
-    }
-
-    // Update payment method if provided
-    if (body.payment_method) {
-      updateData.payment_method = body.payment_method;
-    }
-
-    // Update reference number if provided
-    if (body.reference_number) {
-      updateData.reference = body.reference_number;
-    }
-
-    const { data: updatedExpense, error: updateError } = await supabase
-      .from('expenses')
-      .update(updateData)
-      .eq('id', params.id)
-      .select(`
-        *,
-        paid_by_user:user_profiles!expenses_paid_by_fkey(id, full_name, email),
-        expense_account:accounts!expenses_expense_account_id_fkey(id, name, code)
-      `)
-      .single();
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
-    }
+    const dataRows = await sql`
+      SELECT
+        e.*,
+        json_build_object('id', up.id, 'full_name', up.full_name, 'email', up.email) AS paid_by_user,
+        json_build_object('id', a.id, 'name', a.name, 'code', a.code) AS expense_account
+      FROM expenses e
+      LEFT JOIN user_profiles up ON up.id = e.paid_by
+      LEFT JOIN accounts a ON a.id = e.expense_account_id
+      WHERE e.id = ${params.id}
+    `;
+    const updatedExpense = (dataRows as any[])[0];
 
     // Create journal entry
     if (!expense.journal_entry_id && updatedExpense.expense_account) {
       const journalResult = await createExpenseJournalEntry(
-        supabase,
         {
           id: updatedExpense.id,
           expense_number: updatedExpense.expense_number,
@@ -104,11 +75,7 @@ export async function POST(request: NextRequest, context: any) {
       );
 
       if (journalResult.success && journalResult.journalEntry) {
-        await supabase
-          .from('expenses')
-          .update({ journal_entry_id: journalResult.journalEntry.id })
-          .eq('id', params.id);
-
+        await sql`UPDATE expenses SET journal_entry_id = ${journalResult.journalEntry.id} WHERE id = ${params.id}`;
         updatedExpense.journal_entry_id = journalResult.journalEntry.id;
       } else {
         console.error('Failed to create journal entry for expense:', journalResult.error);

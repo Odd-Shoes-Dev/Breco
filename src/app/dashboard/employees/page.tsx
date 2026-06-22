@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
 import type { Employee } from '@/types/breco';
 import { CurrencySelect } from '@/components/ui';
 import {

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase/client';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import Image from 'next/image';
@@ -63,12 +62,9 @@ export default function SettingsPage() {
   const loadSettings = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('company_settings')
-        .select('*')
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
+      const res = await fetch('/api/settings');
+      if (!res.ok) return;
+      const data = await res.json();
 
       if (data) {
         setSettings(data);
@@ -103,14 +99,13 @@ export default function SettingsPage() {
   const onSaveCompany = async (data: CompanyFormData) => {
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('company_settings')
-        .upsert({
-          id: settings?.id,
-          ...data,
-        });
-
-      if (error) throw error;
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to save settings');
       toast.success('Company settings saved!');
       loadSettings();
     } catch (error: any) {
@@ -123,17 +118,18 @@ export default function SettingsPage() {
   const onSaveFinancial = async (data: FinancialFormData) => {
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('company_settings')
-        .upsert({
-          id: settings?.id,
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           fiscal_year_start_month: data.fiscal_year_start_month,
           default_payment_terms: data.default_payment_terms,
           sales_tax_rate: (data.sales_tax_rate || 0) / 100,
           base_currency: data.base_currency,
-        });
-
-      if (error) throw error;
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to save settings');
       toast.success('Financial settings saved!');
       loadSettings();
     } catch (error: any) {

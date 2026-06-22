@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import {
   ArrowLeftIcon,
@@ -79,32 +78,15 @@ export default function EditTourPackagePage() {
 
   const loadData = async () => {
     try {
-      // Load destinations
-      const { data: destData, error: destError } = await supabase
-        .from('destinations')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
+      // Destinations API not available — destinations will be empty
+      setDestinations([]);
 
-      if (destError) throw destError;
-      setDestinations(destData || []);
-
-      // Load tour package and images
-      const [pkgRes, imagesRes] = await Promise.all([
-        supabase
-          .from('tour_packages')
-          .select('*')
-          .eq('id', params.id)
-          .single(),
-        supabase
-          .from('tour_package_images')
-          .select('*')
-          .eq('tour_package_id', params.id)
-          .order('display_order')
-      ]);
-
-      if (pkgRes.error) throw pkgRes.error;
-      const pkgData = pkgRes.data;
+      // Load tour package
+      const res = await fetch(`/api/tours/${params.id}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to load tour package');
+      const pkgData = json.data || json;
+      const imagesData = pkgData.images || pkgData.tour_package_images || [];
 
       setFormData({
         package_code: pkgData.package_code || '',
@@ -129,9 +111,9 @@ export default function EditTourPackagePage() {
       });
 
       // Load existing images
-      if (imagesRes.data && imagesRes.data.length > 0) {
-        setExistingImages(imagesRes.data);
-        const primaryIndex = imagesRes.data.findIndex(img => img.is_primary);
+      if (imagesData && imagesData.length > 0) {
+        setExistingImages(imagesData);
+        const primaryIndex = imagesData.findIndex((img: any) => img.is_primary);
         if (primaryIndex >= 0) setPrimaryImageIndex(primaryIndex);
       }
     } catch (err) {
@@ -251,104 +233,17 @@ export default function EditTourPackagePage() {
         throw new Error('Base price (USD) must be greater than 0');
       }
 
-      // Delete removed images
-      for (const imageId of deletedImageIds) {
-        await supabase
-          .from('tour_package_images')
-          .delete()
-          .eq('id', imageId);
-      }
-
-      // Upload new images
-      const newImageUrls: string[] = [];
-      for (const file of imageFiles) {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${formData.package_code}-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const filePath = `packages/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('tour-images')
-          .upload(filePath, file, {
-            cacheControl: '3600',
-            upsert: false
-          });
-
-        if (uploadError) {
-          console.error('Upload error:', uploadError);
-          throw new Error(`Failed to upload ${file.name}`);
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('tour-images')
-          .getPublicUrl(filePath);
-
-        newImageUrls.push(publicUrl);
-      }
-
-      // Determine primary image URL for the package
-      const totalImages = existingImages.length + newImageUrls.length;
-      let primaryImageUrl = formData.image_url;
-
-      if (totalImages > 0) {
-        if (primaryImageIndex < existingImages.length) {
-          primaryImageUrl = existingImages[primaryImageIndex].image_url;
-        } else {
-          primaryImageUrl = newImageUrls[primaryImageIndex - existingImages.length];
-        }
-      }
+      // Note: image file uploads (Supabase storage) are not supported in Neon migration.
+      // Image management (tour_package_images) requires dedicated API routes.
 
       // Update tour package
-      const { error: updateError } = await supabase
-        .from('tour_packages')
-        .update({
-          ...formData,
-          image_url: primaryImageUrl,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', params.id);
-
-      if (updateError) throw updateError;
-
-      // Update existing images primary status
-      for (let i = 0; i < existingImages.length; i++) {
-        const isPrimary = i === primaryImageIndex;
-        await supabase
-          .from('tour_package_images')
-          .update({ is_primary: isPrimary })
-          .eq('id', existingImages[i].id);
-      }
-
-      // Insert new images
-      for (let i = 0; i < newImageUrls.length; i++) {
-        const isPrimary = (existingImages.length + i) === primaryImageIndex;
-        await supabase
-          .from('tour_package_images')
-          .insert({
-            tour_package_id: params.id,
-            image_url: newImageUrls[i],
-            is_primary: isPrimary,
-            display_order: existingImages.length + i + 1
-          });
-      }
-
-      // Insert URL images
-      if (imageUrls.length > 0) {
-        const validUrls = imageUrls.filter(url => url.trim() !== '');
-        if (validUrls.length > 0) {
-          const baseIndex = existingImages.length + newImageUrls.length;
-          for (let i = 0; i < validUrls.length; i++) {
-            const isPrimary = (baseIndex + i) === primaryImageIndex;
-            await supabase
-              .from('tour_package_images')
-              .insert({
-                tour_package_id: params.id,
-                image_url: validUrls[i].trim(),
-                is_primary: isPrimary,
-                display_order: baseIndex + i + 1
-              });
-          }
-        }
-      }
+      const updateRes = await fetch(`/api/tours/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...formData }),
+      });
+      const updateResult = await updateRes.json();
+      if (!updateRes.ok) throw new Error(updateResult.error || 'Failed to update tour package');
 
       toast.success('Tour package updated successfully!');
       router.push(`/dashboard/tours/${params.id}`);

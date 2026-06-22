@@ -1,30 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-
     const status = searchParams.get('status');
 
-    let query = supabase
-      .from('fixed_assets')
-      .select('*')
-      .order('created_at', { ascending: false });
-
+    let rows;
     if (status) {
-      query = query.eq('status', status);
+      rows = await sql`SELECT * FROM fixed_assets WHERE status = ${status} ORDER BY created_at DESC`;
+    } else {
+      rows = await sql`SELECT * FROM fixed_assets ORDER BY created_at DESC`;
     }
 
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Error fetching assets:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json(data);
+    return NextResponse.json(rows);
   } catch (error) {
     console.error('Error in assets GET:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -33,7 +22,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
     const {
@@ -57,37 +45,34 @@ export async function POST(request: NextRequest) {
     const purchasePrice = Number(purchase_price) || 0;
     const salvageValue = Number(residual_value) || 0;
 
-    const { data, error } = await supabase
-      .from('fixed_assets')
-      .insert([
-        {
-          name,
-          description,
-          category_id: category_id || null,
-          asset_number: generatedNumber,
-          serial_number,
-          purchase_date,
-          purchase_price: purchasePrice,
-          residual_value: salvageValue,
-          depreciation_start_date: depreciation_start_date || purchase_date,
-          useful_life_months,
-          depreciation_method,
-          accumulated_depreciation: 0,
-          location,
-          vendor_id: vendor_id || null,
-          notes,
-          status: 'active',
-        },
-      ])
-      .select()
-      .single();
+    const rows = await sql`
+      INSERT INTO fixed_assets (
+        name, description, category_id, asset_number, serial_number,
+        purchase_date, purchase_price, residual_value, depreciation_start_date,
+        useful_life_months, depreciation_method, accumulated_depreciation,
+        location, vendor_id, notes, status
+      ) VALUES (
+        ${name},
+        ${description},
+        ${category_id || null},
+        ${generatedNumber},
+        ${serial_number},
+        ${purchase_date},
+        ${purchasePrice},
+        ${salvageValue},
+        ${depreciation_start_date || purchase_date},
+        ${useful_life_months},
+        ${depreciation_method},
+        0,
+        ${location},
+        ${vendor_id || null},
+        ${notes},
+        'active'
+      )
+      RETURNING *
+    `;
 
-    if (error) {
-      console.error('Error creating asset:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json(data, { status: 201 });
+    return NextResponse.json(rows[0], { status: 201 });
   } catch (error) {
     console.error('Error in assets POST:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

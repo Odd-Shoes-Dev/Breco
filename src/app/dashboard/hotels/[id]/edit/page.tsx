@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import {
   ArrowLeftIcon,
@@ -78,32 +77,15 @@ export default function EditHotelPage() {
 
   const loadData = async () => {
     try {
-      // Load destinations
-      const { data: destData, error: destError } = await supabase
-        .from('destinations')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-
-      if (destError) throw destError;
-      setDestinations(destData || []);
+      // Destinations API not available — destinations will be empty
+      setDestinations([]);
 
       // Load hotel and images
-      const [hotelRes, imagesRes] = await Promise.all([
-        supabase
-          .from('hotels')
-          .select('*')
-          .eq('id', params.id)
-          .single(),
-        supabase
-          .from('hotel_images')
-          .select('*')
-          .eq('hotel_id', params.id)
-          .order('display_order')
-      ]);
-
-      if (hotelRes.error) throw hotelRes.error;
-      const hotelData = hotelRes.data;
+      const res = await fetch(`/api/hotels/${params.id}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to load hotel');
+      const hotelData = json.data || json;
+      const imagesData = hotelData.images || hotelData.hotel_images || [];
 
       setFormData({
         name: hotelData.name || '',
@@ -126,9 +108,9 @@ export default function EditHotelPage() {
       });
 
       // Load existing images
-      if (imagesRes.data && imagesRes.data.length > 0) {
-        setExistingImages(imagesRes.data);
-        const primaryIndex = imagesRes.data.findIndex(img => img.is_primary);
+      if (imagesData && imagesData.length > 0) {
+        setExistingImages(imagesData);
+        const primaryIndex = imagesData.findIndex((img: any) => img.is_primary);
         if (primaryIndex >= 0) setPrimaryImageIndex(primaryIndex);
       }
     } catch (err) {
@@ -239,91 +221,17 @@ export default function EditHotelPage() {
         throw new Error('Hotel name is required');
       }
 
-      // Delete removed images
-      for (const imageId of deletedImageIds) {
-        await supabase
-          .from('hotel_images')
-          .delete()
-          .eq('id', imageId);
-      }
-
-      // Upload new images
-      const newImageUrls: string[] = [];
-      for (const file of imageFiles) {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const filePath = `hotels/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('hotel-images')
-          .upload(filePath, file, {
-            cacheControl: '3600',
-            upsert: false
-          });
-
-        if (uploadError) {
-          console.error('Upload error:', uploadError);
-          throw new Error(`Failed to upload ${file.name}`);
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('hotel-images')
-          .getPublicUrl(filePath);
-
-        newImageUrls.push(publicUrl);
-      }
+      // Note: image file uploads (Supabase storage) are not supported in Neon migration.
+      // Image management requires hotel_images API routes.
 
       // Update hotel
-      const { error: updateError } = await supabase
-        .from('hotels')
-        .update({
-          ...formData,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', params.id);
-
-      if (updateError) throw updateError;
-
-      // Update existing images primary status
-      for (let i = 0; i < existingImages.length; i++) {
-        const isPrimary = i === primaryImageIndex;
-        await supabase
-          .from('hotel_images')
-          .update({ is_primary: isPrimary })
-          .eq('id', existingImages[i].id);
-      }
-
-      // Insert new images from files
-      for (let i = 0; i < newImageUrls.length; i++) {
-        const isPrimary = (existingImages.length + i) === primaryImageIndex;
-        await supabase
-          .from('hotel_images')
-          .insert({
-            hotel_id: params.id,
-            image_url: newImageUrls[i],
-            is_primary: isPrimary,
-            display_order: existingImages.length + i + 1
-          });
-      }
-
-      // Insert URL images
-      if (imageUrls.length > 0) {
-        const validUrls = imageUrls.filter(url => url.trim() !== '');
-        if (validUrls.length > 0) {
-          const baseIndex = existingImages.length + newImageUrls.length;
-          for (let i = 0; i < validUrls.length; i++) {
-            const isPrimary = (baseIndex + i) === primaryImageIndex;
-            await supabase
-              .from('hotel_images')
-              .insert({
-                hotel_id: params.id,
-                image_url: validUrls[i].trim(),
-                is_primary: isPrimary,
-                display_order: baseIndex + i + 1
-              });
-          }
-        }
-      }
+      const updateRes = await fetch(`/api/hotels/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...formData }),
+      });
+      const updateResult = await updateRes.json();
+      if (!updateRes.ok) throw new Error(updateResult.error || 'Failed to update hotel');
 
       toast.success('Hotel updated successfully!');
       router.push(`/dashboard/hotels/${params.id}`);

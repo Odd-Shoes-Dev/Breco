@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 
 // GET /api/journal-entries/[id] - Get single journal entry
 export async function GET(
@@ -8,31 +9,33 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    
-    // Get user session
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
+    const user = await getSession();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Fetch journal entry with lines
-    const { data: entry, error: entryError } = await supabase
-      .from('journal_entries')
-      .select(`
-        *,
-        lines:journal_lines(
-          *,
-          account:accounts(code, name)
-        )
-      `)
-      .eq('id', id)
-      .single();
+    const entryRows = await sql`
+      SELECT je.*,
+        json_agg(
+          json_build_object(
+            'id', jl.id,
+            'account_id', jl.account_id,
+            'debit', jl.debit,
+            'credit', jl.credit,
+            'description', jl.description,
+            'line_number', jl.line_number,
+            'account', json_build_object('code', a.code, 'name', a.name)
+          )
+        ) FILTER (WHERE jl.id IS NOT NULL) AS lines
+      FROM journal_entries je
+      LEFT JOIN journal_lines jl ON jl.journal_entry_id = je.id
+      LEFT JOIN accounts a ON a.id = jl.account_id
+      WHERE je.id = ${id}
+      GROUP BY je.id
+    `;
 
-    if (entryError) {
-      return NextResponse.json({ error: entryError.message }, { status: 500 });
-    }
+    const entry = entryRows[0];
 
     if (!entry) {
       return NextResponse.json({ error: 'Journal entry not found' }, { status: 404 });
@@ -49,16 +52,16 @@ export async function GET(
       source_id: entry.source_document_id,
       status: entry.status,
       is_posted: entry.status === 'posted',
-      lines: entry.lines?.map((line: any) => ({
+      lines: (entry.lines || []).map((line: any) => ({
         id: line.id,
         account_id: line.account_id,
-        account_code: line.account.code,
-        account_name: line.account.name,
+        account_code: line.account?.code,
+        account_name: line.account?.name,
         debit_amount: line.debit,
         credit_amount: line.credit,
         description: line.description,
         line_number: line.line_number,
-      })) || [],
+      })),
     };
 
     return NextResponse.json(transformedEntry);
@@ -78,26 +81,21 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    
-    // Get user session
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
+    const user = await getSession();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
     const { action, ...updateData } = body;
 
-    // Check if entry exists and belongs to user
-    const { data: existingEntry, error: fetchError } = await supabase
-      .from('journal_entries')
-      .select('id, status')
-      .eq('id', id)
-      .single();
+    // Check if entry exists
+    const existingRows = await sql`
+      SELECT id, status FROM journal_entries WHERE id = ${id}
+    `;
+    const existingEntry = existingRows[0];
 
-    if (fetchError || !existingEntry) {
+    if (!existingEntry) {
       return NextResponse.json({ error: 'Journal entry not found' }, { status: 404 });
     }
 
@@ -110,21 +108,13 @@ export async function PATCH(
         );
       }
 
-      const { error: voidError } = await supabase
-        .from('journal_entries')
-        .update({ status: 'void' })
-        .eq('id', id);
-
-      if (voidError) {
-        return NextResponse.json({ error: voidError.message }, { status: 500 });
-      }
+      await sql`UPDATE journal_entries SET status = 'void' WHERE id = ${id}`;
 
       return NextResponse.json({ message: 'Journal entry voided successfully' });
     }
 
     // Handle edit action - only drafts can be edited (unless just posting)
     if (existingEntry.status !== 'draft' && action !== 'void') {
-      // Allow changing from draft to posted, but not editing posted entries
       if (!(existingEntry.status === 'draft' && updateData.is_posted === true)) {
         return NextResponse.json(
           { error: 'Only draft entries can be edited' },
@@ -152,55 +142,40 @@ export async function PATCH(
       }
     }
 
-    // Update journal entry header
-    const entryUpdate: any = {};
-    if (updateData.entry_date) entryUpdate.entry_date = updateData.entry_date;
-    if (updateData.description) entryUpdate.description = updateData.description;
-    if (updateData.reference) entryUpdate.memo = updateData.reference;
-    if (updateData.source) entryUpdate.source_module = updateData.source;
-    if (updateData.is_posted !== undefined) {
-      entryUpdate.status = updateData.is_posted ? 'posted' : 'draft';
+    // Update journal entry header fields
+    if (updateData.entry_date !== undefined) {
+      await sql`UPDATE journal_entries SET entry_date = ${updateData.entry_date} WHERE id = ${id}`;
     }
-
-    if (Object.keys(entryUpdate).length > 0) {
-      const { error: updateError } = await supabase
-        .from('journal_entries')
-        .update(entryUpdate)
-        .eq('id', id);
-
-      if (updateError) {
-        return NextResponse.json({ error: updateError.message }, { status: 500 });
-      }
+    if (updateData.description !== undefined) {
+      await sql`UPDATE journal_entries SET description = ${updateData.description} WHERE id = ${id}`;
+    }
+    if (updateData.reference !== undefined) {
+      await sql`UPDATE journal_entries SET memo = ${updateData.reference} WHERE id = ${id}`;
+    }
+    if (updateData.source !== undefined) {
+      await sql`UPDATE journal_entries SET source_module = ${updateData.source} WHERE id = ${id}`;
+    }
+    if (updateData.is_posted !== undefined) {
+      const newStatus = updateData.is_posted ? 'posted' : 'draft';
+      await sql`UPDATE journal_entries SET status = ${newStatus} WHERE id = ${id}`;
     }
 
     // Update journal lines if provided
     if (updateData.lines) {
       // Delete existing lines
-      const { error: deleteError } = await supabase
-        .from('journal_lines')
-        .delete()
-        .eq('journal_entry_id', id);
-
-      if (deleteError) {
-        return NextResponse.json({ error: deleteError.message }, { status: 500 });
-      }
+      await sql`DELETE FROM journal_lines WHERE journal_entry_id = ${id}`;
 
       // Insert new lines
-      const linesToInsert = updateData.lines.map((line: any, index: number) => ({
-        journal_entry_id: id,
-        account_id: line.account_id,
-        debit: line.debit_amount || 0,
-        credit: line.credit_amount || 0,
-        description: line.description,
-        line_number: index + 1,
-      }));
-
-      const { error: insertError } = await supabase
-        .from('journal_lines')
-        .insert(linesToInsert);
-
-      if (insertError) {
-        return NextResponse.json({ error: insertError.message }, { status: 500 });
+      for (let index = 0; index < updateData.lines.length; index++) {
+        const line = updateData.lines[index];
+        await sql`
+          INSERT INTO journal_lines (
+            journal_entry_id, account_id, debit, credit, description, line_number
+          ) VALUES (
+            ${id}, ${line.account_id}, ${line.debit_amount || 0},
+            ${line.credit_amount || 0}, ${line.description || null}, ${index + 1}
+          )
+        `;
       }
     }
 
@@ -221,23 +196,18 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    
-    // Get user session
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
+    const user = await getSession();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Check if entry exists and is a draft
-    const { data: existingEntry, error: fetchError } = await supabase
-      .from('journal_entries')
-      .select('id, status')
-      .eq('id', id)
-      .single();
+    const existingRows = await sql`
+      SELECT id, status FROM journal_entries WHERE id = ${id}
+    `;
+    const existingEntry = existingRows[0];
 
-    if (fetchError || !existingEntry) {
+    if (!existingEntry) {
       return NextResponse.json({ error: 'Journal entry not found' }, { status: 404 });
     }
 
@@ -249,24 +219,10 @@ export async function DELETE(
     }
 
     // Delete journal lines first (due to foreign key constraint)
-    const { error: deleteLinesError } = await supabase
-      .from('journal_lines')
-      .delete()
-      .eq('journal_entry_id', id);
-
-    if (deleteLinesError) {
-      return NextResponse.json({ error: deleteLinesError.message }, { status: 500 });
-    }
+    await sql`DELETE FROM journal_lines WHERE journal_entry_id = ${id}`;
 
     // Delete journal entry
-    const { error: deleteError } = await supabase
-      .from('journal_entries')
-      .delete()
-      .eq('id', id);
-
-    if (deleteError) {
-      return NextResponse.json({ error: deleteError.message }, { status: 500 });
-    }
+    await sql`DELETE FROM journal_entries WHERE id = ${id}`;
 
     return NextResponse.json({ message: 'Journal entry deleted successfully' });
   } catch (error) {

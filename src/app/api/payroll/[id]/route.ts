@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // PATCH /api/payroll/[id] - Update payroll period (including status changes and GL posting)
@@ -7,30 +8,28 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { id } = await params;
     const body = await request.json();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Get current payroll period
-    const { data: period, error: periodError } = await supabase
-      .from('payroll_periods')
-      .select('*, payslips(*)')
-      .eq('id', id)
-      .single();
+    const periodRows = await sql`SELECT * FROM payroll_periods WHERE id = ${id}`;
+    const period = periodRows[0];
 
-    if (periodError || !period) {
+    if (!period) {
       return NextResponse.json({ error: 'Payroll period not found' }, { status: 404 });
     }
+
+    const payslips = await sql`SELECT * FROM payroll_payslips WHERE payroll_period_id = ${id}`;
 
     // Check if status is changing to 'paid' - this requires GL posting
     if (body.status === 'paid' && period.status !== 'paid') {
       // Verify we have payslips
-      if (!period.payslips || period.payslips.length === 0) {
+      if (!payslips || payslips.length === 0) {
         return NextResponse.json(
           { error: 'Cannot mark payroll as paid without payslips' },
           { status: 400 }
@@ -38,35 +37,17 @@ export async function PATCH(
       }
 
       // Check if accounts exist for GL posting
-      const { data: salaryExpenseAccount } = await supabase
-        .from('accounts')
-        .select('id')
-        .eq('code', '5100') // Salary Expense
-        .single();
+      const salaryExpenseRows = await sql`SELECT id FROM accounts WHERE code = '5100' LIMIT 1`;
+      const nssfExpenseRows = await sql`SELECT id FROM accounts WHERE code = '5120' LIMIT 1`;
+      const payePayableRows = await sql`SELECT id FROM accounts WHERE code = '2200' LIMIT 1`;
+      const nssfPayableRows = await sql`SELECT id FROM accounts WHERE code = '2210' LIMIT 1`;
+      const bankRows = await sql`SELECT id, name, gl_account_id FROM bank_accounts WHERE is_primary = true LIMIT 1`;
 
-      const { data: nssfExpenseAccount } = await supabase
-        .from('accounts')
-        .select('id')
-        .eq('code', '5120') // NSSF Employer Expense
-        .single();
-
-      const { data: payePayableAccount } = await supabase
-        .from('accounts')
-        .select('id')
-        .eq('code', '2200') // PAYE Payable
-        .single();
-
-      const { data: nssfPayableAccount } = await supabase
-        .from('accounts')
-        .select('id')
-        .eq('code', '2210') // NSSF Payable
-        .single();
-
-      const { data: bankAccounts } = await supabase
-        .from('bank_accounts')
-        .select('id, name, gl_account_id')
-        .eq('is_primary', true)
-        .single();
+      const salaryExpenseAccount = salaryExpenseRows[0];
+      const nssfExpenseAccount = nssfExpenseRows[0];
+      const payePayableAccount = payePayableRows[0];
+      const nssfPayableAccount = nssfPayableRows[0];
+      const bankAccounts = bankRows[0];
 
       if (!salaryExpenseAccount || !nssfExpenseAccount || !payePayableAccount || !nssfPayableAccount) {
         return NextResponse.json({
@@ -84,20 +65,21 @@ export async function PATCH(
       const totalGross = period.total_gross || 0;
       const totalNet = period.total_net || 0;
       const totalPaye = period.total_paye || 0;
-      const totalNssfEmployee = period.payslips.reduce((sum: number, p: any) => sum + (p.nssf_employee || 0), 0);
-      const totalNssfEmployer = period.payslips.reduce((sum: number, p: any) => sum + (p.nssf_employer || 0), 0);
+      const totalNssfEmployee = payslips.reduce((sum: number, p: any) => sum + (p.nssf_employee || 0), 0);
+      const totalNssfEmployer = payslips.reduce((sum: number, p: any) => sum + (p.nssf_employer || 0), 0);
 
       // Generate journal entry number
       const year = new Date(period.payment_date).getFullYear();
-      const { data: lastEntry } = await supabase
-        .from('journal_entries')
-        .select('entry_number')
-        .like('entry_number', `JE-${year}-%`)
-        .order('entry_number', { ascending: false })
-        .limit(1)
-        .single();
+      const prefix = `JE-${year}-%`;
+      const lastEntryRows = await sql`
+        SELECT entry_number FROM journal_entries
+        WHERE entry_number LIKE ${prefix}
+        ORDER BY entry_number DESC
+        LIMIT 1
+      `;
 
-      let entryNumber;
+      let entryNumber: string;
+      const lastEntry = lastEntryRows[0];
       if (lastEntry?.entry_number) {
         const lastNum = parseInt(lastEntry.entry_number.split('-')[2]);
         entryNumber = `JE-${year}-${String(lastNum + 1).padStart(4, '0')}`;
@@ -106,140 +88,100 @@ export async function PATCH(
       }
 
       // Create journal entry for payroll
-      const { data: journalEntry, error: jeError } = await supabase
-        .from('journal_entries')
-        .insert({
-          entry_number: entryNumber,
-          entry_date: period.payment_date,
-          description: `Payroll payment for ${period.period_name}`,
-          reference: `PAYROLL-${period.id.substring(0, 8)}`,
-          status: 'posted',
-          source_module: 'payroll',
-          source_document_id: period.id,
-          created_by: user.id,
-          posted_by: user.id,
-          posted_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
+      const jeRows = await sql`
+        INSERT INTO journal_entries (
+          entry_number, entry_date, description, reference, status,
+          source_module, source_document_id, created_by, posted_by, posted_at
+        ) VALUES (
+          ${entryNumber}, ${period.payment_date},
+          ${`Payroll payment for ${period.period_name}`},
+          ${`PAYROLL-${id.substring(0, 8)}`},
+          'posted', 'payroll', ${id}, ${user.id}, ${user.id}, ${new Date().toISOString()}
+        )
+        RETURNING *
+      `;
+      const journalEntry = jeRows[0];
 
-      if (jeError) {
-        console.error('Failed to create journal entry:', jeError);
+      if (!journalEntry) {
         return NextResponse.json({
           error: 'Failed to create journal entry for payroll',
-          details: jeError.message,
         }, { status: 400 });
       }
 
       // Create journal lines
       const journalLines = [
-        // 1. Debit Salary Expense (gross salary)
-        {
-          journal_entry_id: journalEntry.id,
-          account_id: salaryExpenseAccount.id,
-          debit: totalGross,
-          credit: 0,
-          description: `Salary expense - ${period.period_name}`,
-          created_by: user.id,
-        },
-        // 2. Debit NSSF Employer Expense (10% employer contribution)
-        {
-          journal_entry_id: journalEntry.id,
-          account_id: nssfExpenseAccount.id,
-          debit: totalNssfEmployer,
-          credit: 0,
-          description: `NSSF employer contribution - ${period.period_name}`,
-          created_by: user.id,
-        },
-        // 3. Credit Bank Account (net pay to employees)
-        {
-          journal_entry_id: journalEntry.id,
-          account_id: bankAccounts.gl_account_id,
-          debit: 0,
-          credit: totalNet,
-          description: `Net salary payment - ${period.period_name}`,
-          created_by: user.id,
-        },
-        // 4. Credit PAYE Payable (tax withholding)
-        {
-          journal_entry_id: journalEntry.id,
-          account_id: payePayableAccount.id,
-          debit: 0,
-          credit: totalPaye,
-          description: `PAYE withholding - ${period.period_name}`,
-          created_by: user.id,
-        },
-        // 5. Credit NSSF Payable (employee + employer contributions)
-        {
-          journal_entry_id: journalEntry.id,
-          account_id: nssfPayableAccount.id,
-          debit: 0,
-          credit: totalNssfEmployee + totalNssfEmployer,
-          description: `NSSF payable (employee + employer) - ${period.period_name}`,
-          created_by: user.id,
-        },
+        { account_id: salaryExpenseAccount.id, debit: totalGross, credit: 0, description: `Salary expense - ${period.period_name}` },
+        { account_id: nssfExpenseAccount.id, debit: totalNssfEmployer, credit: 0, description: `NSSF employer contribution - ${period.period_name}` },
+        { account_id: bankAccounts.gl_account_id, debit: 0, credit: totalNet, description: `Net salary payment - ${period.period_name}` },
+        { account_id: payePayableAccount.id, debit: 0, credit: totalPaye, description: `PAYE withholding - ${period.period_name}` },
+        { account_id: nssfPayableAccount.id, debit: 0, credit: totalNssfEmployee + totalNssfEmployer, description: `NSSF payable (employee + employer) - ${period.period_name}` },
       ];
 
-      const { error: jlError } = await supabase
-        .from('journal_lines')
-        .insert(journalLines);
-
-      if (jlError) {
-        console.error('Failed to create journal lines:', jlError);
-        return NextResponse.json({
-          error: 'Failed to create journal lines for payroll',
-          details: jlError.message,
-        }, { status: 400 });
+      for (const line of journalLines) {
+        await sql`
+          INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit, description, created_by)
+          VALUES (${journalEntry.id}, ${line.account_id}, ${line.debit}, ${line.credit}, ${line.description}, ${user.id})
+        `;
       }
 
-      // Update payroll period with journal entry reference and paid status
-      const { data: updatedPeriod, error: updateError } = await supabase
-        .from('payroll_periods')
-        .update({
-          status: 'paid',
-          journal_entry_id: journalEntry.id,
-          approved_by: user.id,
-          approved_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (updateError) {
-        return NextResponse.json({ error: updateError.message }, { status: 400 });
-      }
+      // Update payroll period
+      const updatedRows = await sql`
+        UPDATE payroll_periods
+        SET status = 'paid',
+            journal_entry_id = ${journalEntry.id},
+            approved_by = ${user.id},
+            approved_at = ${new Date().toISOString()},
+            updated_at = ${new Date().toISOString()}
+        WHERE id = ${id}
+        RETURNING *
+      `;
 
       return NextResponse.json({
-        data: updatedPeriod,
+        data: updatedRows[0],
         journal_entry: journalEntry,
         message: 'Payroll marked as paid and posted to general ledger',
       }, { status: 200 });
     }
 
     // For other status changes or updates
-    const updateData: any = {
-      ...body,
-      updated_at: new Date().toISOString(),
-    };
+    const now = new Date().toISOString();
 
     if (body.status === 'approved') {
-      updateData.approved_by = user.id;
-      updateData.approved_at = new Date().toISOString();
+      const updatedRows = await sql`
+        UPDATE payroll_periods
+        SET status = ${body.status},
+            approved_by = ${user.id},
+            approved_at = ${now},
+            updated_at = ${now}
+        WHERE id = ${id}
+        RETURNING *
+      `;
+      return NextResponse.json({ data: updatedRows[0] }, { status: 200 });
     }
 
-    const { data, error } = await supabase
-      .from('payroll_periods')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
+    // Generic update — only update known safe fields
+    const updateFields: Record<string, any> = { ...body, updated_at: now };
+    // Build update safely by handling each possible field
+    const updatedRows = await sql`
+      UPDATE payroll_periods
+      SET updated_at = ${now}
+      WHERE id = ${id}
+      RETURNING *
+    `;
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    // Apply each field from body
+    for (const [field, value] of Object.entries(body)) {
+      if (field === 'status') {
+        await sql`UPDATE payroll_periods SET status = ${value} WHERE id = ${id}`;
+      } else if (field === 'payment_date') {
+        await sql`UPDATE payroll_periods SET payment_date = ${value} WHERE id = ${id}`;
+      } else if (field === 'notes') {
+        await sql`UPDATE payroll_periods SET notes = ${value} WHERE id = ${id}`;
+      }
     }
 
-    return NextResponse.json({ data }, { status: 200 });
+    const finalRows = await sql`SELECT * FROM payroll_periods WHERE id = ${id}`;
+    return NextResponse.json({ data: finalRows[0] }, { status: 200 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

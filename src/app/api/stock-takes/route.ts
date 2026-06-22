@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const user = await getSession();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -14,28 +13,51 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const stockTakeId = searchParams.get('stock_take_id');
 
-    let query = supabase
-      .from('stock_takes')
-      .select(
-        `
-        *,
-        inventory_locations (id, name, type),
-        user_profiles!stock_takes_counted_by_fkey (full_name)
-      `
-      )
-      .order('stock_take_date', { ascending: false });
-
-    if (status) {
-      query = query.eq('status', status);
+    let data;
+    if (status && stockTakeId) {
+      data = await sql`
+        SELECT st.*,
+          row_to_json(il.*) AS inventory_locations,
+          row_to_json(up.*) AS user_profiles
+        FROM stock_takes st
+        LEFT JOIN inventory_locations il ON il.id = st.location_id
+        LEFT JOIN user_profiles up ON up.id = st.counted_by
+        WHERE st.status = ${status} AND st.id = ${stockTakeId}
+        ORDER BY st.stock_take_date DESC
+      `;
+    } else if (status) {
+      data = await sql`
+        SELECT st.*,
+          row_to_json(il.*) AS inventory_locations,
+          row_to_json(up.*) AS user_profiles
+        FROM stock_takes st
+        LEFT JOIN inventory_locations il ON il.id = st.location_id
+        LEFT JOIN user_profiles up ON up.id = st.counted_by
+        WHERE st.status = ${status}
+        ORDER BY st.stock_take_date DESC
+      `;
+    } else if (stockTakeId) {
+      data = await sql`
+        SELECT st.*,
+          row_to_json(il.*) AS inventory_locations,
+          row_to_json(up.*) AS user_profiles
+        FROM stock_takes st
+        LEFT JOIN inventory_locations il ON il.id = st.location_id
+        LEFT JOIN user_profiles up ON up.id = st.counted_by
+        WHERE st.id = ${stockTakeId}
+        ORDER BY st.stock_take_date DESC
+      `;
+    } else {
+      data = await sql`
+        SELECT st.*,
+          row_to_json(il.*) AS inventory_locations,
+          row_to_json(up.*) AS user_profiles
+        FROM stock_takes st
+        LEFT JOIN inventory_locations il ON il.id = st.location_id
+        LEFT JOIN user_profiles up ON up.id = st.counted_by
+        ORDER BY st.stock_take_date DESC
+      `;
     }
-
-    if (stockTakeId) {
-      query = query.eq('id', stockTakeId);
-    }
-
-    const { data, error } = await query;
-
-    if (error) throw error;
 
     return NextResponse.json(data);
   } catch (error: any) {
@@ -46,10 +68,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const user = await getSession();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -63,7 +83,6 @@ export async function POST(request: NextRequest) {
       lines,
     } = body;
 
-    // Validate required fields
     if (!reference_number || !stock_take_date || !location_id || !type) {
       return NextResponse.json(
         { error: 'Missing required fields' },
@@ -72,38 +91,29 @@ export async function POST(request: NextRequest) {
     }
 
     // Create stock take
-    const { data: stockTake, error: stockTakeError } = await supabase
-      .from('stock_takes')
-      .insert({
-        reference_number,
-        stock_take_date,
-        location_id,
-        type,
-        status: 'draft',
-        counted_by: user.id,
-        notes: notes || null,
-      })
-      .select()
-      .single();
+    const stockTakeRows = await sql`
+      INSERT INTO stock_takes (reference_number, stock_take_date, location_id, type, status, counted_by, notes)
+      VALUES (${reference_number}, ${stock_take_date}, ${location_id}, ${type}, 'draft', ${user.id}, ${notes || null})
+      RETURNING *
+    `;
+    const stockTake = stockTakeRows[0];
 
-    if (stockTakeError) throw stockTakeError;
+    if (!stockTake) {
+      return NextResponse.json({ error: 'Failed to create stock take' }, { status: 500 });
+    }
 
     // Create lines if provided
     if (lines && lines.length > 0) {
-      const linesData = lines.map((line: any) => ({
-        stock_take_id: stockTake.id,
-        product_id: line.product_id,
-        expected_quantity: line.expected_quantity,
-        counted_quantity: line.counted_quantity,
-        variance: line.counted_quantity - line.expected_quantity,
-        notes: line.notes || null,
-      }));
-
-      const { error: linesError } = await supabase
-        .from('stock_take_lines')
-        .insert(linesData);
-
-      if (linesError) throw linesError;
+      for (const line of lines) {
+        await sql`
+          INSERT INTO stock_take_lines (stock_take_id, product_id, expected_quantity, counted_quantity, variance, notes)
+          VALUES (
+            ${stockTake.id}, ${line.product_id}, ${line.expected_quantity},
+            ${line.counted_quantity}, ${line.counted_quantity - line.expected_quantity},
+            ${line.notes || null}
+          )
+        `;
+      }
     }
 
     return NextResponse.json(stockTake, { status: 201 });

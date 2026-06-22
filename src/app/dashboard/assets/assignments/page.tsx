@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import {
   PlusIcon,
@@ -42,23 +41,11 @@ export default function AssetAssignmentsPage() {
     try {
       setLoading(true);
 
-      let query = supabase
-        .from('asset_assignments')
-        .select(`
-          *,
-          fixed_assets (asset_name, asset_tag),
-          employees (first_name, last_name)
-        `)
-        .order('assigned_date', { ascending: false });
-
-      if (statusFilter) {
-        query = query.eq('status', statusFilter);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setAssignments(data || []);
+      const params = new URLSearchParams();
+      if (statusFilter) params.set('status', statusFilter);
+      const res = await fetch(`/api/asset-assignments?${params}`);
+      const result = await res.json();
+      setAssignments(result.data || result || []);
     } catch (error) {
       console.error('Failed to load assignments:', error);
       toast.error('Failed to load assignments');
@@ -74,16 +61,12 @@ export default function AssetAssignmentsPage() {
       const condition = prompt('Enter asset condition at return (good/fair/poor/damaged):');
       if (!condition) return;
 
-      const { error } = await supabase
-        .from('asset_assignments')
-        .update({
-          status: 'returned',
-          return_date: new Date().toISOString(),
-          condition_at_return: condition,
-        })
-        .eq('id', assignmentId);
-
-      if (error) throw error;
+      const res = await fetch(`/api/asset-assignments/${assignmentId}/return`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ condition_at_return: condition }),
+      });
+      if (!res.ok) throw new Error('Failed to return asset');
 
       toast.success('Asset marked as returned');
       loadAssignments();

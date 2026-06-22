@@ -1,14 +1,13 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/expenses/[id]/reject - Reject expense
 export async function POST(request: NextRequest, context: any) {
   const { params } = context || {};
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
-    // Validate rejection reason
     if (!body.rejection_reason || body.rejection_reason.trim() === '') {
       return NextResponse.json(
         { error: 'Rejection reason is required' },
@@ -16,24 +15,18 @@ export async function POST(request: NextRequest, context: any) {
       );
     }
 
-    // Get current user
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get expense
-    const { data: expense, error: fetchError } = await supabase
-      .from('expenses')
-      .select('*, created_by')
-      .eq('id', params.id)
-      .single();
+    const expenseRows = await sql`SELECT *, created_by FROM expenses WHERE id = ${params.id}`;
+    const expense = (expenseRows as any[])[0];
 
-    if (fetchError) {
+    if (!expense) {
       return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
     }
 
-    // Check if expense can be rejected
     if (expense.status === 'paid') {
       return NextResponse.json(
         { error: 'Cannot reject a paid expense' },
@@ -41,28 +34,24 @@ export async function POST(request: NextRequest, context: any) {
       );
     }
 
-    // Update expense to rejected
-    const { data: updatedExpense, error: updateError } = await supabase
-      .from('expenses')
-      .update({
-        status: 'rejected',
-        rejected_by: user.id,
-        rejected_at: new Date().toISOString(),
-        rejection_reason: body.rejection_reason,
-      })
-      .eq('id', params.id)
-      .select(`
-        *,
-        rejected_by_user:user_profiles!expenses_rejected_by_fkey(id, full_name, email)
-      `)
-      .single();
+    await sql`
+      UPDATE expenses SET
+        status = 'rejected',
+        rejected_by = ${user.id},
+        rejected_at = ${new Date().toISOString()},
+        rejection_reason = ${body.rejection_reason}
+      WHERE id = ${params.id}
+    `;
 
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
-    }
-
-    // TODO: Send notification to expense creator
-    // await sendExpenseRejectionNotification(expense.created_by, updatedExpense);
+    const dataRows = await sql`
+      SELECT
+        e.*,
+        json_build_object('id', up.id, 'full_name', up.full_name, 'email', up.email) AS rejected_by_user
+      FROM expenses e
+      LEFT JOIN user_profiles up ON up.id = e.rejected_by
+      WHERE e.id = ${params.id}
+    `;
+    const updatedExpense = (dataRows as any[])[0];
 
     return NextResponse.json({
       data: updatedExpense,

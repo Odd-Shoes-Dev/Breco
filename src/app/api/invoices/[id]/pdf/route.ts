@@ -1,3 +1,4 @@
+import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateInvoiceHTML } from '@/lib/pdf/invoice';
 import { generateQuotationHTML } from '@/lib/pdf/quotation';
@@ -7,44 +8,23 @@ import { generateReceiptHTML } from '@/lib/pdf/receipt';
 export async function GET(request: NextRequest, context: any) {
   const { params } = context || {};
   try {
-    // Create service-role Supabase client on demand so builds without service keys don't
-    // crash during module evaluation. If the key is missing, return a clear error.
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseKey) {
-      return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY is not configured on the server' }, { status: 500 });
-    }
-
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, supabaseKey);
-    const invoiceId = params.id;
+    const invoiceId = (await params).id;
 
     // Fetch invoice
-    const { data: invoice, error: invoiceError } = await supabase
-      .from('invoices')
-      .select('*')
-      .eq('id', invoiceId)
-      .single();
-
-    if (invoiceError || !invoice) {
-      return NextResponse.json(
-        { error: 'Invoice not found' },
-        { status: 404 }
-      );
+    const invoiceRows = await sql`SELECT * FROM invoices WHERE id = ${invoiceId}`;
+    if (invoiceRows.length === 0) {
+      return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
+    const invoice = invoiceRows[0];
 
     // Fetch customer
-    const { data: customer } = await supabase
-      .from('customers')
-      .select('*')
-      .eq('id', invoice.customer_id)
-      .single();
+    const customerRows = await sql`SELECT * FROM customers WHERE id = ${invoice.customer_id}`;
+    const customer = customerRows[0] || {};
 
     // Fetch line items
-    const { data: lineItems } = await supabase
-      .from('invoice_line_items')
-      .select('*')
-      .eq('invoice_id', invoiceId)
-      .order('line_number');
+    const lineItems = await sql`
+      SELECT * FROM invoice_line_items WHERE invoice_id = ${invoiceId} ORDER BY line_number
+    `;
 
     // Generate HTML for PDF based on document type
     let html: string;
@@ -52,7 +32,7 @@ export async function GET(request: NextRequest, context: any) {
     const pdfData = {
       invoice,
       lineItems: lineItems || [],
-      customer: customer || {},
+      customer,
     };
 
     switch (documentType) {

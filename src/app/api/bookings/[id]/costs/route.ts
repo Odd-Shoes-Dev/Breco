@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/bookings/[id]/costs - Get booking costs
@@ -7,33 +8,31 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { id: bookingId } = await context.params;
 
-    const { data, error } = await supabase
-      .from('booking_costs')
-      .select(`
-        *,
-        vendor:vendors(id, name),
-        employee:employees(id, first_name, last_name),
-        expense:expenses(id, expense_number)
-      `)
-      .eq('booking_id', bookingId)
-      .order('cost_date', { ascending: false });
+    const data = await sql`
+      SELECT
+        bc.*,
+        json_build_object('id', v.id, 'name', v.name) AS vendor,
+        json_build_object('id', e.id, 'first_name', e.first_name, 'last_name', e.last_name) AS employee,
+        json_build_object('id', ex.id, 'expense_number', ex.expense_number) AS expense
+      FROM booking_costs bc
+      LEFT JOIN vendors v ON v.id = bc.vendor_id
+      LEFT JOIN employees e ON e.id = bc.employee_id
+      LEFT JOIN expenses ex ON ex.id = bc.expense_id
+      WHERE bc.booking_id = ${bookingId}
+      ORDER BY bc.cost_date DESC
+    `;
+    const costs = data as any[];
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    // Calculate totals by cost type
-    const totalCosts = data?.reduce((sum, cost) => sum + cost.amount, 0) || 0;
-    const costsByType = data?.reduce((acc: any, cost) => {
-      acc[cost.cost_type] = (acc[cost.cost_type] || 0) + cost.amount;
+    const totalCosts = costs.reduce((sum, cost) => sum + (Number(cost.amount) || 0), 0);
+    const costsByType = costs.reduce((acc: any, cost) => {
+      acc[cost.cost_type] = (acc[cost.cost_type] || 0) + Number(cost.amount);
       return acc;
     }, {});
 
     return NextResponse.json({
-      costs: data,
+      costs,
       total_costs: totalCosts,
       costs_by_type: costsByType,
     });
@@ -48,16 +47,14 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { id: bookingId } = await context.params;
     const body = await request.json();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Validate required fields
     if (!body.cost_type || !body.description || !body.amount || !body.cost_date) {
       return NextResponse.json(
         { error: 'Missing required fields: cost_type, description, amount, cost_date' },
@@ -66,43 +63,37 @@ export async function POST(
     }
 
     // Verify booking exists
-    const { data: booking, error: bookingError } = await supabase
-      .from('bookings')
-      .select('id, booking_number')
-      .eq('id', bookingId)
-      .single();
-
-    if (bookingError || !booking) {
+    const bookingRows = await sql`SELECT id, booking_number FROM bookings WHERE id = ${bookingId}`;
+    const booking = (bookingRows as any[])[0];
+    if (!booking) {
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
     }
 
-    // Create cost record
-    const { data, error } = await supabase
-      .from('booking_costs')
-      .insert({
-        booking_id: bookingId,
-        cost_type: body.cost_type,
-        description: body.description,
-        amount: body.amount,
-        currency: body.currency || 'USD',
-        exchange_rate: body.exchange_rate || 1.0,
-        vendor_id: body.vendor_id,
-        employee_id: body.employee_id,
-        expense_id: body.expense_id,
-        cost_date: body.cost_date,
-        notes: body.notes,
-        created_by: user.id,
-      })
-      .select(`
-        *,
-        vendor:vendors(id, name),
-        employee:employees(id, first_name, last_name)
-      `)
-      .single();
+    const insertedRows = await sql`
+      INSERT INTO booking_costs (
+        booking_id, cost_type, description, amount, currency, exchange_rate,
+        vendor_id, employee_id, expense_id, cost_date, notes, created_by
+      ) VALUES (
+        ${bookingId}, ${body.cost_type}, ${body.description}, ${body.amount},
+        ${body.currency || 'USD'}, ${body.exchange_rate || 1.0},
+        ${body.vendor_id ?? null}, ${body.employee_id ?? null}, ${body.expense_id ?? null},
+        ${body.cost_date}, ${body.notes ?? null}, ${user.id}
+      )
+      RETURNING id
+    `;
+    const newId = (insertedRows as any[])[0].id;
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const dataRows = await sql`
+      SELECT
+        bc.*,
+        json_build_object('id', v.id, 'name', v.name) AS vendor,
+        json_build_object('id', e.id, 'first_name', e.first_name, 'last_name', e.last_name) AS employee
+      FROM booking_costs bc
+      LEFT JOIN vendors v ON v.id = bc.vendor_id
+      LEFT JOIN employees e ON e.id = bc.employee_id
+      WHERE bc.id = ${newId}
+    `;
+    const data = (dataRows as any[])[0];
 
     return NextResponse.json(data, { status: 201 });
   } catch (error: any) {

@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const user = await getSession();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -15,34 +14,32 @@ export async function GET(request: NextRequest) {
     const assetId = searchParams.get('asset_id');
     const maintenanceType = searchParams.get('maintenance_type');
 
-    let query = supabase
-      .from('asset_maintenance')
-      .select(
-        `
-        *,
-        assets (id, name, asset_tag, asset_categories (name)),
-        employees:performed_by_employee_id (first_name, last_name, employee_number)
-      `
-      )
-      .order('scheduled_date', { ascending: false });
+    const conditions: string[] = ['1=1'];
+    if (status) conditions.push(`am.status = '${status.replace(/'/g, "''")}'`);
+    if (assetId) conditions.push(`am.asset_id = '${assetId.replace(/'/g, "''")}'`);
+    if (maintenanceType) conditions.push(`am.maintenance_type = '${maintenanceType.replace(/'/g, "''")}'`);
+    const where = conditions.join(' AND ');
 
-    if (status) {
-      query = query.eq('status', status);
-    }
+    const rows = await sql`
+      SELECT
+        am.*,
+        json_build_object(
+          'id', a.id, 'name', a.name, 'asset_tag', a.asset_tag,
+          'asset_categories', json_build_object('name', ac.name)
+        ) AS assets,
+        json_build_object(
+          'first_name', e.first_name, 'last_name', e.last_name,
+          'employee_number', e.employee_number
+        ) AS employees
+      FROM asset_maintenance am
+      LEFT JOIN assets a ON a.id = am.asset_id
+      LEFT JOIN asset_categories ac ON ac.id = a.category_id
+      LEFT JOIN employees e ON e.id = am.performed_by_employee_id
+      WHERE ${sql.unsafe(where)}
+      ORDER BY am.scheduled_date DESC
+    `;
 
-    if (assetId) {
-      query = query.eq('asset_id', assetId);
-    }
-
-    if (maintenanceType) {
-      query = query.eq('maintenance_type', maintenanceType);
-    }
-
-    const { data, error } = await query;
-
-    if (error) throw error;
-
-    return NextResponse.json(data);
+    return NextResponse.json(rows);
   } catch (error: any) {
     console.error('Error fetching maintenance records:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -51,10 +48,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const user = await getSession();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -81,27 +76,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
-      .from('asset_maintenance')
-      .insert({
-        asset_id,
-        maintenance_type,
-        scheduled_date,
-        performed_date: performed_date || null,
-        performed_by_employee_id: performed_by_employee_id || null,
-        performed_by_vendor: performed_by_vendor || null,
-        description,
-        cost: cost || null,
-        status: status || 'scheduled',
-        notes: notes || null,
-        next_maintenance_date: next_maintenance_date || null,
-      })
-      .select()
-      .single();
+    const rows = await sql`
+      INSERT INTO asset_maintenance (
+        asset_id, maintenance_type, scheduled_date, performed_date,
+        performed_by_employee_id, performed_by_vendor, description,
+        cost, status, notes, next_maintenance_date
+      ) VALUES (
+        ${asset_id},
+        ${maintenance_type},
+        ${scheduled_date},
+        ${performed_date || null},
+        ${performed_by_employee_id || null},
+        ${performed_by_vendor || null},
+        ${description},
+        ${cost || null},
+        ${status || 'scheduled'},
+        ${notes || null},
+        ${next_maintenance_date || null}
+      )
+      RETURNING *
+    `;
 
-    if (error) throw error;
-
-    return NextResponse.json(data, { status: 201 });
+    return NextResponse.json(rows[0], { status: 201 });
   } catch (error: any) {
     console.error('Error creating maintenance record:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

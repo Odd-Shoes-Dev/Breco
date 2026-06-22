@@ -1,19 +1,15 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import type { CompanySettings } from '@/types/database';
 
 export async function getCompanySettings(): Promise<CompanySettings> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('company_settings')
-    .select('*')
-    .single();
-
-  if (error) {
+  try {
+    const rows = await sql`SELECT * FROM company_settings LIMIT 1`;
+    if (rows[0]) return rows[0] as CompanySettings;
+    return getDefaultSettings();
+  } catch (error) {
     console.error('Failed to fetch company settings:', error);
     return getDefaultSettings();
   }
-
-  return data;
 }
 
 /**

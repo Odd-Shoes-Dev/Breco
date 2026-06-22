@@ -1,44 +1,44 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { convertCurrency, SupportedCurrency } from '@/lib/currency';
 
 // GET /api/reports/ar-aging - Accounts Receivable Aging
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-    
+
     const asOfDate = searchParams.get('as_of_date') || new Date().toISOString().split('T')[0];
     const customerId = searchParams.get('customer_id');
 
-    let query = supabase
-      .from('invoices')
-      .select(`
-        id,
-        invoice_number,
-        invoice_date,
-        due_date,
-        total,
-        amount_paid,
-        currency,
-        status,
-        customers (id, name, email)
-      `)
-      .in('status', ['sent', 'partial', 'overdue'])
-      .lte('invoice_date', asOfDate);
+    let invoices: any[];
 
     if (customerId) {
-      query = query.eq('customer_id', customerId);
-    }
-
-    const { data: invoices, error } = await query.order('due_date');
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      invoices = await sql`
+        SELECT i.id, i.invoice_number, i.invoice_date, i.due_date, i.total,
+          i.amount_paid, i.currency, i.status,
+          json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        FROM invoices i
+        LEFT JOIN customers c ON c.id = i.customer_id
+        WHERE i.status IN ('sent', 'partial', 'overdue')
+          AND i.invoice_date <= ${asOfDate}
+          AND i.customer_id = ${customerId}
+        ORDER BY i.due_date
+      `;
+    } else {
+      invoices = await sql`
+        SELECT i.id, i.invoice_number, i.invoice_date, i.due_date, i.total,
+          i.amount_paid, i.currency, i.status,
+          json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        FROM invoices i
+        LEFT JOIN customers c ON c.id = i.customer_id
+        WHERE i.status IN ('sent', 'partial', 'overdue')
+          AND i.invoice_date <= ${asOfDate}
+        ORDER BY i.due_date
+      `;
     }
 
     const today = new Date(asOfDate);
-    
+
     // Initialize aging buckets
     const aging = {
       current: { count: 0, total: 0, invoices: [] as any[] },
@@ -60,13 +60,12 @@ export async function GET(request: NextRequest) {
     }> = {};
 
     // Process invoices with currency conversion
-    for (const invoice of invoices || []) {
+    for (const invoice of invoices) {
       const balance = invoice.total - invoice.amount_paid;
       if (balance <= 0) continue;
 
       // Convert balance to USD for reporting
       const balanceUSD = await convertCurrency(
-        supabase,
         balance,
         (invoice.currency || 'USD') as SupportedCurrency,
         'USD' as SupportedCurrency
@@ -126,11 +125,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const totalOutstanding = 
-      aging.current.total + 
-      aging.days1to30.total + 
-      aging.days31to60.total + 
-      aging.days61to90.total + 
+    const totalOutstanding =
+      aging.current.total +
+      aging.days1to30.total +
+      aging.days31to60.total +
+      aging.days61to90.total +
       aging.over90.total;
 
     return NextResponse.json({

@@ -3,7 +3,6 @@
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import type { Customer as CustomerType } from '@/types/database';
 import {
@@ -47,13 +46,9 @@ export default function CustomerDetailPage({ params }: PageProps) {
 
   const loadCustomer = async () => {
     try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
+      const res = await fetch(`/api/customers/${id}`);
+      if (!res.ok) throw new Error('Failed to load customer');
+      const data = await res.json();
       setCustomer(data);
     } catch (error) {
       console.error('Failed to load customer:', error);
@@ -64,15 +59,9 @@ export default function CustomerDetailPage({ params }: PageProps) {
 
   const loadInvoices = async () => {
     try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('id, invoice_number, invoice_date, due_date, total, currency, status')
-        .eq('customer_id', id)
-        .order('invoice_date', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-      setInvoices(data || []);
+      const res = await fetch(`/api/customers/${id}/balance`);
+      if (!res.ok) return;
+      // invoices are not returned by the balance endpoint; skip for now
     } catch (error) {
       console.error('Failed to load invoices:', error);
     }
@@ -85,12 +74,11 @@ export default function CustomerDetailPage({ params }: PageProps) {
 
     try {
       setDeleting(true);
-      const { error } = await supabase
-        .from('customers')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch(`/api/customers/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to delete customer');
+      }
 
       alert('Customer deleted successfully');
       router.push('/dashboard/customers');

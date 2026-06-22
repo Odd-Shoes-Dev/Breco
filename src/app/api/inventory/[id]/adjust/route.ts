@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/inventory/[id]/adjust - Adjust inventory quantity
@@ -8,7 +9,6 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
     const body = await request.json();
 
     if (!body.adjustment_type || body.quantity === undefined) {
@@ -18,21 +18,17 @@ export async function POST(
       );
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Get current product
-    const { data: item, error: itemError } = await supabase
-      .from('products')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (itemError) {
+    const itemRows = await sql`SELECT * FROM products WHERE id = ${id}`;
+    if (itemRows.length === 0) {
       return NextResponse.json({ error: 'Product not found' }, { status: 404 });
     }
+    const item = itemRows[0];
 
     // Calculate new quantity
     let newQuantity = item.quantity_on_hand;
@@ -69,37 +65,27 @@ export async function POST(
     }
 
     // Create movement record
-    const { data: movement, error: movementError } = await supabase
-      .from('inventory_movements')
-      .insert({
-        product_id: id,
-        movement_type: body.adjustment_type,
-        quantity: movementQuantity,
-        unit_cost: body.unit_cost || item.cost_price,
-        notes: body.notes || null,
-        created_by: user.id,
-      })
-      .select()
-      .single();
-
-    if (movementError) {
-      return NextResponse.json({ error: movementError.message }, { status: 400 });
-    }
+    const movementRows = await sql`
+      INSERT INTO inventory_movements (
+        product_id, movement_type, quantity, unit_cost, notes, created_by
+      ) VALUES (
+        ${id}, ${body.adjustment_type}, ${movementQuantity},
+        ${body.unit_cost || item.cost_price || null}, ${body.notes || null}, ${user.id}
+      )
+      RETURNING *
+    `;
+    const movement = movementRows[0];
 
     // Update product quantity
-    const { data: updatedItem, error: updateError } = await supabase
-      .from('products')
-      .update({
-        quantity_on_hand: newQuantity,
-        cost_price: body.update_cost ? body.unit_cost : item.cost_price,
-      })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
-    }
+    const updatedItemRows = await sql`
+      UPDATE products
+      SET
+        quantity_on_hand = ${newQuantity},
+        cost_price = ${body.update_cost ? body.unit_cost : item.cost_price}
+      WHERE id = ${id}
+      RETURNING *
+    `;
+    const updatedItem = updatedItemRows[0];
 
     return NextResponse.json({
       data: {
@@ -119,31 +105,31 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-    
+
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = (page - 1) * limit;
 
-    const { data, count, error } = await supabase
-      .from('inventory_movements')
-      .select('*', { count: 'exact' })
-      .eq('product_id', id)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+    const [rows, countRows] = await Promise.all([
+      sql`
+        SELECT * FROM inventory_movements
+        WHERE product_id = ${id}
+        ORDER BY created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `,
+      sql`SELECT COUNT(*) FROM inventory_movements WHERE product_id = ${id}`,
+    ]);
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const count = parseInt(countRows[0].count);
 
     return NextResponse.json({
-      data,
+      data: rows,
       pagination: {
         page,
         limit,
         total: count,
-        totalPages: Math.ceil((count || 0) / limit),
+        totalPages: Math.ceil(count / limit),
       },
     });
   } catch (error: any) {

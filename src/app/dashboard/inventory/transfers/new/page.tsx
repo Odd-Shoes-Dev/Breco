@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import toast from 'react-hot-toast';
 import {
   ArrowLeftIcon,
@@ -53,13 +53,8 @@ export default function NewInventoryTransferPage() {
 
   const loadLocations = async () => {
     try {
-      const { data, error } = await supabase
-        .from('locations')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-
-      if (error) throw error;
+      const res = await fetch('/api/locations');
+      const data = await res.json();
       setLocations(data || []);
     } catch (error) {
       console.error('Failed to load locations:', error);
@@ -69,15 +64,9 @@ export default function NewInventoryTransferPage() {
 
   const loadProducts = async () => {
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, name, sku, quantity_in_stock')
-        .eq('track_inventory', true)
-        .gt('quantity_in_stock', 0)
-        .order('name');
-
-      if (error) throw error;
-      setProducts(data || []);
+      const res = await fetch('/api/inventory');
+      const result = await res.json();
+      setProducts(result.data || result || []);
     } catch (error) {
       console.error('Failed to load products:', error);
     }

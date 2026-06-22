@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { createExpenseJournalEntry } from '@/lib/accounting/journal-entry-helpers';
 
@@ -6,24 +7,29 @@ import { createExpenseJournalEntry } from '@/lib/accounting/journal-entry-helper
 export async function GET(request: NextRequest, context: any) {
   const { params } = context || {};
   try {
-    const supabase = await createClient();
+    const rows = await sql`
+      SELECT
+        e.*,
+        json_build_object('id', v.id, 'name', v.name, 'company_name', v.company_name) AS vendor,
+        json_build_object('id', ea.id, 'name', ea.name, 'code', ea.code) AS expense_account,
+        json_build_object('id', pa.id, 'name', pa.name, 'code', pa.code) AS payment_account,
+        json_build_object('id', ba.id, 'account_name', ba.account_name, 'account_number', ba.account_number) AS bank_account,
+        json_build_object('id', c.id, 'name', c.name) AS customer,
+        json_build_object('id', je.id, 'entry_number', je.entry_number, 'entry_date', je.entry_date) AS journal_entry,
+        json_build_object('id', up.id, 'email', up.email, 'full_name', up.full_name) AS created_by_user
+      FROM expenses e
+      LEFT JOIN vendors v ON v.id = e.vendor_id
+      LEFT JOIN accounts ea ON ea.id = e.expense_account_id
+      LEFT JOIN accounts pa ON pa.id = e.payment_account_id
+      LEFT JOIN bank_accounts ba ON ba.id = e.bank_account_id
+      LEFT JOIN customers c ON c.id = e.customer_id
+      LEFT JOIN journal_entries je ON je.id = e.journal_entry_id
+      LEFT JOIN user_profiles up ON up.id = e.created_by
+      WHERE e.id = ${params.id}
+    `;
+    const data = (rows as any[])[0];
 
-    const { data, error } = await supabase
-      .from('expenses')
-      .select(`
-        *,
-        vendor:vendors(id, name, company_name),
-        expense_account:accounts!expenses_expense_account_id_fkey(id, name, code),
-        payment_account:accounts!expenses_payment_account_id_fkey(id, name, code),
-        bank_account:bank_accounts(id, account_name, account_number),
-        customer:customers(id, name),
-        journal_entry:journal_entries(id, entry_number, entry_date),
-        created_by_user:user_profiles!expenses_created_by_fkey(id, email, full_name)
-      `)
-      .eq('id', params.id)
-      .single();
-
-    if (error) {
+    if (!data) {
       return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
     }
 
@@ -37,21 +43,15 @@ export async function GET(request: NextRequest, context: any) {
 export async function PATCH(request: NextRequest, context: any) {
   const { params } = context || {};
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
-    // Get existing expense
-    const { data: existing, error: fetchError } = await supabase
-      .from('expenses')
-      .select('status, journal_entry_id')
-      .eq('id', params.id)
-      .single();
+    const existingRows = await sql`SELECT status, journal_entry_id, expense_account_id, bank_account_id FROM expenses WHERE id = ${params.id}`;
+    const existing = (existingRows as any[])[0];
 
-    if (fetchError) {
+    if (!existing) {
       return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
     }
 
-    // Prevent editing paid expenses
     if (existing.status === 'paid' && body.status !== 'paid') {
       return NextResponse.json(
         { error: 'Cannot edit paid expenses. Void the expense first.' },
@@ -59,45 +59,42 @@ export async function PATCH(request: NextRequest, context: any) {
       );
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
 
-    // Calculate total if amount or tax changed
     const total = (body.amount || 0) + (body.tax_amount || 0);
 
-    // Update expense
-    const updateData: any = {
-      ...body,
-      total: total || body.total,
-    };
+    await sql`
+      UPDATE expenses SET
+        expense_date = COALESCE(${body.expense_date ?? null}, expense_date),
+        vendor_id = CASE WHEN ${body.vendor_id !== undefined} THEN ${body.vendor_id ?? null} ELSE vendor_id END,
+        expense_account_id = COALESCE(${body.expense_account_id ?? null}, expense_account_id),
+        payment_account_id = CASE WHEN ${body.payment_account_id !== undefined} THEN ${body.payment_account_id ?? null} ELSE payment_account_id END,
+        amount = COALESCE(${body.amount ?? null}, amount),
+        tax_amount = COALESCE(${body.tax_amount ?? null}, tax_amount),
+        total = CASE WHEN ${(body.amount !== undefined || body.tax_amount !== undefined)} THEN ${total || null} ELSE total END,
+        currency = COALESCE(${body.currency ?? null}, currency),
+        description = CASE WHEN ${body.description !== undefined} THEN ${body.description ?? null} ELSE description END,
+        category = CASE WHEN ${body.category !== undefined} THEN ${body.category ?? null} ELSE category END,
+        department = CASE WHEN ${body.department !== undefined} THEN ${body.department ?? null} ELSE department END,
+        payment_method = COALESCE(${body.payment_method ?? null}, payment_method),
+        bank_account_id = CASE WHEN ${body.bank_account_id !== undefined} THEN ${body.bank_account_id ?? null} ELSE bank_account_id END,
+        receipt_url = CASE WHEN ${body.receipt_url !== undefined} THEN ${body.receipt_url ?? null} ELSE receipt_url END,
+        is_billable = COALESCE(${body.is_billable ?? null}, is_billable),
+        customer_id = CASE WHEN ${body.customer_id !== undefined} THEN ${body.customer_id ?? null} ELSE customer_id END,
+        status = COALESCE(${body.status ?? null}, status)
+      WHERE id = ${params.id}
+    `;
 
-    // Remove fields that shouldn't be updated directly
-    delete updateData.id;
-    delete updateData.created_at;
-    delete updateData.created_by;
-
-    const { data: expense, error: updateError } = await supabase
-      .from('expenses')
-      .update(updateData)
-      .eq('id', params.id)
-      .select()
-      .single();
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
-    }
+    const expenseRows = await sql`SELECT * FROM expenses WHERE id = ${params.id}`;
+    const expense = (expenseRows as any[])[0];
 
     // Create journal entry if status changed to 'paid' and no journal entry exists
     if (body.status === 'paid' && existing.status !== 'paid' && !existing.journal_entry_id && user) {
-      // Get account code for the expense account
-      const { data: expenseAccount } = await supabase
-        .from('accounts')
-        .select('code')
-        .eq('id', expense.expense_account_id)
-        .single();
+      const acctRows = await sql`SELECT code FROM accounts WHERE id = ${expense.expense_account_id} LIMIT 1`;
+      const expenseAccount = (acctRows as any[])[0];
 
       if (expenseAccount) {
         const journalResult = await createExpenseJournalEntry(
-          supabase,
           {
             id: expense.id,
             expense_number: expense.expense_number,
@@ -111,10 +108,7 @@ export async function PATCH(request: NextRequest, context: any) {
         );
 
         if (journalResult.success && journalResult.journalEntry) {
-          await supabase
-            .from('expenses')
-            .update({ journal_entry_id: journalResult.journalEntry.id })
-            .eq('id', params.id);
+          await sql`UPDATE expenses SET journal_entry_id = ${journalResult.journalEntry.id} WHERE id = ${params.id}`;
         }
       }
     }
@@ -129,20 +123,13 @@ export async function PATCH(request: NextRequest, context: any) {
 export async function DELETE(request: NextRequest, context: any) {
   const { params } = context || {};
   try {
-    const supabase = await createClient();
+    const existingRows = await sql`SELECT status, journal_entry_id FROM expenses WHERE id = ${params.id}`;
+    const expense = (existingRows as any[])[0];
 
-    // Get expense to check status
-    const { data: expense, error: fetchError } = await supabase
-      .from('expenses')
-      .select('status, journal_entry_id')
-      .eq('id', params.id)
-      .single();
-
-    if (fetchError) {
+    if (!expense) {
       return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
     }
 
-    // Only allow deletion of pending/rejected expenses
     if (expense.status === 'paid' || expense.status === 'approved') {
       return NextResponse.json(
         { error: 'Cannot delete paid or approved expenses. Only pending/rejected expenses can be deleted.' },
@@ -150,7 +137,6 @@ export async function DELETE(request: NextRequest, context: any) {
       );
     }
 
-    // If there's a journal entry, we shouldn't delete (should void instead)
     if (expense.journal_entry_id) {
       return NextResponse.json(
         { error: 'Cannot delete expense with journal entry. Contact administrator.' },
@@ -158,15 +144,7 @@ export async function DELETE(request: NextRequest, context: any) {
       );
     }
 
-    // Delete the expense
-    const { error: deleteError } = await supabase
-      .from('expenses')
-      .delete()
-      .eq('id', params.id);
-
-    if (deleteError) {
-      return NextResponse.json({ error: deleteError.message }, { status: 400 });
-    }
+    await sql`DELETE FROM expenses WHERE id = ${params.id}`;
 
     return NextResponse.json({ message: 'Expense deleted successfully' });
   } catch (error: any) {

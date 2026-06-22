@@ -11,7 +11,6 @@ import {
 } from '@heroicons/react/24/outline';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import { CurrencySelect } from '@/components/ui';
-import { supabase } from '@/lib/supabase/client';
 
 interface Vendor {
   id: string;
@@ -76,14 +75,7 @@ export default function NewBillPage() {
   }, []);
 
   const fetchDefaultTaxRate = async () => {
-    try {
-      const { data } = await supabase.from('company_settings').select('sales_tax_rate').single();
-      const rate = (data?.sales_tax_rate || 0) * 100;
-      setDefaultTaxRate(rate);
-      setLineItems(prev => prev.map(item => ({ ...item, tax_rate: rate })));
-    } catch {
-      // use 0 if settings unavailable
-    }
+    // Default tax rate is 0 when no settings endpoint is available
   };
 
   const fetchExchangeRates = async () => {

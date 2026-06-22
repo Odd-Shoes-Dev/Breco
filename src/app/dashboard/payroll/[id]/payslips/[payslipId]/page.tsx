@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';import { formatCurrency as currencyFormatter, type SupportedCurrency } from '@/lib/currency';import { ArrowLeftIcon, PrinterIcon, EnvelopeIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { formatCurrency as currencyFormatter, type SupportedCurrency } from '@/lib/currency';
+import { ArrowLeftIcon, PrinterIcon, EnvelopeIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
 interface Employee {
@@ -88,30 +89,12 @@ export default function PayslipDetailPage({
 
   const fetchPayslipDetails = async (id: string) => {
     try {
-      // Fetch payslip with employee and period details
-      const { data: payslipData, error: payslipError } = await supabase
-        .from('payslips')
-        .select(`
-          *,
-          employee:employees(*),
-          payroll_period:payroll_periods(period_name, start_date, end_date, payment_date, status)
-        `)
-        .eq('id', id)
-        .single();
-
-      if (payslipError) throw payslipError;
+      const res = await fetch(`/api/payroll/payslips/${id}`);
+      if (!res.ok) throw new Error('Failed to load payslip');
+      const result = await res.json();
+      const payslipData = result.data || result;
       setPayslip(payslipData);
-
-      // Fetch payslip items (detailed breakdown)
-      const { data: itemsData, error: itemsError } = await supabase
-        .from('payslip_items')
-        .select('*')
-        .eq('payslip_id', id)
-        .order('item_type', { ascending: false })
-        .order('item_name');
-
-      if (itemsError) throw itemsError;
-      setPayslipItems(itemsData || []);
+      setPayslipItems(payslipData.items || []);
     } catch (error) {
       console.error('Error fetching payslip details:', error);
       toast.error('Failed to load payslip details');

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import toast from 'react-hot-toast';
 import {
   PlusIcon,
@@ -39,28 +39,12 @@ export default function InventoryTransfersPage() {
   const loadTransfers = async () => {
     try {
       setLoading(true);
-
-      let query = supabase
-        .from('inventory_transfers')
-        .select(`
-          *,
-          from_location:locations!inventory_transfers_from_location_id_fkey (name, code),
-          to_location:locations!inventory_transfers_to_location_id_fkey (name, code)
-        `)
-        .order('transfer_date', { ascending: false });
-
-      if (search) {
-        query = query.ilike('transfer_number', `%${search}%`);
-      }
-
-      if (statusFilter) {
-        query = query.eq('status', statusFilter);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setTransfers(data || []);
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      if (statusFilter) params.set('status', statusFilter);
+      const res = await fetch(`/api/inventory-transfers?${params}`);
+      const data = await res.json();
+      setTransfers(data.data || data || []);
     } catch (error) {
       console.error('Failed to load transfers:', error);
       toast.error('Failed to load transfers');

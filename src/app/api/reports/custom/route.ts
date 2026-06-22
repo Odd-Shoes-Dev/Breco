@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 
 interface Field {
   id: string;
@@ -38,43 +38,34 @@ interface CustomReportConfig {
 
 // Fetch real data from database based on data source
 const fetchTransactionData = async (config: CustomReportConfig) => {
-  const supabase = await createClient();
-  
-  let query = supabase
-    .from('journal_entries')
-    .select('id, entry_number, entry_date, description, memo, status')
-    .order('entry_date', { ascending: false });
-
-  // Apply date range filter
+  let entries;
   if (config.dateRange) {
-    query = query
-      .gte('entry_date', config.dateRange.startDate)
-      .lte('entry_date', config.dateRange.endDate);
-  }
-
-  const { data: entries, error } = await query;
-
-  if (error) {
-    console.error('Transaction data fetch error:', error);
-    throw error;
+    entries = await sql`
+      SELECT id, entry_number, entry_date, description, memo, status
+      FROM journal_entries
+      WHERE entry_date >= ${config.dateRange.startDate}
+        AND entry_date <= ${config.dateRange.endDate}
+      ORDER BY entry_date DESC
+    `;
+  } else {
+    entries = await sql`
+      SELECT id, entry_number, entry_date, description, memo, status
+      FROM journal_entries
+      ORDER BY entry_date DESC
+    `;
   }
 
   // Fetch journal lines to calculate totals
-  const { data: lines, error: linesError } = await supabase
-    .from('journal_lines')
-    .select('journal_entry_id, debit, credit, account_id');
-
-  if (linesError) {
-    console.error('Journal lines fetch error:', linesError);
-    throw linesError;
-  }
+  const lines = await sql`
+    SELECT journal_entry_id, debit, credit, account_id FROM journal_lines
+  `;
 
   // Transform data to match expected format
-  return (entries || []).map(entry => {
-    const entryLines = (lines || []).filter(line => line.journal_entry_id === entry.id);
-    const totalDebit = entryLines.reduce((sum, line) => sum + (line.debit || 0), 0);
-    const totalCredit = entryLines.reduce((sum, line) => sum + (line.credit || 0), 0);
-    
+  return entries.map((entry: any) => {
+    const entryLines = lines.filter((line: any) => line.journal_entry_id === entry.id);
+    const totalDebit = entryLines.reduce((sum: number, line: any) => sum + (line.debit || 0), 0);
+    const totalCredit = entryLines.reduce((sum: number, line: any) => sum + (line.credit || 0), 0);
+
     return {
       date: entry.entry_date,
       amount: totalDebit || totalCredit || 0,
@@ -89,38 +80,18 @@ const fetchTransactionData = async (config: CustomReportConfig) => {
 };
 
 const fetchCustomerData = async (config: CustomReportConfig) => {
-  const supabase = await createClient();
-  
-  // Fetch customers
-  const { data: customers, error: customersError } = await supabase
-    .from('customers')
-    .select('*');
+  const customers = await sql`SELECT * FROM customers`;
+  const invoices = await sql`SELECT customer_id, total, amount_paid, invoice_date FROM invoices`;
 
-  if (customersError) {
-    console.error('Customers fetch error:', customersError);
-    throw customersError;
-  }
-
-  // Fetch all invoices
-  const { data: invoices, error: invoicesError } = await supabase
-    .from('invoices')
-    .select('customer_id, total, amount_paid, invoice_date');
-
-  if (invoicesError) {
-    console.error('Invoices fetch error:', invoicesError);
-    throw invoicesError;
-  }
-
-  // Group invoices by customer and calculate metrics
-  return (customers || []).map(customer => {
-    const customerInvoices = (invoices || []).filter(inv => inv.customer_id === customer.id);
-    const totalSales = customerInvoices.reduce((sum, inv) => sum + (inv.amount_paid || 0), 0);
+  return customers.map((customer: any) => {
+    const customerInvoices = invoices.filter((inv: any) => inv.customer_id === customer.id);
+    const totalSales = customerInvoices.reduce((sum: number, inv: any) => sum + (inv.amount_paid || 0), 0);
     const invoiceCount = customerInvoices.length;
-    
-    const sortedInvoices = customerInvoices.sort((a, b) => 
+
+    const sortedInvoices = customerInvoices.sort((a: any, b: any) =>
       new Date(a.invoice_date).getTime() - new Date(b.invoice_date).getTime()
     );
-    
+
     const firstSale = sortedInvoices.length > 0 ? sortedInvoices[0]?.invoice_date : null;
     const lastSale = sortedInvoices.length > 0 ? sortedInvoices[sortedInvoices.length - 1]?.invoice_date : null;
 
@@ -137,38 +108,18 @@ const fetchCustomerData = async (config: CustomReportConfig) => {
 };
 
 const fetchVendorData = async (config: CustomReportConfig) => {
-  const supabase = await createClient();
-  
-  // Fetch vendors
-  const { data: vendors, error: vendorsError } = await supabase
-    .from('vendors')
-    .select('*');
+  const vendors = await sql`SELECT * FROM vendors`;
+  const bills = await sql`SELECT vendor_id, total, amount_paid, bill_date FROM bills`;
 
-  if (vendorsError) {
-    console.error('Vendors fetch error:', vendorsError);
-    throw vendorsError;
-  }
-
-  // Fetch all bills
-  const { data: bills, error: billsError } = await supabase
-    .from('bills')
-    .select('vendor_id, total, amount_paid, bill_date');
-
-  if (billsError) {
-    console.error('Bills fetch error:', billsError);
-    throw billsError;
-  }
-
-  // Group bills by vendor and calculate metrics
-  return (vendors || []).map(vendor => {
-    const vendorBills = (bills || []).filter(bill => bill.vendor_id === vendor.id);
-    const totalPurchases = vendorBills.reduce((sum, bill) => sum + (bill.amount_paid || 0), 0);
+  return vendors.map((vendor: any) => {
+    const vendorBills = bills.filter((bill: any) => bill.vendor_id === vendor.id);
+    const totalPurchases = vendorBills.reduce((sum: number, bill: any) => sum + (bill.amount_paid || 0), 0);
     const billCount = vendorBills.length;
-    
-    const sortedBills = vendorBills.sort((a, b) => 
+
+    const sortedBills = vendorBills.sort((a: any, b: any) =>
       new Date(a.bill_date).getTime() - new Date(b.bill_date).getTime()
     );
-    
+
     const firstPurchase = sortedBills.length > 0 ? sortedBills[0]?.bill_date : null;
     const lastPurchase = sortedBills.length > 0 ? sortedBills[sortedBills.length - 1]?.bill_date : null;
 
@@ -185,19 +136,13 @@ const fetchVendorData = async (config: CustomReportConfig) => {
 };
 
 const fetchInventoryData = async (config: CustomReportConfig) => {
-  const supabase = await createClient();
-  
-  const { data: products, error } = await supabase
-    .from('products')
-    .select('id, sku, name, quantity_on_hand, cost_price, reorder_point, updated_at')
-    .eq('track_inventory', true);
+  const products = await sql`
+    SELECT id, sku, name, quantity_on_hand, cost_price, reorder_point, updated_at
+    FROM products
+    WHERE track_inventory = true
+  `;
 
-  if (error) {
-    console.error('Inventory fetch error:', error);
-    throw error;
-  }
-
-  return (products || []).map(product => ({
+  return products.map((product: any) => ({
     item_name: product.name,
     sku: product.sku || 'N/A',
     quantity_on_hand: product.quantity_on_hand || 0,
@@ -209,7 +154,6 @@ const fetchInventoryData = async (config: CustomReportConfig) => {
 };
 
 function applyFiltersAndSorts(data: any[], config: CustomReportConfig) {
-  // Apply custom filters
   let filteredData = data.filter(item => {
     return config.filters.every(filter => {
       const fieldValue = item[filter.fieldId];
@@ -232,17 +176,16 @@ function applyFiltersAndSorts(data: any[], config: CustomReportConfig) {
     });
   });
 
-  // Apply sorting
   if (config.sorts.length > 0) {
     filteredData.sort((a, b) => {
       for (const sort of config.sorts) {
         const aValue = a[sort.fieldId];
         const bValue = b[sort.fieldId];
-        
+
         let comparison = 0;
         if (aValue < bValue) comparison = -1;
         if (aValue > bValue) comparison = 1;
-        
+
         if (comparison !== 0) {
           return sort.direction === 'desc' ? -comparison : comparison;
         }
@@ -259,10 +202,9 @@ export async function POST(request: NextRequest) {
     console.log('Custom report POST request received');
     const config: CustomReportConfig = await request.json();
     console.log('Config:', JSON.stringify(config, null, 2));
-    
+
     let data: any[] = [];
-    
-    // Fetch real data from database based on selected data source
+
     console.log('Fetching data for source:', config.dataSource);
     try {
       switch (config.dataSource) {
@@ -294,11 +236,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Apply additional filters and sorting
     data = applyFiltersAndSorts(data, config);
     console.log('After filters and sorts, rows:', data.length);
 
-    // Filter data to only include selected fields
     const filteredRows = data.map(row => {
       const filteredRow: any = {};
       config.selectedFields.forEach(fieldId => {
@@ -307,7 +247,6 @@ export async function POST(request: NextRequest) {
       return filteredRow;
     });
 
-    // Calculate summary statistics
     const summary = {
       totalRows: filteredRows.length,
       generatedAt: new Date().toISOString(),

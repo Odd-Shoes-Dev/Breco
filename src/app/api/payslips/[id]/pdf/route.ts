@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { generatePayslipHTML, type PayslipData } from '@/lib/pdf/payslip-pdf';
 
@@ -8,36 +9,41 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { id } = await params;
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Fetch payslip with employee and period details
-    const { data: payslip, error: payslipError } = await supabase
-      .from('payslips')
-      .select(`
-        *,
-        employee:employees(*),
-        payroll_period:payroll_periods(period_name, start_date, end_date, payment_date, status)
-      `)
-      .eq('id', id)
-      .single();
+    const rows = await sql`
+      SELECT ps.*,
+        row_to_json(e.*) AS employee,
+        json_build_object(
+          'period_name', pp.period_name,
+          'start_date', pp.start_date,
+          'end_date', pp.end_date,
+          'payment_date', pp.payment_date,
+          'status', pp.status
+        ) AS payroll_period
+      FROM payslips ps
+      LEFT JOIN employees e ON e.id = ps.employee_id
+      LEFT JOIN payroll_periods pp ON pp.id = ps.payroll_period_id
+      WHERE ps.id = ${id}
+    `;
+    const payslip = rows[0];
 
-    if (payslipError || !payslip) {
+    if (!payslip) {
       return NextResponse.json({ error: 'Payslip not found' }, { status: 404 });
     }
 
     // Fetch payslip items
-    const { data: payslipItems } = await supabase
-      .from('payslip_items')
-      .select('*')
-      .eq('payslip_id', id)
-      .order('item_type', { ascending: false })
-      .order('item_name');
+    const payslipItems = await sql`
+      SELECT * FROM payslip_items
+      WHERE payslip_id = ${id}
+      ORDER BY item_type DESC, item_name ASC
+    `;
 
     // Prepare payslip data
     const payslipData: PayslipData = {
@@ -48,9 +54,6 @@ export async function GET(
     // Generate HTML
     const htmlContent = generatePayslipHTML(payslipData);
 
-    // Return HTML as downloadable file
-    // Note: For true PDF generation, you would need a library like puppeteer or jsPDF
-    // For now, we return HTML that can be printed to PDF by the browser
     const filename = `Payslip_${payslip.payslip_number}_${payslip.employee.first_name}_${payslip.employee.last_name}.html`;
 
     return new NextResponse(htmlContent, {

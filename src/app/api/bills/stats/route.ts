@@ -1,19 +1,16 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { getCompanySettings } from '@/lib/company-settings';
 
 export async function GET() {
   try {
-    const supabase = await createClient();
     const settings = await getCompanySettings();
     const baseCurrency = settings.base_currency;
 
     // Fetch all bills with their currencies
-    const { data: bills, error } = await supabase
-      .from('bills')
-      .select('total, amount_paid, due_date, status, currency, bill_date');
-
-    if (error) throw error;
+    const bills = await sql`
+      SELECT total, amount_paid, due_date, status, currency, bill_date FROM bills
+    `;
 
     if (!bills || bills.length === 0) {
       return NextResponse.json({
@@ -44,22 +41,14 @@ export async function GET() {
       let remainingInBase = remaining;
 
       if (bill.currency !== baseCurrency) {
-        const { data: convertedTotal } = await supabase.rpc('convert_currency', {
-          p_amount: bill.total,
-          p_from_currency: bill.currency,
-          p_to_currency: baseCurrency,
-          p_date: bill.bill_date,
-        });
-
-        const { data: convertedRemaining } = await supabase.rpc('convert_currency', {
-          p_amount: remaining,
-          p_from_currency: bill.currency,
-          p_to_currency: baseCurrency,
-          p_date: bill.bill_date,
-        });
-
-        amountInBase = convertedTotal ?? 0;
-        remainingInBase = convertedRemaining ?? 0;
+        const convertedTotal = await sql`
+          SELECT convert_currency(${bill.total}, ${bill.currency}, ${baseCurrency}, ${bill.bill_date}) AS result
+        `;
+        const convertedRemaining = await sql`
+          SELECT convert_currency(${remaining}, ${bill.currency}, ${baseCurrency}, ${bill.bill_date}) AS result
+        `;
+        amountInBase = convertedTotal[0]?.result ?? 0;
+        remainingInBase = convertedRemaining[0]?.result ?? 0;
       }
 
       if (bill.status !== 'paid' && bill.status !== 'void') {
@@ -88,9 +77,6 @@ export async function GET() {
     });
   } catch (error: any) {
     console.error('Failed to calculate bill stats:', error);
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

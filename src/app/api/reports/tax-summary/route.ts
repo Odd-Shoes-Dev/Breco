@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 
 interface TaxDeduction {
   category: string;
@@ -67,11 +67,9 @@ interface TaxSummaryData {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
     const taxYear = parseInt(searchParams.get('taxYear') || new Date().getFullYear().toString());
 
-    // Validate tax year
     const currentYear = new Date().getFullYear();
     if (taxYear < currentYear - 10 || taxYear > currentYear + 1) {
       return NextResponse.json({ error: 'Invalid tax year' }, { status: 400 });
@@ -81,70 +79,65 @@ export async function GET(request: NextRequest) {
     const endDate = `${taxYear}-12-31`;
 
     // Fetch invoices for revenue (paid and partial)
-    const { data: invoices } = await supabase
-      .from('invoices')
-      .select('total_amount, amount_paid, status, issue_date')
-      .gte('issue_date', startDate)
-      .lte('issue_date', endDate)
-      .in('status', ['paid', 'partial']);
+    const invoices = await sql`
+      SELECT total_amount, amount_paid, status, issue_date FROM invoices
+      WHERE issue_date >= ${startDate}
+        AND issue_date <= ${endDate}
+        AND status IN ('paid', 'partial')
+    `;
 
-    // Calculate gross revenue from invoices
-    const grossRevenue = (invoices || []).reduce((sum, inv) => sum + (inv.amount_paid || 0), 0);
+    const grossRevenue = invoices.reduce((sum: number, inv: any) => sum + (inv.amount_paid || 0), 0);
 
     // Fetch expenses for deductions
-    const { data: expenses } = await supabase
-      .from('expenses')
-      .select('amount, category, description, expense_date')
-      .gte('expense_date', startDate)
-      .lte('expense_date', endDate);
+    const expenses = await sql`
+      SELECT amount, category, description, expense_date FROM expenses
+      WHERE expense_date >= ${startDate} AND expense_date <= ${endDate}
+    `;
 
     // Fetch bills for additional deductions
-    const { data: bills } = await supabase
-      .from('bills')
-      .select('total_amount, amount_paid, category, description, bill_date')
-      .gte('bill_date', startDate)
-      .lte('bill_date', endDate)
-      .in('status', ['paid', 'partial']);
+    const bills = await sql`
+      SELECT total_amount, amount_paid, category, description, bill_date FROM bills
+      WHERE bill_date >= ${startDate}
+        AND bill_date <= ${endDate}
+        AND status IN ('paid', 'partial')
+    `;
 
     // Fetch assets for depreciation calculation
-    const { data: assets } = await supabase
-      .from('assets')
-      .select('purchase_price, depreciation_method, useful_life_months, accumulated_depreciation, purchase_date')
-      .lte('purchase_date', endDate)
-      .eq('status', 'active');
+    const assets = await sql`
+      SELECT purchase_price, depreciation_method, useful_life_months, accumulated_depreciation, purchase_date
+      FROM assets
+      WHERE purchase_date <= ${endDate} AND status = 'active'
+    `;
 
-    // Calculate depreciation for the year
     const currentDate = new Date(endDate);
-    const depreciation = (assets || []).reduce((sum, asset) => {
+    const depreciation = assets.reduce((sum: number, asset: any) => {
       const purchaseDate = new Date(asset.purchase_date);
       if (purchaseDate > currentDate) return sum;
-      
+
       const monthsElapsed = Math.min(
         asset.useful_life_months || 60,
         ((currentDate.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44))
       );
-      
+
       const annualDepreciation = (asset.purchase_price || 0) / ((asset.useful_life_months || 60) / 12);
       const monthsInYear = Math.min(12, monthsElapsed);
-      
+
       return sum + (annualDepreciation * (monthsInYear / 12));
     }, 0);
 
-    // Categorize expenses and bills
     const expenseCategories: Record<string, number> = {};
     const itemizedDeductions: TaxDeduction[] = [];
 
-    (expenses || []).forEach(exp => {
+    expenses.forEach((exp: any) => {
       const category = exp.category || 'Other Expenses';
       expenseCategories[category] = (expenseCategories[category] || 0) + (exp.amount || 0);
     });
 
-    (bills || []).forEach(bill => {
+    bills.forEach((bill: any) => {
       const category = bill.category || 'Vendor Payments';
       expenseCategories[category] = (expenseCategories[category] || 0) + (bill.amount_paid || 0);
     });
 
-    // Create itemized deductions from categories
     Object.entries(expenseCategories).forEach(([category, amount]) => {
       if (amount > 0) {
         itemizedDeductions.push({
@@ -156,7 +149,6 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Add depreciation as a deduction
     if (depreciation > 0) {
       itemizedDeductions.push({
         category: 'Depreciation',
@@ -166,27 +158,24 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Calculate totals
     const businessExpenses = Object.values(expenseCategories).reduce((sum, val) => sum + val, 0);
     const interestExpenses = expenseCategories['Interest'] || 0;
     const otherDeductions = expenseCategories['Other Expenses'] || 0;
     const totalDeductions = businessExpenses + depreciation;
 
     const operatingIncome = grossRevenue - businessExpenses;
-    const otherIncome = 0; // Can be expanded to include interest income from bank accounts
+    const otherIncome = 0;
     const netIncome = operatingIncome + otherIncome;
 
-    // Tax calculations
     const taxableIncome = Math.max(0, netIncome - depreciation);
-    const federalTaxRate = 0.21; // Corporate tax rate
-    const stateTaxRate = 0.063; // Massachusetts corporate tax rate
+    const federalTaxRate = 0.21;
+    const stateTaxRate = 0.063;
     const federalTaxLiability = taxableIncome * federalTaxRate;
     const stateTaxLiability = taxableIncome * stateTaxRate;
-    const selfEmploymentTax = netIncome * 0.153; // 15.3% SE tax rate
+    const selfEmploymentTax = netIncome * 0.153;
     const totalTaxLiability = federalTaxLiability + stateTaxLiability + selfEmploymentTax;
     const effectiveTaxRate = netIncome > 0 ? totalTaxLiability / netIncome : 0;
 
-    // Quarterly payments (simplified - could be enhanced with actual payment records)
     const quarterlyEstimate = totalTaxLiability / 4;
     const quarterlyPayments: QuarterlyTax[] = [
       {

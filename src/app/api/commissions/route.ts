@@ -1,49 +1,52 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/commissions - List commissions with filters
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-    
+
     const commission_type = searchParams.get('commission_type');
     const status = searchParams.get('status');
     const booking_id = searchParams.get('booking_id');
     const employee_id = searchParams.get('employee_id');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
+    const offset = (page - 1) * limit;
 
-    let query = supabase
-      .from('commissions')
-      .select(`
-        *,
-        booking:bookings(id, booking_number),
-        invoice:invoices(id, invoice_number),
-        employee:employees(id, first_name, last_name),
-        vendor:vendors(id, name)
-      `, { count: 'exact' });
+    const rows = await sql`
+      SELECT
+        c.*,
+        json_build_object('id', b.id, 'booking_number', b.booking_number) AS booking,
+        json_build_object('id', i.id, 'invoice_number', i.invoice_number) AS invoice,
+        json_build_object('id', e.id, 'first_name', e.first_name, 'last_name', e.last_name) AS employee,
+        json_build_object('id', v.id, 'name', v.name) AS vendor
+      FROM commissions c
+      LEFT JOIN bookings b ON b.id = c.booking_id
+      LEFT JOIN invoices i ON i.id = c.invoice_id
+      LEFT JOIN employees e ON e.id = c.employee_id
+      LEFT JOIN vendors v ON v.id = c.vendor_id
+      ORDER BY c.commission_date DESC
+    `;
 
-    if (commission_type) query = query.eq('commission_type', commission_type);
-    if (status) query = query.eq('status', status);
-    if (booking_id) query = query.eq('booking_id', booking_id);
-    if (employee_id) query = query.eq('employee_id', employee_id);
+    let data = rows as any[];
 
-    const { data, error, count } = await query
-      .order('commission_date', { ascending: false })
-      .range((page - 1) * limit, page * limit - 1);
+    if (commission_type) data = data.filter((r: any) => r.commission_type === commission_type);
+    if (status) data = data.filter((r: any) => r.status === status);
+    if (booking_id) data = data.filter((r: any) => r.booking_id === booking_id);
+    if (employee_id) data = data.filter((r: any) => r.employee_id === employee_id);
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const total = data.length;
+    const paged = data.slice(offset, offset + limit);
 
     return NextResponse.json({
-      data,
+      data: paged,
       pagination: {
         page,
         limit,
-        total: count || 0,
-        totalPages: Math.ceil((count || 0) / limit),
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     });
   } catch (error: any) {
@@ -54,15 +57,13 @@ export async function GET(request: NextRequest) {
 // POST /api/commissions - Create commission
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Validate required fields
     if (!body.commission_type || !body.commission_date) {
       return NextResponse.json(
         { error: 'Missing required fields: commission_type, commission_date' },
@@ -70,7 +71,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calculate commission amount
     let commission_amount = body.commission_amount;
     if (body.commission_rate && body.base_amount) {
       commission_amount = body.base_amount * (body.commission_rate / 100);
@@ -83,37 +83,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
-      .from('commissions')
-      .insert({
-        commission_type: body.commission_type,
-        booking_id: body.booking_id,
-        invoice_id: body.invoice_id,
-        employee_id: body.employee_id,
-        vendor_id: body.vendor_id,
-        commission_rate: body.commission_rate,
-        base_amount: body.base_amount,
-        commission_amount,
-        currency: body.currency || 'USD',
-        exchange_rate: body.exchange_rate || 1.0,
-        commission_date: body.commission_date,
-        payment_date: body.payment_date,
-        status: body.status || 'pending',
-        notes: body.notes,
-        created_by: user.id,
-      })
-      .select(`
-        *,
-        booking:bookings(id, booking_number),
-        invoice:invoices(id, invoice_number),
-        employee:employees(id, first_name, last_name),
-        vendor:vendors(id, name)
-      `)
-      .single();
+    const insertedRows = await sql`
+      INSERT INTO commissions (
+        commission_type, booking_id, invoice_id, employee_id, vendor_id,
+        commission_rate, base_amount, commission_amount, currency, exchange_rate,
+        commission_date, payment_date, status, notes, created_by
+      ) VALUES (
+        ${body.commission_type}, ${body.booking_id ?? null}, ${body.invoice_id ?? null},
+        ${body.employee_id ?? null}, ${body.vendor_id ?? null},
+        ${body.commission_rate ?? null}, ${body.base_amount ?? null}, ${commission_amount},
+        ${body.currency || 'USD'}, ${body.exchange_rate || 1.0},
+        ${body.commission_date}, ${body.payment_date ?? null},
+        ${body.status || 'pending'}, ${body.notes ?? null}, ${user.id}
+      )
+      RETURNING id
+    `;
+    const newId = (insertedRows as any[])[0].id;
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const dataRows = await sql`
+      SELECT
+        c.*,
+        json_build_object('id', b.id, 'booking_number', b.booking_number) AS booking,
+        json_build_object('id', i.id, 'invoice_number', i.invoice_number) AS invoice,
+        json_build_object('id', e.id, 'first_name', e.first_name, 'last_name', e.last_name) AS employee,
+        json_build_object('id', v.id, 'name', v.name) AS vendor
+      FROM commissions c
+      LEFT JOIN bookings b ON b.id = c.booking_id
+      LEFT JOIN invoices i ON i.id = c.invoice_id
+      LEFT JOIN employees e ON e.id = c.employee_id
+      LEFT JOIN vendors v ON v.id = c.vendor_id
+      WHERE c.id = ${newId}
+    `;
+    const data = (dataRows as any[])[0];
 
     return NextResponse.json(data, { status: 201 });
   } catch (error: any) {

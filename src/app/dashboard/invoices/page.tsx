@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import { PlusIcon, MagnifyingGlassIcon, FunnelIcon } from '@heroicons/react/24/outline';
 import type { Invoice, Customer } from '@/types/database';
@@ -20,24 +19,12 @@ export default function InvoicesPage() {
 
   const loadInvoices = async () => {
     try {
-      let query = supabase
-        .from('invoices')
-        .select('*, customers(*)')
-        .neq('document_type', 'receipt') // Exclude receipts
-        .order('created_at', { ascending: false });
-
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
-
-      if (typeFilter !== 'all') {
-        query = query.eq('document_type', typeFilter);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setInvoices(data || []);
+      const params = new URLSearchParams();
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      if (typeFilter !== 'all') params.set('type', typeFilter);
+      const res = await fetch(`/api/invoices?${params.toString()}`, { cache: 'no-store' });
+      const data = await res.json();
+      setInvoices(data.data || []);
     } catch (error) {
       console.error('Failed to load invoices:', error);
     } finally {

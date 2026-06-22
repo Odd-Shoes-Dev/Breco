@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import { ScaledNumber } from '@/components/ui/scaled-number';
 import {
@@ -43,31 +43,13 @@ export default function AssetsPage() {
   const loadAssets = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('fixed_assets')
-        .select(`
-          *,
-          asset_categories (name)
-        `, { count: 'exact' })
-        .order('purchase_date', { ascending: false });
-
-      if (searchQuery) {
-        query = query.or(`name.ilike.%${searchQuery}%,asset_number.ilike.%${searchQuery}%,serial_number.ilike.%${searchQuery}%`);
-      }
-
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
-
-      const from = (currentPage - 1) * pageSize;
-      const to = from + pageSize - 1;
-      query = query.range(from, to);
-
-      const { data, count, error } = await query;
-      if (error) throw error;
-
-      setAssets(data || []);
-      setTotalCount(count || 0);
+      const params = new URLSearchParams({ page: String(currentPage), limit: String(pageSize) });
+      if (searchQuery) params.set('search', searchQuery);
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      const res = await fetch(`/api/assets?${params}`);
+      const result = await res.json();
+      setAssets(result.data || result || []);
+      setTotalCount(result.total || result.count || 0);
     } catch (error) {
       console.error('Failed to load assets:', error);
     } finally {

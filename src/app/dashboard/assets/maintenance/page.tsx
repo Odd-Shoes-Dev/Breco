@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import {
   PlusIcon,
@@ -42,23 +41,11 @@ export default function AssetMaintenancePage() {
     try {
       setLoading(true);
 
-      let query = supabase
-        .from('asset_maintenance')
-        .select(`
-          *,
-          fixed_assets (asset_name, asset_tag),
-          vendors (name, company_name)
-        `)
-        .order('scheduled_date', { ascending: true });
-
-      if (statusFilter) {
-        query = query.eq('status', statusFilter);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setMaintenances(data || []);
+      const params = new URLSearchParams();
+      if (statusFilter) params.set('status', statusFilter);
+      const res = await fetch(`/api/asset-maintenance?${params}`);
+      const result = await res.json();
+      setMaintenances(result.data || result || []);
     } catch (error) {
       console.error('Failed to load maintenances:', error);
       toast.error('Failed to load maintenances');
@@ -74,16 +61,17 @@ export default function AssetMaintenancePage() {
       const cost = prompt('Enter actual cost:');
       if (cost === null) return;
 
-      const { error } = await supabase
-        .from('asset_maintenance')
-        .update({
+      const res = await fetch(`/api/asset-maintenance`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: maintenanceId,
           status: 'completed',
           completed_date: new Date().toISOString(),
           cost: parseFloat(cost) || 0,
-        })
-        .eq('id', maintenanceId);
-
-      if (error) throw error;
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to complete maintenance');
 
       toast.success('Maintenance marked as completed');
       loadMaintenances();

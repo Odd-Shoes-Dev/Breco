@@ -3,7 +3,7 @@
 // Breco Safaris Ltd Financial System
 // =====================================================
 
-import { supabase } from '@/lib/supabase/client';
+import { sql } from '@/lib/db';
 import type {
   JournalEntry,
   JournalLine,
@@ -71,9 +71,9 @@ export function validateJournalBalance(lines: JournalLineInput[]): {
  * Generates the next journal entry number
  */
 export async function generateJournalNumber(): Promise<string> {
-  const { data, error } = await supabase.rpc('generate_journal_number');
-  if (error) throw new Error(`Failed to generate journal number: ${error.message}`);
-  return data;
+  const rows = await sql`SELECT generate_journal_number() AS num`;
+  if (!rows[0]?.num) throw new Error('Failed to generate journal number');
+  return rows[0].num;
 }
 
 /**
@@ -95,72 +95,64 @@ export async function createJournalEntry(
   const entryNumber = await generateJournalNumber();
 
   // Get period for the entry date
-  const { data: period } = await supabase
-    .from('fiscal_periods')
-    .select('id')
-    .eq('level', 'monthly')
-    .lte('start_date', input.entry_date)
-    .gte('end_date', input.entry_date)
-    .single();
+  const periodRows = await sql`
+    SELECT id FROM fiscal_periods
+    WHERE level = 'monthly'
+      AND start_date <= ${input.entry_date}
+      AND end_date >= ${input.entry_date}
+    LIMIT 1
+  `;
+  const period = periodRows[0];
 
   // Create journal entry
-  const { data: entry, error: entryError } = await supabase
-    .from('journal_entries')
-    .insert({
-      entry_number: entryNumber,
-      entry_date: input.entry_date,
-      period_id: period?.id,
-      description: input.description,
-      memo: input.memo,
-      source_module: input.source_module || 'manual',
-      source_document_id: input.source_document_id,
-      is_adjusting: input.is_adjusting || false,
-      is_closing: input.is_closing || false,
-      status: 'draft',
-      created_by: userId,
-    })
-    .select()
-    .single();
-
-  if (entryError) throw new Error(`Failed to create journal entry: ${entryError.message}`);
+  const entryRows = await sql`
+    INSERT INTO journal_entries (
+      entry_number, entry_date, period_id, description, memo,
+      source_module, source_document_id, is_adjusting, is_closing,
+      status, created_by
+    ) VALUES (
+      ${entryNumber}, ${input.entry_date}, ${period?.id ?? null},
+      ${input.description}, ${input.memo ?? null},
+      ${input.source_module || 'manual'}, ${input.source_document_id ?? null},
+      ${input.is_adjusting || false}, ${input.is_closing || false},
+      'draft', ${userId}
+    )
+    RETURNING *
+  `;
+  const entry = entryRows[0];
+  if (!entry) throw new Error('Failed to create journal entry');
 
   // Create journal lines
-  const linesWithEntry = input.lines.map((line, index) => ({
-    journal_entry_id: entry.id,
-    line_number: index + 1,
-    account_id: line.account_id,
-    description: line.description,
-    debit: line.debit || 0,
-    credit: line.credit || 0,
-    currency: line.currency || 'USD',
-    exchange_rate: line.exchange_rate || 1,
-    base_debit: new Decimal(line.debit || 0)
-      .times(line.exchange_rate || 1)
-      .toNumber(),
-    base_credit: new Decimal(line.credit || 0)
-      .times(line.exchange_rate || 1)
-      .toNumber(),
-    customer_id: line.customer_id,
-    vendor_id: line.vendor_id,
-    project_id: line.project_id,
-    department: line.department,
-  }));
-
-  const { data: lines, error: linesError } = await supabase
-    .from('journal_lines')
-    .insert(linesWithEntry)
-    .select();
-
-  if (linesError) throw new Error(`Failed to create journal lines: ${linesError.message}`);
+  const lines: any[] = [];
+  for (let index = 0; index < input.lines.length; index++) {
+    const line = input.lines[index];
+    const lineRows = await sql`
+      INSERT INTO journal_lines (
+        journal_entry_id, line_number, account_id, description,
+        debit, credit, currency, exchange_rate, base_debit, base_credit,
+        customer_id, vendor_id, project_id, department
+      ) VALUES (
+        ${entry.id}, ${index + 1}, ${line.account_id}, ${line.description ?? null},
+        ${line.debit || 0}, ${line.credit || 0},
+        ${line.currency || 'USD'}, ${line.exchange_rate || 1},
+        ${new Decimal(line.debit || 0).times(line.exchange_rate || 1).toNumber()},
+        ${new Decimal(line.credit || 0).times(line.exchange_rate || 1).toNumber()},
+        ${line.customer_id ?? null}, ${line.vendor_id ?? null},
+        ${line.project_id ?? null}, ${line.department ?? null}
+      )
+      RETURNING *
+    `;
+    lines.push(lineRows[0]);
+  }
 
   // Log activity
-  await supabase.from('activity_logs').insert({
-    user_id: userId,
-    action: 'create',
-    entity_type: 'journal_entry',
-    entity_id: entry.id,
-    new_values: { entry_number: entryNumber, lines_count: lines.length },
-  });
+  await sql`
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    VALUES (
+      ${userId}, 'create', 'journal_entry', ${entry.id},
+      ${JSON.stringify({ entry_number: entryNumber, lines_count: lines.length })}
+    )
+  `;
 
   return { ...entry, lines };
 }
@@ -172,55 +164,53 @@ export async function postJournalEntry(
   entryId: string,
   userId: string
 ): Promise<JournalEntry> {
-  // Get the entry
-  const { data: entry, error: fetchError } = await supabase
-    .from('journal_entries')
-    .select('*, fiscal_periods!inner(status)')
-    .eq('id', entryId)
-    .single();
+  // Get the entry with period status
+  const entryRows = await sql`
+    SELECT je.*, fp.status AS period_status
+    FROM journal_entries je
+    LEFT JOIN fiscal_periods fp ON fp.id = je.period_id
+    WHERE je.id = ${entryId}
+    LIMIT 1
+  `;
+  const entry = entryRows[0];
 
-  if (fetchError) throw new Error(`Journal entry not found: ${fetchError.message}`);
+  if (!entry) throw new Error('Journal entry not found');
   if (entry.status !== 'draft') {
     throw new Error(`Cannot post entry with status: ${entry.status}`);
   }
-  if (entry.fiscal_periods?.status === 'closed') {
+  if (entry.period_status === 'closed') {
     throw new Error('Cannot post to a closed period');
   }
 
   // Validate lines balance
-  const { data: lines } = await supabase
-    .from('journal_lines')
-    .select('*')
-    .eq('journal_entry_id', entryId);
+  const linesRows = await sql`
+    SELECT * FROM journal_lines WHERE journal_entry_id = ${entryId}
+  `;
 
-  const balance = validateJournalBalance(lines || []);
+  const balance = validateJournalBalance(linesRows || []);
   if (!balance.valid) {
     throw new Error('Journal entry does not balance');
   }
 
   // Update status to posted
-  const { data: posted, error: postError } = await supabase
-    .from('journal_entries')
-    .update({
-      status: 'posted',
-      posted_by: userId,
-      posted_at: new Date().toISOString(),
-    })
-    .eq('id', entryId)
-    .select()
-    .single();
-
-  if (postError) throw new Error(`Failed to post journal entry: ${postError.message}`);
+  const postedRows = await sql`
+    UPDATE journal_entries
+    SET status = 'posted', posted_by = ${userId}, posted_at = ${new Date().toISOString()}
+    WHERE id = ${entryId}
+    RETURNING *
+  `;
+  const posted = postedRows[0];
+  if (!posted) throw new Error('Failed to post journal entry');
 
   // Log activity
-  await supabase.from('activity_logs').insert({
-    user_id: userId,
-    action: 'post',
-    entity_type: 'journal_entry',
-    entity_id: entryId,
-    old_values: { status: 'draft' },
-    new_values: { status: 'posted' },
-  });
+  await sql`
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, old_values, new_values)
+    VALUES (
+      ${userId}, 'post', 'journal_entry', ${entryId},
+      ${JSON.stringify({ status: 'draft' })},
+      ${JSON.stringify({ status: 'posted' })}
+    )
+  `;
 
   return posted;
 }
@@ -233,37 +223,31 @@ export async function voidJournalEntry(
   userId: string,
   reason: string
 ): Promise<JournalEntry> {
-  const { data: entry, error: fetchError } = await supabase
-    .from('journal_entries')
-    .select('*')
-    .eq('id', entryId)
-    .single();
+  const entryRows = await sql`SELECT * FROM journal_entries WHERE id = ${entryId} LIMIT 1`;
+  const entry = entryRows[0];
 
-  if (fetchError) throw new Error(`Journal entry not found: ${fetchError.message}`);
+  if (!entry) throw new Error('Journal entry not found');
   if (entry.status === 'void') {
     throw new Error('Entry is already void');
   }
 
-  const { data: voided, error: voidError } = await supabase
-    .from('journal_entries')
-    .update({
-      status: 'void',
-      memo: `${entry.memo || ''}\n[VOIDED: ${reason}]`,
-    })
-    .eq('id', entryId)
-    .select()
-    .single();
+  const voidedRows = await sql`
+    UPDATE journal_entries
+    SET status = 'void', memo = ${`${entry.memo || ''}\n[VOIDED: ${reason}]`}
+    WHERE id = ${entryId}
+    RETURNING *
+  `;
+  const voided = voidedRows[0];
+  if (!voided) throw new Error('Failed to void journal entry');
 
-  if (voidError) throw new Error(`Failed to void journal entry: ${voidError.message}`);
-
-  await supabase.from('activity_logs').insert({
-    user_id: userId,
-    action: 'void',
-    entity_type: 'journal_entry',
-    entity_id: entryId,
-    old_values: { status: entry.status },
-    new_values: { status: 'void', reason },
-  });
+  await sql`
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, old_values, new_values)
+    VALUES (
+      ${userId}, 'void', 'journal_entry', ${entryId},
+      ${JSON.stringify({ status: entry.status })},
+      ${JSON.stringify({ status: 'void', reason })}
+    )
+  `;
 
   return voided;
 }
@@ -277,24 +261,20 @@ export async function reverseJournalEntry(
   userId: string
 ): Promise<JournalEntryWithLines> {
   // Get original entry and lines
-  const { data: original, error: fetchError } = await supabase
-    .from('journal_entries')
-    .select('*')
-    .eq('id', entryId)
-    .single();
+  const entryRows = await sql`SELECT * FROM journal_entries WHERE id = ${entryId} LIMIT 1`;
+  const original = entryRows[0];
 
-  if (fetchError) throw new Error(`Journal entry not found: ${fetchError.message}`);
+  if (!original) throw new Error('Journal entry not found');
   if (original.status !== 'posted') {
     throw new Error('Can only reverse posted entries');
   }
 
-  const { data: originalLines } = await supabase
-    .from('journal_lines')
-    .select('*')
-    .eq('journal_entry_id', entryId);
+  const originalLines = await sql`
+    SELECT * FROM journal_lines WHERE journal_entry_id = ${entryId}
+  `;
 
   // Create reversal with swapped debits/credits
-  const reversalLines: JournalLineInput[] = (originalLines || []).map((line) => ({
+  const reversalLines: JournalLineInput[] = (originalLines || []).map((line: any) => ({
     account_id: line.account_id,
     description: `Reversal: ${line.description || ''}`,
     debit: line.credit, // Swap debit and credit
@@ -321,10 +301,9 @@ export async function reverseJournalEntry(
   );
 
   // Update original entry to reference reversal
-  await supabase
-    .from('journal_entries')
-    .update({ reversed_entry_id: reversal.id })
-    .eq('id', entryId);
+  await sql`
+    UPDATE journal_entries SET reversed_entry_id = ${reversal.id} WHERE id = ${entryId}
+  `;
 
   return reversal;
 }
@@ -336,21 +315,20 @@ export async function getAccountBalance(
   accountId: string,
   asOfDate: string
 ): Promise<Decimal> {
-  const { data: lines, error } = await supabase
-    .from('journal_lines')
-    .select('base_debit, base_credit, journal_entries!inner(entry_date, status)')
-    .eq('account_id', accountId)
-    .eq('journal_entries.status', 'posted')
-    .lte('journal_entries.entry_date', asOfDate);
-
-  if (error) throw new Error(`Failed to get account balance: ${error.message}`);
+  const lines = await sql`
+    SELECT jl.base_debit, jl.base_credit
+    FROM journal_lines jl
+    JOIN journal_entries je ON je.id = jl.journal_entry_id
+    WHERE jl.account_id = ${accountId}
+      AND je.status = 'posted'
+      AND je.entry_date <= ${asOfDate}
+  `;
 
   // Get account to determine normal balance
-  const { data: account } = await supabase
-    .from('accounts')
-    .select('normal_balance, account_type')
-    .eq('id', accountId)
-    .single();
+  const accountRows = await sql`
+    SELECT normal_balance, account_type FROM accounts WHERE id = ${accountId} LIMIT 1
+  `;
+  const account = accountRows[0];
 
   let balance = new Decimal(0);
   for (const line of lines || []) {
@@ -373,21 +351,20 @@ export async function getAccountBalanceForPeriod(
   startDate: string,
   endDate: string
 ): Promise<Decimal> {
-  const { data: lines, error } = await supabase
-    .from('journal_lines')
-    .select('base_debit, base_credit, journal_entries!inner(entry_date, status)')
-    .eq('account_id', accountId)
-    .eq('journal_entries.status', 'posted')
-    .gte('journal_entries.entry_date', startDate)
-    .lte('journal_entries.entry_date', endDate);
+  const lines = await sql`
+    SELECT jl.base_debit, jl.base_credit
+    FROM journal_lines jl
+    JOIN journal_entries je ON je.id = jl.journal_entry_id
+    WHERE jl.account_id = ${accountId}
+      AND je.status = 'posted'
+      AND je.entry_date >= ${startDate}
+      AND je.entry_date <= ${endDate}
+  `;
 
-  if (error) throw new Error(`Failed to get account balance: ${error.message}`);
-
-  const { data: account } = await supabase
-    .from('accounts')
-    .select('normal_balance')
-    .eq('id', accountId)
-    .single();
+  const accountRows = await sql`
+    SELECT normal_balance FROM accounts WHERE id = ${accountId} LIMIT 1
+  `;
+  const account = accountRows[0];
 
   let balance = new Decimal(0);
   for (const line of lines || []) {
@@ -409,48 +386,39 @@ export async function closePeriod(
   userId: string
 ): Promise<void> {
   // Check if all child periods are closed (for quarterly/annual)
-  const { data: children } = await supabase
-    .from('fiscal_periods')
-    .select('id, status')
-    .eq('parent_period_id', periodId);
+  const children = await sql`
+    SELECT id, status FROM fiscal_periods WHERE parent_period_id = ${periodId}
+  `;
 
-  const openChildren = (children || []).filter((c) => c.status !== 'closed');
+  const openChildren = (children || []).filter((c: any) => c.status !== 'closed');
   if (openChildren.length > 0) {
     throw new Error('Cannot close period with open child periods');
   }
 
   // Check for unposted entries in the period
-  const { data: period } = await supabase
-    .from('fiscal_periods')
-    .select('*')
-    .eq('id', periodId)
-    .single();
+  const periodRows = await sql`SELECT * FROM fiscal_periods WHERE id = ${periodId} LIMIT 1`;
+  const period = periodRows[0];
 
-  const { data: unposted } = await supabase
-    .from('journal_entries')
-    .select('id')
-    .eq('period_id', periodId)
-    .eq('status', 'draft');
+  const unposted = await sql`
+    SELECT id FROM journal_entries WHERE period_id = ${periodId} AND status = 'draft'
+  `;
 
   if ((unposted || []).length > 0) {
     throw new Error(`Cannot close period with ${unposted?.length} unposted entries`);
   }
 
   // Close the period
-  await supabase
-    .from('fiscal_periods')
-    .update({
-      status: 'closed',
-      closed_by: userId,
-      closed_at: new Date().toISOString(),
-    })
-    .eq('id', periodId);
+  await sql`
+    UPDATE fiscal_periods
+    SET status = 'closed', closed_by = ${userId}, closed_at = ${new Date().toISOString()}
+    WHERE id = ${periodId}
+  `;
 
-  await supabase.from('activity_logs').insert({
-    user_id: userId,
-    action: 'close',
-    entity_type: 'fiscal_period',
-    entity_id: periodId,
-    new_values: { status: 'closed', period_name: period?.name },
-  });
+  await sql`
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    VALUES (
+      ${userId}, 'close', 'fiscal_period', ${periodId},
+      ${JSON.stringify({ status: 'closed', period_name: period?.name })}
+    )
+  `;
 }

@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/bank-transfers/[id]/approve - Approve bank transfer
@@ -7,52 +8,50 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { id } = await context.params;
-
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check current status
-    const { data: existing } = await supabase
-      .from('bank_transfers')
-      .select('status')
-      .eq('id', id)
-      .single();
+    const { id } = await context.params;
 
-    if (!existing) {
+    // Check current status
+    const existing = await sql`SELECT status FROM bank_transfers WHERE id = ${id}`;
+
+    if (existing.length === 0) {
       return NextResponse.json({ error: 'Bank transfer not found' }, { status: 404 });
     }
 
-    if (existing.status !== 'pending') {
+    if (existing[0].status !== 'pending') {
       return NextResponse.json(
-        { error: `Can only approve pending transfers. Current status: ${existing.status}` },
+        { error: `Can only approve pending transfers. Current status: ${existing[0].status}` },
         { status: 400 }
       );
     }
 
-    const { data, error } = await supabase
-      .from('bank_transfers')
-      .update({
-        status: 'approved',
-        approved_by: user.id,
-        approved_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .select(`
-        *,
-        from_account:bank_accounts!bank_transfers_from_account_id_fkey(id, account_name),
-        to_account:bank_accounts!bank_transfers_to_account_id_fkey(id, account_name)
-      `)
-      .single();
+    const rows = await sql`
+      UPDATE bank_transfers
+      SET
+        status = 'approved',
+        approved_by = ${user.id},
+        approved_at = NOW()
+      WHERE id = ${id}
+      RETURNING *
+    `;
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    // Fetch with joins
+    const fullRows = await sql`
+      SELECT
+        bt.*,
+        json_build_object('id', fa.id, 'account_name', fa.account_name) AS from_account,
+        json_build_object('id', ta.id, 'account_name', ta.account_name) AS to_account
+      FROM bank_transfers bt
+      LEFT JOIN bank_accounts fa ON fa.id = bt.from_account_id
+      LEFT JOIN bank_accounts ta ON ta.id = bt.to_account_id
+      WHERE bt.id = ${id}
+    `;
 
-    return NextResponse.json(data);
+    return NextResponse.json(fullRows[0]);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

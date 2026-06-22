@@ -1,55 +1,171 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/goods-receipts - List goods receipts
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-    
+
     const purchase_order_id = searchParams.get('purchase_order_id');
     const status = searchParams.get('status');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
+    const offset = (page - 1) * limit;
 
-    let query = supabase
-      .from('goods_receipts')
-      .select(`
-        *,
-        purchase_order:purchase_orders(
-          id,
-          po_number,
-          vendor:vendors(id, name)
-        ),
-        goods_receipt_lines(
-          *,
-          purchase_order_line:purchase_order_lines(
-            id,
-            description,
-            quantity as ordered_quantity,
-            unit_price
-          )
-        )
-      `, { count: 'exact' });
+    let rows: any[];
+    let countRows: any[];
 
-    if (purchase_order_id) query = query.eq('purchase_order_id', purchase_order_id);
-    if (status) query = query.eq('status', status);
-
-    const { data, error, count } = await query
-      .order('receipt_date', { ascending: false })
-      .range((page - 1) * limit, page * limit - 1);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    if (purchase_order_id && status) {
+      rows = await sql`
+        SELECT
+          gr.*,
+          po.id AS po_id, po.po_number,
+          v.id AS vendor_id, v.name AS vendor_name,
+          json_agg(
+            json_build_object(
+              'id', grl.id,
+              'goods_receipt_id', grl.goods_receipt_id,
+              'purchase_order_line_id', grl.purchase_order_line_id,
+              'quantity_received', grl.quantity_received,
+              'quantity_accepted', grl.quantity_accepted,
+              'quantity_rejected', grl.quantity_rejected,
+              'notes', grl.notes,
+              'purchase_order_line', json_build_object(
+                'id', pol.id,
+                'description', pol.description,
+                'ordered_quantity', pol.quantity,
+                'unit_price', pol.unit_price
+              )
+            )
+          ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
+        FROM goods_receipts gr
+        LEFT JOIN purchase_orders po ON po.id = gr.purchase_order_id
+        LEFT JOIN vendors v ON v.id = po.vendor_id
+        LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
+        LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
+        WHERE gr.purchase_order_id = ${purchase_order_id} AND gr.status = ${status}
+        GROUP BY gr.id, po.id, po.po_number, v.id, v.name
+        ORDER BY gr.receipt_date DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`
+        SELECT COUNT(*) FROM goods_receipts WHERE purchase_order_id = ${purchase_order_id} AND status = ${status}
+      `;
+    } else if (purchase_order_id) {
+      rows = await sql`
+        SELECT
+          gr.*,
+          po.id AS po_id, po.po_number,
+          v.id AS vendor_id, v.name AS vendor_name,
+          json_agg(
+            json_build_object(
+              'id', grl.id,
+              'goods_receipt_id', grl.goods_receipt_id,
+              'purchase_order_line_id', grl.purchase_order_line_id,
+              'quantity_received', grl.quantity_received,
+              'quantity_accepted', grl.quantity_accepted,
+              'quantity_rejected', grl.quantity_rejected,
+              'notes', grl.notes,
+              'purchase_order_line', json_build_object(
+                'id', pol.id,
+                'description', pol.description,
+                'ordered_quantity', pol.quantity,
+                'unit_price', pol.unit_price
+              )
+            )
+          ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
+        FROM goods_receipts gr
+        LEFT JOIN purchase_orders po ON po.id = gr.purchase_order_id
+        LEFT JOIN vendors v ON v.id = po.vendor_id
+        LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
+        LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
+        WHERE gr.purchase_order_id = ${purchase_order_id}
+        GROUP BY gr.id, po.id, po.po_number, v.id, v.name
+        ORDER BY gr.receipt_date DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`
+        SELECT COUNT(*) FROM goods_receipts WHERE purchase_order_id = ${purchase_order_id}
+      `;
+    } else if (status) {
+      rows = await sql`
+        SELECT
+          gr.*,
+          po.id AS po_id, po.po_number,
+          v.id AS vendor_id, v.name AS vendor_name,
+          json_agg(
+            json_build_object(
+              'id', grl.id,
+              'goods_receipt_id', grl.goods_receipt_id,
+              'purchase_order_line_id', grl.purchase_order_line_id,
+              'quantity_received', grl.quantity_received,
+              'quantity_accepted', grl.quantity_accepted,
+              'quantity_rejected', grl.quantity_rejected,
+              'notes', grl.notes,
+              'purchase_order_line', json_build_object(
+                'id', pol.id,
+                'description', pol.description,
+                'ordered_quantity', pol.quantity,
+                'unit_price', pol.unit_price
+              )
+            )
+          ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
+        FROM goods_receipts gr
+        LEFT JOIN purchase_orders po ON po.id = gr.purchase_order_id
+        LEFT JOIN vendors v ON v.id = po.vendor_id
+        LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
+        LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
+        WHERE gr.status = ${status}
+        GROUP BY gr.id, po.id, po.po_number, v.id, v.name
+        ORDER BY gr.receipt_date DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) FROM goods_receipts WHERE status = ${status}`;
+    } else {
+      rows = await sql`
+        SELECT
+          gr.*,
+          po.id AS po_id, po.po_number,
+          v.id AS vendor_id, v.name AS vendor_name,
+          json_agg(
+            json_build_object(
+              'id', grl.id,
+              'goods_receipt_id', grl.goods_receipt_id,
+              'purchase_order_line_id', grl.purchase_order_line_id,
+              'quantity_received', grl.quantity_received,
+              'quantity_accepted', grl.quantity_accepted,
+              'quantity_rejected', grl.quantity_rejected,
+              'notes', grl.notes,
+              'purchase_order_line', json_build_object(
+                'id', pol.id,
+                'description', pol.description,
+                'ordered_quantity', pol.quantity,
+                'unit_price', pol.unit_price
+              )
+            )
+          ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
+        FROM goods_receipts gr
+        LEFT JOIN purchase_orders po ON po.id = gr.purchase_order_id
+        LEFT JOIN vendors v ON v.id = po.vendor_id
+        LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
+        LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
+        GROUP BY gr.id, po.id, po.po_number, v.id, v.name
+        ORDER BY gr.receipt_date DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) FROM goods_receipts`;
     }
 
+    const count = parseInt(countRows[0].count);
+
     return NextResponse.json({
-      data,
+      data: rows,
       pagination: {
         page,
         limit,
-        total: count || 0,
-        totalPages: Math.ceil((count || 0) / limit),
+        total: count,
+        totalPages: Math.ceil(count / limit),
       },
     });
   } catch (error: any) {
@@ -60,10 +176,9 @@ export async function GET(request: NextRequest) {
 // POST /api/goods-receipts - Create goods receipt from PO
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -77,15 +192,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Get PO details
-    const { data: po, error: poError } = await supabase
-      .from('purchase_orders')
-      .select('*, purchase_order_lines(*)')
-      .eq('id', body.purchase_order_id)
-      .single();
-
-    if (poError || !po) {
+    const pos = await sql`SELECT * FROM purchase_orders WHERE id = ${body.purchase_order_id}`;
+    if (pos.length === 0) {
       return NextResponse.json({ error: 'Purchase order not found' }, { status: 404 });
     }
+    const po = pos[0];
+
+    const poLines = await sql`SELECT * FROM purchase_order_lines WHERE purchase_order_id = ${body.purchase_order_id}`;
+    po.purchase_order_lines = poLines;
 
     if (po.status !== 'approved') {
       return NextResponse.json(
@@ -95,56 +209,35 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate GR number
-    const { data: lastGR } = await supabase
-      .from('goods_receipts')
-      .select('gr_number')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
+    const lastGRRows = await sql`
+      SELECT gr_number FROM goods_receipts ORDER BY created_at DESC LIMIT 1
+    `;
     let nextNumber = 1;
-    if (lastGR?.gr_number) {
-      const match = lastGR.gr_number.match(/GR-(\d+)/);
+    if (lastGRRows.length > 0 && lastGRRows[0].gr_number) {
+      const match = lastGRRows[0].gr_number.match(/GR-(\d+)/);
       if (match) nextNumber = parseInt(match[1]) + 1;
     }
     const gr_number = `GR-${String(nextNumber).padStart(6, '0')}`;
 
     // Create goods receipt
-    const { data: receipt, error: receiptError } = await supabase
-      .from('goods_receipts')
-      .insert({
-        gr_number,
-        purchase_order_id: body.purchase_order_id,
-        receipt_date: body.receipt_date,
-        status: body.status || 'received',
-        notes: body.notes,
-        received_by: user.id,
-      })
-      .select()
-      .single();
-
-    if (receiptError) {
-      return NextResponse.json({ error: receiptError.message }, { status: 400 });
-    }
+    const receiptRows = await sql`
+      INSERT INTO goods_receipts (gr_number, purchase_order_id, receipt_date, status, notes, received_by)
+      VALUES (${gr_number}, ${body.purchase_order_id}, ${body.receipt_date}, ${body.status || 'received'}, ${body.notes || null}, ${user.id})
+      RETURNING *
+    `;
+    const receipt = receiptRows[0];
 
     // Create goods receipt lines
-    const lines = body.lines.map((line: any) => ({
-      goods_receipt_id: receipt.id,
-      purchase_order_line_id: line.purchase_order_line_id,
-      quantity_received: line.quantity_received,
-      quantity_accepted: line.quantity_accepted,
-      quantity_rejected: line.quantity_rejected || 0,
-      notes: line.notes,
-    }));
-
-    const { error: linesError } = await supabase
-      .from('goods_receipt_lines')
-      .insert(lines);
-
-    if (linesError) {
-      // Rollback receipt creation
-      await supabase.from('goods_receipts').delete().eq('id', receipt.id);
-      return NextResponse.json({ error: linesError.message }, { status: 400 });
+    for (const line of body.lines) {
+      await sql`
+        INSERT INTO goods_receipt_lines (
+          goods_receipt_id, purchase_order_line_id, quantity_received,
+          quantity_accepted, quantity_rejected, notes
+        ) VALUES (
+          ${receipt.id}, ${line.purchase_order_line_id}, ${line.quantity_received},
+          ${line.quantity_accepted}, ${line.quantity_rejected || 0}, ${line.notes || null}
+        )
+      `;
     }
 
     // Update PO status to received if fully received
@@ -154,35 +247,41 @@ export async function POST(request: NextRequest) {
     });
 
     if (allLinesReceived) {
-      await supabase
-        .from('purchase_orders')
-        .update({
-          status: 'received',
-          received_date: body.receipt_date,
-          received_by: user.id,
-        })
-        .eq('id', body.purchase_order_id);
+      await sql`
+        UPDATE purchase_orders
+        SET status = 'received', received_date = ${body.receipt_date}, received_by = ${user.id}
+        WHERE id = ${body.purchase_order_id}
+      `;
     }
 
     // Fetch complete receipt
-    const { data: completeReceipt } = await supabase
-      .from('goods_receipts')
-      .select(`
-        *,
-        purchase_order:purchase_orders(
-          id,
-          po_number,
-          vendor:vendors(id, name)
-        ),
-        goods_receipt_lines(
-          *,
-          purchase_order_line:purchase_order_lines(*)
-        )
-      `)
-      .eq('id', receipt.id)
-      .single();
+    const completeRows = await sql`
+      SELECT
+        gr.*,
+        po.id AS po_id, po.po_number,
+        v.id AS vendor_id, v.name AS vendor_name,
+        json_agg(
+          json_build_object(
+            'id', grl.id,
+            'goods_receipt_id', grl.goods_receipt_id,
+            'purchase_order_line_id', grl.purchase_order_line_id,
+            'quantity_received', grl.quantity_received,
+            'quantity_accepted', grl.quantity_accepted,
+            'quantity_rejected', grl.quantity_rejected,
+            'notes', grl.notes,
+            'purchase_order_line', row_to_json(pol.*)
+          )
+        ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
+      FROM goods_receipts gr
+      LEFT JOIN purchase_orders po ON po.id = gr.purchase_order_id
+      LEFT JOIN vendors v ON v.id = po.vendor_id
+      LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
+      LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
+      WHERE gr.id = ${receipt.id}
+      GROUP BY gr.id, po.id, po.po_number, v.id, v.name
+    `;
 
-    return NextResponse.json(completeReceipt, { status: 201 });
+    return NextResponse.json(completeRows[0], { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

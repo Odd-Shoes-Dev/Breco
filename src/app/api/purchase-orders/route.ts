@@ -1,57 +1,107 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/purchase-orders - List purchase orders
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-    
+
     const vendorId = searchParams.get('vendor_id');
     const status = searchParams.get('status');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
 
-    let query = supabase
-      .from('purchase_orders')
-      .select(`
-        *,
-        vendor:vendors(id, name, email, phone),
-        purchase_order_lines(
-          id,
-          product_id,
-          description,
-          quantity,
-          unit_price,
-          line_total
-        )
-      `, { count: 'exact' })
-      .order('po_date', { ascending: false });
+    let rows: any[];
+    let countRows: any[];
 
-    if (vendorId) {
-      query = query.eq('vendor_id', vendorId);
+    if (vendorId && status) {
+      rows = await sql`
+        SELECT po.*,
+          json_build_object('id', v.id, 'name', v.name, 'email', v.email, 'phone', v.phone) AS vendor,
+          COALESCE(json_agg(
+            json_build_object(
+              'id', pol.id, 'product_id', pol.product_id, 'description', pol.description,
+              'quantity', pol.quantity, 'unit_price', pol.unit_price, 'line_total', pol.line_total
+            )
+          ) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
+        FROM purchase_orders po
+        LEFT JOIN vendors v ON v.id = po.vendor_id
+        LEFT JOIN purchase_order_lines pol ON pol.purchase_order_id = po.id
+        WHERE po.vendor_id = ${vendorId} AND po.status = ${status}
+        GROUP BY po.id, v.id, v.name, v.email, v.phone
+        ORDER BY po.po_date DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) FROM purchase_orders WHERE vendor_id = ${vendorId} AND status = ${status}`;
+    } else if (vendorId) {
+      rows = await sql`
+        SELECT po.*,
+          json_build_object('id', v.id, 'name', v.name, 'email', v.email, 'phone', v.phone) AS vendor,
+          COALESCE(json_agg(
+            json_build_object(
+              'id', pol.id, 'product_id', pol.product_id, 'description', pol.description,
+              'quantity', pol.quantity, 'unit_price', pol.unit_price, 'line_total', pol.line_total
+            )
+          ) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
+        FROM purchase_orders po
+        LEFT JOIN vendors v ON v.id = po.vendor_id
+        LEFT JOIN purchase_order_lines pol ON pol.purchase_order_id = po.id
+        WHERE po.vendor_id = ${vendorId}
+        GROUP BY po.id, v.id, v.name, v.email, v.phone
+        ORDER BY po.po_date DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) FROM purchase_orders WHERE vendor_id = ${vendorId}`;
+    } else if (status) {
+      rows = await sql`
+        SELECT po.*,
+          json_build_object('id', v.id, 'name', v.name, 'email', v.email, 'phone', v.phone) AS vendor,
+          COALESCE(json_agg(
+            json_build_object(
+              'id', pol.id, 'product_id', pol.product_id, 'description', pol.description,
+              'quantity', pol.quantity, 'unit_price', pol.unit_price, 'line_total', pol.line_total
+            )
+          ) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
+        FROM purchase_orders po
+        LEFT JOIN vendors v ON v.id = po.vendor_id
+        LEFT JOIN purchase_order_lines pol ON pol.purchase_order_id = po.id
+        WHERE po.status = ${status}
+        GROUP BY po.id, v.id, v.name, v.email, v.phone
+        ORDER BY po.po_date DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) FROM purchase_orders WHERE status = ${status}`;
+    } else {
+      rows = await sql`
+        SELECT po.*,
+          json_build_object('id', v.id, 'name', v.name, 'email', v.email, 'phone', v.phone) AS vendor,
+          COALESCE(json_agg(
+            json_build_object(
+              'id', pol.id, 'product_id', pol.product_id, 'description', pol.description,
+              'quantity', pol.quantity, 'unit_price', pol.unit_price, 'line_total', pol.line_total
+            )
+          ) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
+        FROM purchase_orders po
+        LEFT JOIN vendors v ON v.id = po.vendor_id
+        LEFT JOIN purchase_order_lines pol ON pol.purchase_order_id = po.id
+        GROUP BY po.id, v.id, v.name, v.email, v.phone
+        ORDER BY po.po_date DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) FROM purchase_orders`;
     }
 
-    if (status) {
-      query = query.eq('status', status);
-    }
-
-    query = query.range(offset, offset + limit - 1);
-
-    const { data, error, count } = await query;
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const count = parseInt(countRows[0]?.count || '0');
 
     return NextResponse.json({
-      data,
+      data: rows,
       pagination: {
         page,
         limit,
-        total: count || 0,
-        totalPages: Math.ceil((count || 0) / limit),
+        total: count,
+        totalPages: Math.ceil(count / limit),
       },
     });
   } catch (error: any) {
@@ -62,13 +112,12 @@ export async function GET(request: NextRequest) {
 // POST /api/purchase-orders - Create purchase order
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const body = await request.json();
-
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const body = await request.json();
 
     // Validate required fields
     if (!body.vendor_id || !body.po_date || !body.lines || body.lines.length === 0) {
@@ -79,12 +128,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate PO number
-    const { data: latestPO } = await supabase
-      .from('purchase_orders')
-      .select('po_number')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    const latestRows = await sql`
+      SELECT po_number FROM purchase_orders ORDER BY created_at DESC LIMIT 1
+    `;
+    const latestPO = latestRows[0];
 
     let nextNumber = 1;
     if (latestPO?.po_number) {
@@ -106,62 +153,56 @@ export async function POST(request: NextRequest) {
     const total = subtotal + taxAmount;
 
     // Create purchase order
-    const { data: po, error: poError } = await supabase
-      .from('purchase_orders')
-      .insert({
-        po_number: poNumber,
-        vendor_id: body.vendor_id,
-        po_date: body.po_date,
-        expected_delivery_date: body.expected_delivery_date,
-        currency: body.currency || 'USD',
-        exchange_rate: body.exchange_rate || 1.0,
-        subtotal,
-        tax_rate: body.tax_rate || 0,
-        tax_amount: taxAmount,
-        total,
-        status: 'draft',
-        notes: body.notes,
-        created_by: user.id,
-      })
-      .select()
-      .single();
+    const poRows = await sql`
+      INSERT INTO purchase_orders (
+        po_number, vendor_id, po_date, expected_delivery_date, currency,
+        exchange_rate, subtotal, tax_rate, tax_amount, total, status, notes, created_by
+      ) VALUES (
+        ${poNumber}, ${body.vendor_id}, ${body.po_date},
+        ${body.expected_delivery_date ?? null},
+        ${body.currency || 'USD'}, ${body.exchange_rate || 1.0},
+        ${subtotal}, ${body.tax_rate || 0}, ${taxAmount}, ${total},
+        'draft', ${body.notes ?? null}, ${user.id}
+      )
+      RETURNING *
+    `;
+    const po = poRows[0];
 
-    if (poError) {
-      return NextResponse.json({ error: poError.message }, { status: 400 });
+    if (!po) {
+      return NextResponse.json({ error: 'Failed to create purchase order' }, { status: 400 });
     }
 
     // Create PO lines
-    const poLines = lines.map((line: any) => ({
-      purchase_order_id: po.id,
-      product_id: line.product_id,
-      description: line.description,
-      quantity: line.quantity,
-      unit_price: line.unit_price,
-      line_total: line.line_total,
-    }));
-
-    const { error: linesError } = await supabase
-      .from('purchase_order_lines')
-      .insert(poLines);
-
-    if (linesError) {
+    try {
+      for (const line of lines) {
+        await sql`
+          INSERT INTO purchase_order_lines (
+            purchase_order_id, product_id, description, quantity, unit_price, line_total
+          ) VALUES (
+            ${po.id}, ${line.product_id ?? null}, ${line.description ?? null},
+            ${line.quantity}, ${line.unit_price}, ${line.line_total}
+          )
+        `;
+      }
+    } catch (linesError: any) {
       // Rollback - delete PO
-      await supabase.from('purchase_orders').delete().eq('id', po.id);
+      await sql`DELETE FROM purchase_orders WHERE id = ${po.id}`;
       return NextResponse.json({ error: linesError.message }, { status: 400 });
     }
 
     // Fetch complete PO with lines
-    const { data: completePO } = await supabase
-      .from('purchase_orders')
-      .select(`
-        *,
-        vendor:vendors(id, name, email, phone),
-        purchase_order_lines(*)
-      `)
-      .eq('id', po.id)
-      .single();
+    const completeRows = await sql`
+      SELECT po.*,
+        json_build_object('id', v.id, 'name', v.name, 'email', v.email, 'phone', v.phone) AS vendor,
+        COALESCE(json_agg(row_to_json(pol.*)) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
+      FROM purchase_orders po
+      LEFT JOIN vendors v ON v.id = po.vendor_id
+      LEFT JOIN purchase_order_lines pol ON pol.purchase_order_id = po.id
+      WHERE po.id = ${po.id}
+      GROUP BY po.id, v.id, v.name, v.email, v.phone
+    `;
 
-    return NextResponse.json(completePO, { status: 201 });
+    return NextResponse.json(completeRows[0], { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

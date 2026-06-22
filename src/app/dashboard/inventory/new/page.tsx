@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import { formatCurrency as currencyFormatter, type SupportedCurrency } from '@/lib/currency';
 import { CurrencySelect } from '@/components/ui/currency-select';
 import {
@@ -46,12 +46,8 @@ export default function NewInventoryItemPage() {
 
   const fetchCategories = async () => {
     try {
-      const { data, error } = await supabase
-        .from('product_categories')
-        .select('id, name, description')
-        .order('name');
-
-      if (error) throw error;
+      const res = await fetch('/api/product-categories');
+      const data = await res.json();
       setCategories(data || []);
     } catch (error) {
       console.error('Error fetching categories:', error);

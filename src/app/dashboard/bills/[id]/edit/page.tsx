@@ -10,7 +10,6 @@ import {
   PlusIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
-import { supabase } from '@/lib/supabase/client';
 
 interface Vendor {
   id: string;
@@ -78,14 +77,11 @@ export default function EditBillPage() {
     try {
       setLoading(true);
 
-      // Fetch bill
-      const { data: billData, error: billError } = await supabase
-        .from('bills')
-        .select('*')
-        .eq('id', params.id)
-        .single();
-
-      if (billError) throw billError;
+      // Fetch bill with lines
+      const billRes = await fetch(`/api/bills/${params.id}`);
+      if (!billRes.ok) throw new Error('Failed to load bill');
+      const billResult = await billRes.json();
+      const billData = billResult.data || billResult;
 
       // Check if bill can be edited
       if (billData.status !== 'draft') {
@@ -103,17 +99,9 @@ export default function EditBillPage() {
         notes: billData.notes || '',
       });
 
-      // Fetch bill lines
-      const { data: linesData, error: linesError } = await supabase
-        .from('bill_lines')
-        .select('*')
-        .eq('bill_id', params.id)
-        .order('line_number');
-
-      if (linesError) throw linesError;
-
+      const linesData = billResult.lines || [];
       setLineItems(
-        (linesData || []).map((line: any) => ({
+        linesData.map((line: any) => ({
           id: line.id,
           description: line.description,
           quantity: parseFloat(line.quantity),

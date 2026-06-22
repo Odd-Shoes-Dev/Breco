@@ -2,7 +2,6 @@
 
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import {
   ArrowLeftIcon,
@@ -54,14 +53,10 @@ export default function BankAccountDetailPage({ params }: PageProps) {
 
   const loadAccount = async () => {
     try {
-      const { data, error } = await supabase
-        .from('bank_accounts')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
-      setAccount(data);
+      const res = await fetch(`/api/bank-accounts/${id}`);
+      if (!res.ok) throw new Error('Failed to load account');
+      const result = await res.json();
+      setAccount(result.data || result);
     } catch (error) {
       console.error('Failed to load bank account:', error);
     } finally {
@@ -71,15 +66,10 @@ export default function BankAccountDetailPage({ params }: PageProps) {
 
   const loadTransactions = async () => {
     try {
-      const { data, error } = await supabase
-        .from('bank_transactions')
-        .select('*')
-        .eq('bank_account_id', id)
-        .order('transaction_date', { ascending: false })
-        .limit(50);
-
-      if (error) throw error;
-      setTransactions(data || []);
+      const res = await fetch(`/api/bank-transactions?bank_account_id=${id}&limit=50`);
+      if (!res.ok) throw new Error('Failed to load transactions');
+      const result = await res.json();
+      setTransactions(result.data || []);
     } catch (error) {
       console.error('Failed to load transactions:', error);
     }
@@ -102,12 +92,8 @@ export default function BankAccountDetailPage({ params }: PageProps) {
 
     try {
       setDeleting(true);
-      const { error } = await supabase
-        .from('bank_accounts')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch(`/api/bank-accounts/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
 
       alert('Bank account deleted successfully');
       window.location.href = '/dashboard/bank/accounts';

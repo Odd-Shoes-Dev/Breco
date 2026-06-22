@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import {
   PlusIcon,
@@ -29,32 +28,18 @@ export default function CustomersPage() {
   const loadCustomers = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('customers')
-        .select('*', { count: 'exact' })
-        .order('name');
+      const params = new URLSearchParams();
+      if (statusFilter === 'active') params.set('is_active', 'true');
+      else if (statusFilter === 'inactive') params.set('is_active', 'false');
+      if (searchQuery) params.set('search', searchQuery);
+      params.set('page', String(currentPage));
+      params.set('page_size', String(pageSize));
 
-      // Apply status filter
-      if (statusFilter === 'active') {
-        query = query.eq('is_active', true);
-      } else if (statusFilter === 'inactive') {
-        query = query.eq('is_active', false);
-      }
-      // 'all' shows both active and inactive
+      const res = await fetch(`/api/customers?${params.toString()}`);
+      const result = await res.json();
 
-      if (searchQuery) {
-        query = query.or(`name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%,company_name.ilike.%${searchQuery}%`);
-      }
-
-      const from = (currentPage - 1) * pageSize;
-      const to = from + pageSize - 1;
-      query = query.range(from, to);
-
-      const { data, count, error } = await query;
-      if (error) throw error;
-
-      setCustomers(data || []);
-      setTotalCount(count || 0);
+      setCustomers(result.data || []);
+      setTotalCount(result.count || 0);
     } catch (error) {
       console.error('Failed to load customers:', error);
     } finally {

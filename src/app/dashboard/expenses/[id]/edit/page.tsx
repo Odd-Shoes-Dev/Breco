@@ -7,7 +7,6 @@ import {
   ArrowLeftIcon,
   CreditCardIcon,
 } from '@heroicons/react/24/outline';
-import { supabase } from '@/lib/supabase/client';
 
 interface Vendor {
   id: string;
@@ -115,14 +114,9 @@ export default function EditExpensePage() {
   const loadExpense = async () => {
     try {
       setLoading(true);
-
-      const { data, error: expenseError } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('id', params.id)
-        .single();
-
-      if (expenseError) throw expenseError;
+      const res = await fetch(`/api/expenses/${params.id}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to load expense');
+      const data = await res.json();
 
       setExpense(data);
       setFormData({
@@ -167,31 +161,16 @@ export default function EditExpensePage() {
     setError(null);
 
     try {
-      const total = formData.amount + formData.tax_amount;
+      const res = await fetch(`/api/expenses/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
 
-      const { error: updateError } = await supabase
-        .from('expenses')
-        .update({
-          vendor_id: formData.vendor_id || null,
-          payee: formData.payee || null,
-          expense_date: formData.expense_date,
-          category: formData.category || null,
-          department: formData.department || null,
-          expense_account_id: formData.expense_account_id,
-          payment_account_id: formData.payment_account_id,
-          description: formData.description,
-          amount: formData.amount,
-          tax_amount: formData.tax_amount,
-          total: total,
-          payment_method: formData.payment_method,
-          reference_number: formData.reference_number || null,
-          is_reimbursable: formData.is_reimbursable,
-          is_billable: formData.is_billable,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', params.id);
-
-      if (updateError) throw updateError;
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to update expense');
+      }
 
       router.push(`/dashboard/expenses/${params.id}`);
     } catch (err) {

@@ -1,12 +1,11 @@
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const user = await getSession();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -16,37 +15,127 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('start_date');
     const endDate = searchParams.get('end_date');
 
-    let query = supabase
-      .from('inventory_adjustments')
-      .select(
-        `
-        *,
-        products (id, name, sku, unit)
-      `
-      )
-      .order('adjustment_date', { ascending: false });
+    let rows: any[];
 
-    if (productId) {
-      query = query.eq('product_id', productId);
+    if (productId && reason && startDate && endDate) {
+      rows = await sql`
+        SELECT ia.*, json_build_object('id', p.id, 'name', p.name, 'sku', p.sku, 'unit', p.unit) AS products
+        FROM inventory_adjustments ia
+        LEFT JOIN products p ON p.id = ia.product_id
+        WHERE ia.product_id = ${productId} AND ia.reason = ${reason}
+          AND ia.adjustment_date >= ${startDate} AND ia.adjustment_date <= ${endDate}
+        ORDER BY ia.adjustment_date DESC
+      `;
+    } else if (productId && reason && startDate) {
+      rows = await sql`
+        SELECT ia.*, json_build_object('id', p.id, 'name', p.name, 'sku', p.sku, 'unit', p.unit) AS products
+        FROM inventory_adjustments ia
+        LEFT JOIN products p ON p.id = ia.product_id
+        WHERE ia.product_id = ${productId} AND ia.reason = ${reason}
+          AND ia.adjustment_date >= ${startDate}
+        ORDER BY ia.adjustment_date DESC
+      `;
+    } else if (productId && reason && endDate) {
+      rows = await sql`
+        SELECT ia.*, json_build_object('id', p.id, 'name', p.name, 'sku', p.sku, 'unit', p.unit) AS products
+        FROM inventory_adjustments ia
+        LEFT JOIN products p ON p.id = ia.product_id
+        WHERE ia.product_id = ${productId} AND ia.reason = ${reason}
+          AND ia.adjustment_date <= ${endDate}
+        ORDER BY ia.adjustment_date DESC
+      `;
+    } else if (productId && startDate && endDate) {
+      rows = await sql`
+        SELECT ia.*, json_build_object('id', p.id, 'name', p.name, 'sku', p.sku, 'unit', p.unit) AS products
+        FROM inventory_adjustments ia
+        LEFT JOIN products p ON p.id = ia.product_id
+        WHERE ia.product_id = ${productId}
+          AND ia.adjustment_date >= ${startDate} AND ia.adjustment_date <= ${endDate}
+        ORDER BY ia.adjustment_date DESC
+      `;
+    } else if (reason && startDate && endDate) {
+      rows = await sql`
+        SELECT ia.*, json_build_object('id', p.id, 'name', p.name, 'sku', p.sku, 'unit', p.unit) AS products
+        FROM inventory_adjustments ia
+        LEFT JOIN products p ON p.id = ia.product_id
+        WHERE ia.reason = ${reason}
+          AND ia.adjustment_date >= ${startDate} AND ia.adjustment_date <= ${endDate}
+        ORDER BY ia.adjustment_date DESC
+      `;
+    } else if (productId && reason) {
+      rows = await sql`
+        SELECT ia.*, json_build_object('id', p.id, 'name', p.name, 'sku', p.sku, 'unit', p.unit) AS products
+        FROM inventory_adjustments ia
+        LEFT JOIN products p ON p.id = ia.product_id
+        WHERE ia.product_id = ${productId} AND ia.reason = ${reason}
+        ORDER BY ia.adjustment_date DESC
+      `;
+    } else if (productId && startDate) {
+      rows = await sql`
+        SELECT ia.*, json_build_object('id', p.id, 'name', p.name, 'sku', p.sku, 'unit', p.unit) AS products
+        FROM inventory_adjustments ia
+        LEFT JOIN products p ON p.id = ia.product_id
+        WHERE ia.product_id = ${productId} AND ia.adjustment_date >= ${startDate}
+        ORDER BY ia.adjustment_date DESC
+      `;
+    } else if (productId && endDate) {
+      rows = await sql`
+        SELECT ia.*, json_build_object('id', p.id, 'name', p.name, 'sku', p.sku, 'unit', p.unit) AS products
+        FROM inventory_adjustments ia
+        LEFT JOIN products p ON p.id = ia.product_id
+        WHERE ia.product_id = ${productId} AND ia.adjustment_date <= ${endDate}
+        ORDER BY ia.adjustment_date DESC
+      `;
+    } else if (productId) {
+      rows = await sql`
+        SELECT ia.*, json_build_object('id', p.id, 'name', p.name, 'sku', p.sku, 'unit', p.unit) AS products
+        FROM inventory_adjustments ia
+        LEFT JOIN products p ON p.id = ia.product_id
+        WHERE ia.product_id = ${productId}
+        ORDER BY ia.adjustment_date DESC
+      `;
+    } else if (reason) {
+      rows = await sql`
+        SELECT ia.*, json_build_object('id', p.id, 'name', p.name, 'sku', p.sku, 'unit', p.unit) AS products
+        FROM inventory_adjustments ia
+        LEFT JOIN products p ON p.id = ia.product_id
+        WHERE ia.reason = ${reason}
+        ORDER BY ia.adjustment_date DESC
+      `;
+    } else if (startDate && endDate) {
+      rows = await sql`
+        SELECT ia.*, json_build_object('id', p.id, 'name', p.name, 'sku', p.sku, 'unit', p.unit) AS products
+        FROM inventory_adjustments ia
+        LEFT JOIN products p ON p.id = ia.product_id
+        WHERE ia.adjustment_date >= ${startDate} AND ia.adjustment_date <= ${endDate}
+        ORDER BY ia.adjustment_date DESC
+      `;
+    } else if (startDate) {
+      rows = await sql`
+        SELECT ia.*, json_build_object('id', p.id, 'name', p.name, 'sku', p.sku, 'unit', p.unit) AS products
+        FROM inventory_adjustments ia
+        LEFT JOIN products p ON p.id = ia.product_id
+        WHERE ia.adjustment_date >= ${startDate}
+        ORDER BY ia.adjustment_date DESC
+      `;
+    } else if (endDate) {
+      rows = await sql`
+        SELECT ia.*, json_build_object('id', p.id, 'name', p.name, 'sku', p.sku, 'unit', p.unit) AS products
+        FROM inventory_adjustments ia
+        LEFT JOIN products p ON p.id = ia.product_id
+        WHERE ia.adjustment_date <= ${endDate}
+        ORDER BY ia.adjustment_date DESC
+      `;
+    } else {
+      rows = await sql`
+        SELECT ia.*, json_build_object('id', p.id, 'name', p.name, 'sku', p.sku, 'unit', p.unit) AS products
+        FROM inventory_adjustments ia
+        LEFT JOIN products p ON p.id = ia.product_id
+        ORDER BY ia.adjustment_date DESC
+      `;
     }
 
-    if (reason) {
-      query = query.eq('reason', reason);
-    }
-
-    if (startDate) {
-      query = query.gte('adjustment_date', startDate);
-    }
-
-    if (endDate) {
-      query = query.lte('adjustment_date', endDate);
-    }
-
-    const { data, error } = await query;
-
-    if (error) throw error;
-
-    return NextResponse.json(data);
+    return NextResponse.json(rows);
   } catch (error: any) {
     console.error('Error fetching inventory adjustments:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -55,10 +144,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const user = await getSession();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -82,37 +169,26 @@ export async function POST(request: NextRequest) {
     }
 
     // Create adjustment
-    const { data, error } = await supabase
-      .from('inventory_adjustments')
-      .insert({
-        product_id,
-        adjustment_date,
-        quantity_change,
-        reason,
-        reference_type: reference_type || null,
-        reference_id: reference_id || null,
-        notes: notes || null,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
+    const rows = await sql`
+      INSERT INTO inventory_adjustments (
+        product_id, adjustment_date, quantity_change, reason,
+        reference_type, reference_id, notes
+      ) VALUES (
+        ${product_id}, ${adjustment_date}, ${quantity_change}, ${reason},
+        ${reference_type || null}, ${reference_id || null}, ${notes || null}
+      )
+      RETURNING *
+    `;
+    const data = rows[0];
 
     // Update product stock
-    const { data: currentProduct, error: getError } = await supabase
-      .from('products')
-      .select('current_stock')
-      .eq('id', product_id)
-      .single();
+    const productRows = await sql`SELECT current_stock FROM products WHERE id = ${product_id}`;
+    if (productRows.length === 0) throw new Error('Product not found');
+    const currentStock = productRows[0].current_stock || 0;
 
-    if (getError) throw getError;
-
-    const { error: stockError } = await supabase
-      .from('products')
-      .update({ current_stock: (currentProduct.current_stock || 0) + quantity_change })
-      .eq('id', product_id);
-
-    if (stockError) throw stockError;
+    await sql`
+      UPDATE products SET current_stock = ${currentStock + quantity_change} WHERE id = ${product_id}
+    `;
 
     return NextResponse.json(data, { status: 201 });
   } catch (error: any) {

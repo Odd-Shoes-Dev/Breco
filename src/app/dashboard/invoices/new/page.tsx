@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { CurrencySelect } from '@/components/ui';
 import { formatCurrency as currencyFormatter, convertCurrency } from '@/lib/currency';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -126,22 +125,16 @@ export default function NewInvoicePage() {
 
   const loadData = async () => {
     try {
-      const [customersRes, productsRes, settingsRes] = await Promise.all([
-        supabase.from('customers').select('*').eq('is_active', true).order('name'),
-        supabase.from('products').select('*').eq('is_active', true).order('name'),
-        supabase.from('company_settings').select('sales_tax_rate').single(),
+      const [customersRes, productsRes] = await Promise.all([
+        fetch('/api/customers?active=true', { cache: 'no-store' }),
+        fetch('/api/products?active=true', { cache: 'no-store' }),
       ]);
 
-      setCustomers(customersRes.data || []);
-      setProducts(productsRes.data || []);
+      const customersData = await customersRes.json();
+      const productsData = await productsRes.json();
 
-      const rate = (settingsRes.data?.sales_tax_rate || 0) * 100;
-      setDefaultTaxRate(rate);
-      if (rate > 0) {
-        getValues('lines').forEach((line, index) => {
-          if (!line.tax_rate) setValue(`lines.${index}.tax_rate`, rate);
-        });
-      }
+      setCustomers(customersData.data || []);
+      setProducts(productsData.data || []);
     } catch (error) {
       console.error('Failed to load data:', error);
     }
@@ -161,7 +154,6 @@ export default function NewInvoicePage() {
       if (productCurrency !== invoiceCurrency) {
         // Convert the product price to invoice currency
         const converted = await convertCurrency(
-          supabase,
           product.unit_price,
           productCurrency as any,
           invoiceCurrency as any

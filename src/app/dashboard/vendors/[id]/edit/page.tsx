@@ -3,7 +3,6 @@
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import {
   ArrowLeftIcon,
   TruckIcon,
@@ -46,13 +45,10 @@ export default function EditVendorPage({ params }: PageProps) {
   const loadVendor = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('vendors')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
+      const res = await fetch(`/api/vendors/${id}`);
+      if (!res.ok) throw new Error('Failed to load vendor');
+      const result = await res.json();
+      const data = result.data || result;
 
       if (data) {
         setFormData({

@@ -1,33 +1,28 @@
+import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+
 export async function POST(request: NextRequest, context: any) {
   const { params } = context || {};
   try {
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseKey) {
-      return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY is not configured on the server' }, { status: 500 });
-    }
-
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, supabaseKey);
     const { sendInvoiceEmail } = await import('@/lib/email/resend');
-    const invoiceId = params.id;
+    const invoiceId = (await params).id;
 
     // Fetch invoice with customer
-    const { data: invoice, error: invoiceError } = await supabase
-      .from('invoices')
-      .select(`
-        *,
-        customer:customers(name, email, email_2, email_3, email_4)
-      `)
-      .eq('id', invoiceId)
-      .single();
+    const invoiceRows = await sql`
+      SELECT i.*,
+        json_build_object(
+          'name', c.name, 'email', c.email,
+          'email_2', c.email_2, 'email_3', c.email_3, 'email_4', c.email_4
+        ) AS customer
+      FROM invoices i
+      LEFT JOIN customers c ON c.id = i.customer_id
+      WHERE i.id = ${invoiceId}
+    `;
 
-    if (invoiceError || !invoice) {
-      return NextResponse.json(
-        { error: 'Invoice not found' },
-        { status: 404 }
-      );
+    if (invoiceRows.length === 0) {
+      return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
+    const invoice = invoiceRows[0];
 
     if (!invoice.customer?.email) {
       return NextResponse.json(
@@ -62,15 +57,12 @@ export async function POST(request: NextRequest, context: any) {
 
     // Update invoice status to sent if it was draft
     if (invoice.status === 'draft') {
-      await supabase
-        .from('invoices')
-        .update({ status: 'sent' })
-        .eq('id', invoiceId);
+      await sql`UPDATE invoices SET status = 'sent' WHERE id = ${invoiceId}`;
     }
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
-      message: `Invoice sent to ${emailAddresses.length} email address${emailAddresses.length > 1 ? 'es' : ''}` 
+      message: `Invoice sent to ${emailAddresses.length} email address${emailAddresses.length > 1 ? 'es' : ''}`,
     });
   } catch (error: any) {
     console.error('Error sending invoice:', error);

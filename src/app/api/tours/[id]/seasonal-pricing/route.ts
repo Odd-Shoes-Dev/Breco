@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/tours/[id]/seasonal-pricing - Get seasonal pricing
@@ -7,18 +8,13 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { id } = await context.params;
 
-    const { data, error } = await supabase
-      .from('tour_seasonal_pricing')
-      .select('*')
-      .eq('tour_package_id', id)
-      .order('start_date');
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const data = await sql`
+      SELECT * FROM tour_seasonal_pricing
+      WHERE tour_package_id = ${id}
+      ORDER BY start_date
+    `;
 
     return NextResponse.json({ data }, { status: 200 });
   } catch (error: any) {
@@ -32,29 +28,25 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { id } = await context.params;
     const body = await request.json();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data, error } = await supabase
-      .from('tour_seasonal_pricing')
-      .insert({
-        ...body,
-        tour_package_id: id,
-      })
-      .select()
-      .single();
+    const rows = await sql`
+      INSERT INTO tour_seasonal_pricing (
+        tour_package_id, season_name, start_date, end_date, price_per_person, price_modifier
+      ) VALUES (
+        ${id}, ${body.season_name || null}, ${body.start_date || null}, ${body.end_date || null},
+        ${body.price_per_person || null}, ${body.price_modifier || null}
+      )
+      RETURNING *
+    `;
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    return NextResponse.json({ data }, { status: 201 });
+    return NextResponse.json({ data: rows[0] }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

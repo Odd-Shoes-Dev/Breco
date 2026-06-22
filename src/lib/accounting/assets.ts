@@ -3,7 +3,7 @@
 // Breco Safaris Ltd Financial System
 // =====================================================
 
-import { supabase } from '@/lib/supabase/client';
+import { sql } from '@/lib/db';
 import { createJournalEntry, postJournalEntry } from './general-ledger';
 import type { FixedAsset, DepreciationEntry } from '@/types/database';
 import Decimal from 'decimal.js';
@@ -40,7 +40,7 @@ export function calculateMonthlyDepreciation(
       const rate = new Decimal(2).div(asset.useful_life_months);
       const bookValue = cost.minus(accumulated);
       let monthlyDepr = bookValue.times(rate).div(12);
-      
+
       // Don't depreciate below residual value
       if (bookValue.minus(monthlyDepr).lessThan(residual)) {
         monthlyDepr = bookValue.minus(residual);
@@ -58,28 +58,27 @@ export function calculateMonthlyDepreciation(
 export async function getAssetsDueForDepreciation(
   periodEndDate: string
 ): Promise<FixedAsset[]> {
-  const { data: assets, error } = await supabase
-    .from('fixed_assets')
-    .select('*')
-    .eq('status', 'active')
-    .lte('depreciation_start_date', periodEndDate);
+  const assets = await sql`
+    SELECT * FROM fixed_assets
+    WHERE status = 'active'
+      AND depreciation_start_date <= ${periodEndDate}
+  `;
 
-  if (error) throw new Error(`Failed to get assets: ${error.message}`);
+  if (!assets || assets.length === 0) return [];
 
   // Filter out assets that have already been depreciated this month
   const periodStart = periodEndDate.substring(0, 7) + '-01';
-  
-  const assetsWithDepreciation = await Promise.all(
-    (assets || []).map(async (asset) => {
-      const { data: existingEntry } = await supabase
-        .from('depreciation_entries')
-        .select('id')
-        .eq('asset_id', asset.id)
-        .gte('depreciation_date', periodStart)
-        .lte('depreciation_date', periodEndDate)
-        .single();
 
-      return { asset, hasDepreciation: !!existingEntry };
+  const assetsWithDepreciation = await Promise.all(
+    assets.map(async (asset: any) => {
+      const existing = await sql`
+        SELECT id FROM depreciation_entries
+        WHERE asset_id = ${asset.id}
+          AND depreciation_date >= ${periodStart}
+          AND depreciation_date <= ${periodEndDate}
+        LIMIT 1
+      `;
+      return { asset, hasDepreciation: existing.length > 0 };
     })
   );
 
@@ -97,13 +96,15 @@ export async function runAssetDepreciation(
   userId: string
 ): Promise<DepreciationEntry> {
   // Get asset with category
-  const { data: asset, error: assetError } = await supabase
-    .from('fixed_assets')
-    .select('*, asset_categories(*)')
-    .eq('id', assetId)
-    .single();
-
-  if (assetError) throw new Error(`Asset not found: ${assetError.message}`);
+  const assetRows = await sql`
+    SELECT fa.*, ac.depreciation_expense_account_id, ac.accumulated_depreciation_account_id
+    FROM fixed_assets fa
+    LEFT JOIN asset_categories ac ON ac.id = fa.category_id
+    WHERE fa.id = ${assetId}
+    LIMIT 1
+  `;
+  const asset = assetRows[0];
+  if (!asset) throw new Error('Asset not found');
   if (asset.status !== 'active') {
     throw new Error(`Cannot depreciate asset with status: ${asset.status}`);
   }
@@ -113,31 +114,27 @@ export async function runAssetDepreciation(
 
   if (depreciationAmount.lessThanOrEqualTo(0)) {
     // Asset is fully depreciated
-    await supabase
-      .from('fixed_assets')
-      .update({ status: 'fully_depreciated' })
-      .eq('id', assetId);
+    await sql`UPDATE fixed_assets SET status = 'fully_depreciated' WHERE id = ${assetId}`;
     throw new Error('Asset is fully depreciated');
   }
 
   // Get accounts from category or defaults
-  const deprExpenseAccountId =
-    asset.asset_categories?.depreciation_expense_account_id;
-  const accumDeprAccountId =
-    asset.asset_categories?.accumulated_depreciation_account_id;
+  const deprExpenseAccountId = asset.depreciation_expense_account_id;
+  const accumDeprAccountId = asset.accumulated_depreciation_account_id;
 
   if (!deprExpenseAccountId || !accumDeprAccountId) {
     throw new Error('Asset category missing depreciation accounts');
   }
 
   // Get period
-  const { data: period } = await supabase
-    .from('fiscal_periods')
-    .select('id')
-    .eq('level', 'monthly')
-    .lte('start_date', depreciationDate)
-    .gte('end_date', depreciationDate)
-    .single();
+  const periodRows = await sql`
+    SELECT id FROM fiscal_periods
+    WHERE level = 'monthly'
+      AND start_date <= ${depreciationDate}
+      AND end_date >= ${depreciationDate}
+    LIMIT 1
+  `;
+  const period = periodRows[0];
 
   // Create journal entry: DR Depreciation Expense, CR Accumulated Depreciation
   const journalEntry = await createJournalEntry(
@@ -167,19 +164,13 @@ export async function runAssetDepreciation(
   await postJournalEntry(journalEntry.id, userId);
 
   // Create depreciation entry record
-  const { data: deprEntry, error: deprError } = await supabase
-    .from('depreciation_entries')
-    .insert({
-      asset_id: assetId,
-      period_id: period?.id,
-      depreciation_date: depreciationDate,
-      amount: depreciationAmount.toNumber(),
-      journal_entry_id: journalEntry.id,
-    })
-    .select()
-    .single();
-
-  if (deprError) throw new Error(`Failed to create depreciation entry: ${deprError.message}`);
+  const deprRows = await sql`
+    INSERT INTO depreciation_entries (asset_id, period_id, depreciation_date, amount, journal_entry_id)
+    VALUES (${assetId}, ${period?.id ?? null}, ${depreciationDate}, ${depreciationAmount.toNumber()}, ${journalEntry.id})
+    RETURNING *
+  `;
+  const deprEntry = deprRows[0];
+  if (!deprEntry) throw new Error('Failed to create depreciation entry');
 
   // Update asset accumulated depreciation
   const newAccumDepr = new Decimal(asset.accumulated_depreciation || 0)
@@ -191,25 +182,20 @@ export async function runAssetDepreciation(
       ? 'fully_depreciated'
       : 'active';
 
-  await supabase
-    .from('fixed_assets')
-    .update({
-      accumulated_depreciation: newAccumDepr,
-      status: newStatus,
-    })
-    .eq('id', assetId);
+  await sql`
+    UPDATE fixed_assets
+    SET accumulated_depreciation = ${newAccumDepr}, status = ${newStatus}
+    WHERE id = ${assetId}
+  `;
 
   // Log activity
-  await supabase.from('activity_logs').insert({
-    user_id: userId,
-    action: 'depreciate',
-    entity_type: 'fixed_asset',
-    entity_id: assetId,
-    new_values: {
-      amount: depreciationAmount.toNumber(),
-      accumulated: newAccumDepr,
-    },
-  });
+  await sql`
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    VALUES (
+      ${userId}, 'depreciate', 'fixed_asset', ${assetId},
+      ${JSON.stringify({ amount: depreciationAmount.toNumber(), accumulated: newAccumDepr })}
+    )
+  `;
 
   return deprEntry;
 }
@@ -247,13 +233,15 @@ export async function disposeAsset(
   userId: string
 ): Promise<{ journalEntryId: string; gainLoss: number }> {
   // Get asset with category
-  const { data: asset, error: assetError } = await supabase
-    .from('fixed_assets')
-    .select('*, asset_categories(*)')
-    .eq('id', assetId)
-    .single();
-
-  if (assetError) throw new Error(`Asset not found: ${assetError.message}`);
+  const assetRows = await sql`
+    SELECT fa.*, ac.accumulated_depreciation_account_id
+    FROM fixed_assets fa
+    LEFT JOIN asset_categories ac ON ac.id = fa.category_id
+    WHERE fa.id = ${assetId}
+    LIMIT 1
+  `;
+  const asset = assetRows[0];
+  if (!asset) throw new Error('Asset not found');
   if (asset.status === 'disposed') {
     throw new Error('Asset is already disposed');
   }
@@ -264,24 +252,17 @@ export async function disposeAsset(
   const gainLoss = disposalPrice - bookValue;
 
   // Get accounts
-  const accumDeprAccountId =
-    asset.asset_categories?.accumulated_depreciation_account_id;
+  const accumDeprAccountId = asset.accumulated_depreciation_account_id;
   const assetAccountId = asset.asset_account_id;
 
   // Get cash account (assuming disposal proceeds go to cash)
-  const { data: cashAccount } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('code', '1100')
-    .single();
+  const cashRows = await sql`SELECT id FROM accounts WHERE code = '1100' LIMIT 1`;
+  const cashAccount = cashRows[0];
 
   // Get gain/loss account
   const gainLossAccountCode = gainLoss >= 0 ? '4900' : '8920'; // Other Income or Loss on Disposal
-  const { data: gainLossAccount } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('code', gainLossAccountCode)
-    .single();
+  const gainLossRows = await sql`SELECT id FROM accounts WHERE code = ${gainLossAccountCode} LIMIT 1`;
+  const gainLossAccount = gainLossRows[0];
 
   // Build journal entry lines
   const lines: {
@@ -353,28 +334,21 @@ export async function disposeAsset(
   await postJournalEntry(journalEntry.id, userId);
 
   // Update asset status
-  await supabase
-    .from('fixed_assets')
-    .update({
-      status: 'disposed',
-      disposal_date: disposalDate,
-      disposal_price: disposalPrice,
-      disposal_journal_id: journalEntry.id,
-    })
-    .eq('id', assetId);
+  await sql`
+    UPDATE fixed_assets
+    SET status = 'disposed', disposal_date = ${disposalDate},
+        disposal_price = ${disposalPrice}, disposal_journal_id = ${journalEntry.id}
+    WHERE id = ${assetId}
+  `;
 
   // Log activity
-  await supabase.from('activity_logs').insert({
-    user_id: userId,
-    action: 'dispose',
-    entity_type: 'fixed_asset',
-    entity_id: assetId,
-    new_values: {
-      disposal_date: disposalDate,
-      disposal_price: disposalPrice,
-      gain_loss: gainLoss,
-    },
-  });
+  await sql`
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    VALUES (
+      ${userId}, 'dispose', 'fixed_asset', ${assetId},
+      ${JSON.stringify({ disposal_date: disposalDate, disposal_price: disposalPrice, gain_loss: gainLoss })}
+    )
+  `;
 
   return { journalEntryId: journalEntry.id, gainLoss };
 }
@@ -407,13 +381,13 @@ export function generateDepreciationSchedule(
   let accumulated = new Decimal(asset.accumulated_depreciation || 0);
   const cost = new Decimal(asset.purchase_price);
   const residual = new Decimal(asset.residual_value || 0);
-  
+
   const startDate = new Date(asset.depreciation_start_date);
-  
+
   for (let i = 0; i < asset.useful_life_months; i++) {
     const currentDate = new Date(startDate);
     currentDate.setMonth(currentDate.getMonth() + i);
-    
+
     const depr = calculateMonthlyDepreciation({
       ...asset,
       accumulated_depreciation: accumulated.toNumber(),

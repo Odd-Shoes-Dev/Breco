@@ -1,24 +1,31 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { getCompanySettings } from '@/lib/company-settings';
 
+async function convertCurrencyDB(amount: number, from: string, to: string, date: string): Promise<number> {
+  if (from === to) return amount;
+  try {
+    const rows = await sql`SELECT convert_currency(${amount}, ${from}, ${to}, ${date}) AS result`;
+    return Number(rows[0]?.result ?? amount);
+  } catch {
+    return amount;
+  }
+}
+
 export async function GET() {
   try {
-    const supabase = await createClient();
     const settings = await getCompanySettings();
     const baseCurrency = settings.base_currency;
 
-    // Fetch all financial data
-    const [
-      { data: invoices },
-      { data: bills },
-      { data: expenses },
-      { data: bankTransactions },
-    ] = await Promise.all([
-      supabase.from('invoices').select('total, amount_paid, status, currency, invoice_date'),
-      supabase.from('bills').select('total, amount_paid, status, currency, bill_date'),
-      supabase.from('expenses').select('total, currency, expense_date'),
-      supabase.from('bank_transactions').select('amount, transaction_type, transaction_date, bank_accounts(currency)'),
+    const [invoiceRows, billRows, expenseRows, bankTxRows] = await Promise.all([
+      sql`SELECT total, amount_paid, status, currency, invoice_date FROM invoices`,
+      sql`SELECT total, amount_paid, status, currency, bill_date FROM bills`,
+      sql`SELECT total, currency, expense_date FROM expenses`,
+      sql`
+        SELECT bt.amount, bt.transaction_type, bt.transaction_date, ba.currency AS bank_currency
+        FROM bank_transactions bt
+        LEFT JOIN bank_accounts ba ON ba.id = bt.bank_account_id
+      `,
     ]);
 
     let totalRevenue = 0;
@@ -27,150 +34,58 @@ export async function GET() {
     let accountsPayable = 0;
     let cashBalance = 0;
 
-    // Process invoices
-    if (invoices) {
-      for (const invoice of invoices) {
-        let amountInBase = invoice.total;
-        let remainingInBase = invoice.total - (invoice.amount_paid || 0);
+    for (const invoice of invoiceRows as any[]) {
+      const total = Number(invoice.total);
+      const remaining = total - (Number(invoice.amount_paid) || 0);
+      const amountInBase = await convertCurrencyDB(total, invoice.currency, baseCurrency, invoice.invoice_date);
+      const remainingInBase = await convertCurrencyDB(remaining, invoice.currency, baseCurrency, invoice.invoice_date);
 
-        if (invoice.currency !== baseCurrency) {
-          const { data: convertedTotal } = await supabase.rpc('convert_currency', {
-            p_amount: invoice.total,
-            p_from_currency: invoice.currency,
-            p_to_currency: baseCurrency,
-            p_date: invoice.invoice_date,
-          });
-
-          const { data: convertedRemaining } = await supabase.rpc('convert_currency', {
-            p_amount: invoice.total - (invoice.amount_paid || 0),
-            p_from_currency: invoice.currency,
-            p_to_currency: baseCurrency,
-            p_date: invoice.invoice_date,
-          });
-
-          amountInBase = convertedTotal ?? 0;
-          remainingInBase = convertedRemaining ?? 0;
-        }
-
-        if (invoice.status === 'paid') {
-          totalRevenue += amountInBase;
-        }
-
-        if (invoice.status !== 'paid' && invoice.status !== 'void' && invoice.status !== 'cancelled') {
-          accountsReceivable += remainingInBase;
-        }
+      if (invoice.status === 'paid') totalRevenue += amountInBase;
+      if (invoice.status !== 'paid' && invoice.status !== 'void' && invoice.status !== 'cancelled') {
+        accountsReceivable += remainingInBase;
       }
     }
 
-    // Process bills
-    if (bills) {
-      for (const bill of bills) {
-        let remainingInBase = bill.total - (bill.amount_paid || 0);
-
-        if (bill.currency !== baseCurrency) {
-          const { data: convertedRemaining } = await supabase.rpc('convert_currency', {
-            p_amount: bill.total - (bill.amount_paid || 0),
-            p_from_currency: bill.currency,
-            p_to_currency: baseCurrency,
-            p_date: bill.bill_date,
-          });
-
-          remainingInBase = convertedRemaining ?? 0;
-        }
-
-        if (bill.status !== 'paid' && bill.status !== 'void') {
-          accountsPayable += remainingInBase;
-        }
+    for (const bill of billRows as any[]) {
+      const remaining = Number(bill.total) - (Number(bill.amount_paid) || 0);
+      const remainingInBase = await convertCurrencyDB(remaining, bill.currency, baseCurrency, bill.bill_date);
+      if (bill.status !== 'paid' && bill.status !== 'void') {
+        accountsPayable += remainingInBase;
       }
     }
 
-    // Process expenses
-    if (expenses) {
-      for (const expense of expenses) {
-        let amountInBase = expense.total;
+    for (const expense of expenseRows as any[]) {
+      const amountInBase = await convertCurrencyDB(Number(expense.total), expense.currency, baseCurrency, expense.expense_date);
+      totalExpenses += amountInBase;
+    }
 
-        if (expense.currency !== baseCurrency) {
-          const { data: converted } = await supabase.rpc('convert_currency', {
-            p_amount: expense.total,
-            p_from_currency: expense.currency,
-            p_to_currency: baseCurrency,
-            p_date: expense.expense_date,
-          });
-
-          amountInBase = converted ?? 0;
-        }
-
-        totalExpenses += amountInBase;
+    for (const transaction of bankTxRows as any[]) {
+      const currency = transaction.bank_currency || baseCurrency;
+      const raw = Number(transaction.amount) || 0;
+      if (currency !== baseCurrency) {
+        const converted = await convertCurrencyDB(Math.abs(raw), currency, baseCurrency, transaction.transaction_date);
+        cashBalance += raw < 0 ? -converted : converted;
+      } else {
+        cashBalance += raw;
       }
     }
 
-    // Process bank transactions for cash balance
-    if (bankTransactions) {
-      for (const transaction of bankTransactions) {
-        const bankAccount = Array.isArray(transaction.bank_accounts)
-          ? transaction.bank_accounts[0]
-          : transaction.bank_accounts;
-        const currency = bankAccount?.currency || baseCurrency;
-
-        let amountInBase = transaction.amount || 0;
-
-        if (currency !== baseCurrency) {
-          const { data: converted } = await supabase.rpc('convert_currency', {
-            p_amount: Math.abs(transaction.amount),
-            p_from_currency: currency,
-            p_to_currency: baseCurrency,
-            p_date: transaction.transaction_date,
-          });
-
-          if (converted !== null) {
-            amountInBase = transaction.amount < 0 ? -converted : converted;
-          } else {
-            amountInBase = 0;
-          }
-        }
-
-        cashBalance += amountInBase;
-      }
-    }
-
-    // Calculate inventory value
     let inventoryValue = 0;
-    const { data: inventoryItems } = await supabase
-      .from('products')
-      .select('quantity_on_hand, cost_price, currency')
-      .eq('track_inventory', true);
-
-    if (inventoryItems) {
-      for (const item of inventoryItems) {
-        const quantity = item.quantity_on_hand || 0;
-        const cost = item.cost_price || 0;
-        const itemValue = quantity * cost;
-
-        if (itemValue > 0) {
-          let valueInBase = itemValue;
-
-          if (item.currency && item.currency !== baseCurrency) {
-            const { data: converted } = await supabase.rpc('convert_currency', {
-              p_amount: itemValue,
-              p_from_currency: item.currency,
-              p_to_currency: baseCurrency,
-              p_date: new Date().toISOString().split('T')[0],
-            });
-
-            valueInBase = converted ?? 0;
-          }
-
-          inventoryValue += valueInBase;
-        }
+    const inventoryRows = await sql`
+      SELECT quantity_on_hand, cost_price, currency FROM products WHERE track_inventory = true
+    `;
+    const today = new Date().toISOString().split('T')[0];
+    for (const item of inventoryRows as any[]) {
+      const itemValue = (Number(item.quantity_on_hand) || 0) * (Number(item.cost_price) || 0);
+      if (itemValue > 0) {
+        inventoryValue += await convertCurrencyDB(itemValue, item.currency || baseCurrency, baseCurrency, today);
       }
     }
-
-    const netIncome = totalRevenue - totalExpenses;
 
     return NextResponse.json({
       totalRevenue,
       totalExpenses,
-      netIncome,
+      netIncome: totalRevenue - totalExpenses,
       accountsReceivable,
       accountsPayable,
       cashBalance,
@@ -179,9 +94,6 @@ export async function GET() {
     });
   } catch (error: any) {
     console.error('Failed to calculate dashboard stats:', error);
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

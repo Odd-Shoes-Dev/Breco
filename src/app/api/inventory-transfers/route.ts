@@ -1,18 +1,10 @@
+import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
-
 export async function POST(request: NextRequest) {
   try {
-    const supabase = getSupabase();
     const { from_location_id, to_location_id, transfer_date, notes, lines } = await request.json();
 
     if (!from_location_id || !to_location_id || !lines || lines.length === 0) {
@@ -23,16 +15,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate transfer number
-    const { data: lastTransfer } = await supabase
-      .from('inventory_transfers')
-      .select('transfer_number')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
+    const lastTransferRows = await sql`
+      SELECT transfer_number FROM inventory_transfers ORDER BY created_at DESC LIMIT 1
+    `;
     let nextNumber = 1;
-    if (lastTransfer?.transfer_number) {
-      const match = lastTransfer.transfer_number.match(/TR-(\d+)/);
+    if (lastTransferRows.length > 0 && lastTransferRows[0].transfer_number) {
+      const match = lastTransferRows[0].transfer_number.match(/TR-(\d+)/);
       if (match) {
         nextNumber = parseInt(match[1]) + 1;
       }
@@ -40,33 +28,20 @@ export async function POST(request: NextRequest) {
     const transfer_number = `TR-${nextNumber.toString().padStart(4, '0')}`;
 
     // Create transfer
-    const { data: transfer, error: transferError } = await supabase
-      .from('inventory_transfers')
-      .insert({
-        transfer_number,
-        from_location_id,
-        to_location_id,
-        transfer_date,
-        status: 'pending',
-        notes,
-      })
-      .select()
-      .single();
-
-    if (transferError) throw transferError;
+    const transferRows = await sql`
+      INSERT INTO inventory_transfers (transfer_number, from_location_id, to_location_id, transfer_date, status, notes)
+      VALUES (${transfer_number}, ${from_location_id}, ${to_location_id}, ${transfer_date ?? null}, 'pending', ${notes ?? null})
+      RETURNING *
+    `;
+    const transfer = transferRows[0];
 
     // Create transfer lines
-    const transferLines = lines.map((line: any) => ({
-      transfer_id: transfer.id,
-      product_id: line.product_id,
-      quantity: line.quantity,
-    }));
-
-    const { error: linesError } = await supabase
-      .from('inventory_transfer_lines')
-      .insert(transferLines);
-
-    if (linesError) throw linesError;
+    for (const line of lines) {
+      await sql`
+        INSERT INTO inventory_transfer_lines (transfer_id, product_id, quantity)
+        VALUES (${transfer.id}, ${line.product_id}, ${line.quantity})
+      `;
+    }
 
     return NextResponse.json(transfer);
   } catch (error: any) {

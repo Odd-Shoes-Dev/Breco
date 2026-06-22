@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import {
   CubeIcon,
   ArrowDownTrayIcon,
@@ -94,13 +93,9 @@ export default function InventoryValuationPage() {
 
   const fetchCategories = async () => {
     try {
-      const { data, error } = await supabase
-        .from('product_categories')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
-      setCategories(data || []);
+      const res = await fetch('/api/product-categories');
+      const result = await res.json();
+      setCategories(result.data || result || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
     }

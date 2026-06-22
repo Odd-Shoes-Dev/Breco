@@ -1,38 +1,66 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/fleet - List all vehicles with optional filters
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-    
+
     const searchQuery = searchParams.get('search');
     const status = searchParams.get('status');
     const vehicleType = searchParams.get('vehicle_type');
 
-    let query = supabase
-      .from('vehicles')
-      .select('*')
-      .order('registration_number', { ascending: true });
+    let data;
 
-    // Apply filters
-    if (searchQuery) {
-      query = query.or(`registration_number.ilike.%${searchQuery}%,make.ilike.%${searchQuery}%,model.ilike.%${searchQuery}%`);
-    }
-
-    if (status && status !== 'all') {
-      query = query.eq('status', status);
-    }
-
-    if (vehicleType && vehicleType !== 'all') {
-      query = query.eq('vehicle_type', vehicleType);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    if (searchQuery && status && status !== 'all' && vehicleType && vehicleType !== 'all') {
+      const q = `%${searchQuery}%`;
+      data = await sql`
+        SELECT * FROM vehicles
+        WHERE (registration_number ILIKE ${q} OR make ILIKE ${q} OR model ILIKE ${q})
+          AND status = ${status}
+          AND vehicle_type = ${vehicleType}
+        ORDER BY registration_number ASC
+      `;
+    } else if (searchQuery && status && status !== 'all') {
+      const q = `%${searchQuery}%`;
+      data = await sql`
+        SELECT * FROM vehicles
+        WHERE (registration_number ILIKE ${q} OR make ILIKE ${q} OR model ILIKE ${q})
+          AND status = ${status}
+        ORDER BY registration_number ASC
+      `;
+    } else if (searchQuery && vehicleType && vehicleType !== 'all') {
+      const q = `%${searchQuery}%`;
+      data = await sql`
+        SELECT * FROM vehicles
+        WHERE (registration_number ILIKE ${q} OR make ILIKE ${q} OR model ILIKE ${q})
+          AND vehicle_type = ${vehicleType}
+        ORDER BY registration_number ASC
+      `;
+    } else if (status && status !== 'all' && vehicleType && vehicleType !== 'all') {
+      data = await sql`
+        SELECT * FROM vehicles
+        WHERE status = ${status} AND vehicle_type = ${vehicleType}
+        ORDER BY registration_number ASC
+      `;
+    } else if (searchQuery) {
+      const q = `%${searchQuery}%`;
+      data = await sql`
+        SELECT * FROM vehicles
+        WHERE registration_number ILIKE ${q} OR make ILIKE ${q} OR model ILIKE ${q}
+        ORDER BY registration_number ASC
+      `;
+    } else if (status && status !== 'all') {
+      data = await sql`
+        SELECT * FROM vehicles WHERE status = ${status} ORDER BY registration_number ASC
+      `;
+    } else if (vehicleType && vehicleType !== 'all') {
+      data = await sql`
+        SELECT * FROM vehicles WHERE vehicle_type = ${vehicleType} ORDER BY registration_number ASC
+      `;
+    } else {
+      data = await sql`SELECT * FROM vehicles ORDER BY registration_number ASC`;
     }
 
     return NextResponse.json({ data }, { status: 200 });
@@ -44,7 +72,6 @@ export async function GET(request: NextRequest) {
 // POST /api/fleet - Create a new vehicle
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
     // Validate required fields
@@ -55,19 +82,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Check for duplicate registration number
-    const { data: existing } = await supabase
-      .from('vehicles')
-      .select('id')
-      .eq('registration_number', body.registration_number)
-      .single();
+    const existing = await sql`
+      SELECT id FROM vehicles WHERE registration_number = ${body.registration_number}
+    `;
 
-    if (existing) {
+    if (existing.length > 0) {
       return NextResponse.json(
         { error: 'Vehicle with this registration number already exists' },
         { status: 409 }
@@ -75,18 +100,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the vehicle
-    const { data, error } = await supabase
-      .from('vehicles')
-      .insert({
-        ...body,
-        created_by: user.id,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const rows = await sql`
+      INSERT INTO vehicles (
+        registration_number, make, model, vehicle_type, year, color, status,
+        purchase_price, purchase_date, insurance_expiry, license_expiry,
+        mileage, fuel_type, capacity, notes, created_by
+      ) VALUES (
+        ${body.registration_number}, ${body.make}, ${body.model}, ${body.vehicle_type},
+        ${body.year || null}, ${body.color || null}, ${body.status || 'available'},
+        ${body.purchase_price || null}, ${body.purchase_date || null},
+        ${body.insurance_expiry || null}, ${body.license_expiry || null},
+        ${body.mileage || null}, ${body.fuel_type || null}, ${body.capacity || null},
+        ${body.notes || null}, ${user.id}
+      )
+      RETURNING *
+    `;
+    const data = rows[0];
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error: any) {

@@ -1,48 +1,45 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/customers - List customers
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-    
+
     const search = searchParams.get('search');
     const active = searchParams.get('active');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
 
-    let query = supabase
-      .from('customers')
-      .select('*', { count: 'exact' })
-      .order('name');
+    const rows = await sql`SELECT * FROM customers ORDER BY name`;
+    let data = rows as any[];
 
     if (search) {
-      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,company.ilike.%${search}%`);
+      const s = search.toLowerCase();
+      data = data.filter((c: any) =>
+        c.name?.toLowerCase().includes(s) ||
+        c.email?.toLowerCase().includes(s) ||
+        c.company?.toLowerCase().includes(s)
+      );
     }
 
     if (active === 'true') {
-      query = query.eq('is_active', true);
+      data = data.filter((c: any) => c.is_active === true);
     } else if (active === 'false') {
-      query = query.eq('is_active', false);
+      data = data.filter((c: any) => c.is_active === false);
     }
 
-    query = query.range(offset, offset + limit - 1);
-
-    const { data, count, error } = await query;
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const total = data.length;
+    const paged = data.slice(offset, offset + limit);
 
     return NextResponse.json({
-      data,
+      data: paged,
       pagination: {
         page,
         limit,
-        total: count,
-        totalPages: Math.ceil((count || 0) / limit),
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     });
   } catch (error: any) {
@@ -53,26 +50,16 @@ export async function GET(request: NextRequest) {
 // POST /api/customers - Create customer
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
-    // Validate required fields
     if (!body.name) {
-      return NextResponse.json(
-        { error: 'Customer name is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Customer name is required' }, { status: 400 });
     }
 
     // Check for duplicate email
     if (body.email) {
-      const { data: existing } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('email', body.email)
-        .single();
-
-      if (existing) {
+      const existingRows = await sql`SELECT id FROM customers WHERE email = ${body.email} LIMIT 1`;
+      if ((existingRows as any[]).length > 0) {
         return NextResponse.json(
           { error: 'A customer with this email already exists' },
           { status: 400 }
@@ -81,42 +68,30 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate customer number using database function
-    const { data: numberData, error: numberError } = await supabase
-      .rpc('generate_customer_number');
+    const numberRows = await sql`SELECT generate_customer_number() AS customer_number`;
+    const numberData = (numberRows as any[])[0]?.customer_number;
 
-    if (numberError) {
-      return NextResponse.json(
-        { error: 'Failed to generate customer number: ' + numberError.message },
-        { status: 500 }
-      );
+    if (!numberData) {
+      return NextResponse.json({ error: 'Failed to generate customer number' }, { status: 500 });
     }
 
-    const { data, error } = await supabase
-      .from('customers')
-      .insert({
-        customer_number: numberData,
-        name: body.name,
-        company_name: body.company_name || null,
-        email: body.email || null,
-        phone: body.phone || null,
-        tax_id: body.tax_id || null,
-        address_line1: body.address_line1 || null,
-        address_line2: body.address_line2 || null,
-        city: body.city || null,
-        state: body.state || null,
-        zip_code: body.postal_code || null,
-        country: body.country || 'USA',
-        payment_terms: body.payment_terms || 30,
-        credit_limit: body.credit_limit || 0,
-        notes: body.notes || null,
-        is_active: body.is_active !== false,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const insertedRows = await sql`
+      INSERT INTO customers (
+        customer_number, name, company_name, email, phone, tax_id,
+        address_line1, address_line2, city, state, zip_code, country,
+        payment_terms, credit_limit, notes, is_active
+      ) VALUES (
+        ${numberData}, ${body.name}, ${body.company_name ?? null}, ${body.email ?? null},
+        ${body.phone ?? null}, ${body.tax_id ?? null},
+        ${body.address_line1 ?? null}, ${body.address_line2 ?? null},
+        ${body.city ?? null}, ${body.state ?? null}, ${body.postal_code ?? null},
+        ${body.country || 'USA'},
+        ${body.payment_terms || 30}, ${body.credit_limit || 0},
+        ${body.notes ?? null}, ${body.is_active !== false}
+      )
+      RETURNING *
+    `;
+    const data = (insertedRows as any[])[0];
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error: any) {

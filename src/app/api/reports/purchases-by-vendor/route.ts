@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { convertCurrency, SupportedCurrency } from '@/lib/currency';
+import { sql } from '@/lib/db';
 
 interface VendorPurchase {
   vendorId: string;
@@ -43,7 +42,6 @@ interface PurchasesByVendorData {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const searchParams = request.nextUrl.searchParams;
     const startDate = searchParams.get('startDate') || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
     const endDate = searchParams.get('endDate') || new Date().toISOString().split('T')[0];
@@ -52,51 +50,28 @@ export async function GET(request: NextRequest) {
     const minAmount = parseFloat(searchParams.get('minAmount') || '0');
 
     // Fetch bills with vendor data for the period
-    const { data: bills, error: billsError } = await supabase
-      .from('bills')
-      .select(`
-        id,
-        vendor_id,
-        bill_date,
-        total,
-        currency,
-        payment_terms,
-        vendors (
-          id,
-          name,
-          company_name
-        )
-      `)
-      .gte('bill_date', startDate)
-      .lte('bill_date', endDate)
-      .neq('status', 'void')
-      .order('bill_date');
+    const bills = await sql`
+      SELECT b.id, b.vendor_id, b.bill_date, b.total, b.currency, b.payment_terms,
+             v.id AS v_id, v.name AS v_name, v.company_name AS v_company_name
+      FROM bills b
+      LEFT JOIN vendors v ON v.id = b.vendor_id
+      WHERE b.bill_date >= ${startDate}
+        AND b.bill_date <= ${endDate}
+        AND b.status != 'void'
+      ORDER BY b.bill_date
+    `;
 
-    if (billsError) {
-      console.error('Error fetching bills:', billsError);
-      return NextResponse.json({ error: billsError.message }, { status: 500 });
-    }
-
-    // Fetch bill lines to get category/account details
-    const billIds = (bills || []).map(bill => bill.id);
+    const billIds = bills.map((bill: any) => bill.id);
     let categoryData: any = {};
 
     if (billIds.length > 0) {
-      const { data: lines, error: linesError } = await supabase
-        .from('bill_lines')
-        .select(`
-          bill_id,
-          description,
-          line_total
-        `)
-        .in('bill_id', billIds);
+      const lines = await sql`
+        SELECT bill_id, description, line_total
+        FROM bill_lines
+        WHERE bill_id = ANY(${billIds})
+      `;
 
-      if (linesError) {
-        console.error('Error fetching bill lines:', linesError);
-      }
-
-      // Group categories by bill
-      (lines || []).forEach((line: any) => {
+      lines.forEach((line: any) => {
         if (!categoryData[line.bill_id]) {
           categoryData[line.bill_id] = [];
         }
@@ -110,15 +85,14 @@ export async function GET(request: NextRequest) {
     // Group bills by vendor
     const vendorMap = new Map<string, VendorPurchase>();
 
-    for (const bill of bills || []) {
-      if (!bill.vendors) continue;
-
-      const vendorData: any = Array.isArray(bill.vendors) ? bill.vendors[0] : bill.vendors;
-      if (!vendorData) continue;
+    for (const bill of bills) {
+      if (!bill.vendor_id) continue;
 
       const vendorId = bill.vendor_id;
-      const vendorName = vendorData.company_name || vendorData.name;
-      const vendorTypeRaw = 'Supplier'; // Default since vendor_type doesn't exist in vendors table
+      const vendorName = bill.v_company_name || bill.v_name;
+      if (!vendorName) continue;
+
+      const vendorTypeRaw = 'Supplier';
       const paymentTerms = bill.payment_terms || 30;
 
       if (!vendorMap.has(vendorId)) {
@@ -138,26 +112,23 @@ export async function GET(request: NextRequest) {
       }
 
       const vendor = vendorMap.get(vendorId)!;
-      
-      // Convert total to USD for reporting
+
       const total = parseFloat(bill.total);
-      const totalUSD = await convertCurrency(
-        supabase,
-        total,
-        (bill.currency || 'USD') as SupportedCurrency,
-        'USD' as SupportedCurrency
-      ) || total;
-      
+      let totalUSD = total;
+      const billCurrency = bill.currency || 'USD';
+      if (billCurrency !== 'USD') {
+        const res = await sql`SELECT convert_currency(${total}, ${billCurrency}, 'USD', ${bill.bill_date}) AS val`;
+        totalUSD = res[0]?.val ?? total;
+      }
+
       vendor.totalPurchases += totalUSD;
       vendor.purchaseCount += 1;
       vendor.lastPurchaseDate = bill.bill_date;
 
-      // Update first purchase date if earlier
       if (new Date(bill.bill_date) < new Date(vendor.firstPurchaseDate)) {
         vendor.firstPurchaseDate = bill.bill_date;
       }
 
-      // Aggregate categories for this vendor (already in USD via bill conversion)
       const billCategories = categoryData[bill.id] || [];
       billCategories.forEach((category: any) => {
         const existingCategory = vendor.topCategories.find((c: any) => c.category === category.name);
@@ -167,38 +138,32 @@ export async function GET(request: NextRequest) {
           vendor.topCategories.push({
             category: category.name,
             amount: category.amount,
-            percentage: 0 // Will calculate below
+            percentage: 0
           });
         }
       });
     }
 
-    // Calculate averages, percentages, and sort categories for each vendor
     let vendors = Array.from(vendorMap.values());
     vendors.forEach(vendor => {
       vendor.averagePurchase = vendor.purchaseCount > 0 ? vendor.totalPurchases / vendor.purchaseCount : 0;
-      
-      // Calculate percentages for categories
+
       vendor.topCategories.forEach((cat: any) => {
         cat.percentage = vendor.totalPurchases > 0 ? (cat.amount / vendor.totalPurchases) * 100 : 0;
       });
-      
-      // Sort by amount and keep top 5
+
       vendor.topCategories.sort((a: any, b: any) => b.amount - a.amount);
       vendor.topCategories = vendor.topCategories.slice(0, 5);
     });
 
-    // Filter by vendor type if specified
     if (vendorType !== 'all') {
       vendors = vendors.filter(v => v.vendorType.toLowerCase() === vendorType.toLowerCase());
     }
 
-    // Filter by minimum amount
     if (minAmount > 0) {
       vendors = vendors.filter(v => v.totalPurchases >= minAmount);
     }
 
-    // Sort vendors
     vendors.sort((a, b) => {
       switch (sortBy) {
         case 'vendorName':
@@ -212,14 +177,12 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Calculate summary statistics
     const totalPurchases = vendors.reduce((sum, v) => sum + v.totalPurchases, 0);
     const totalVendors = vendors.length;
     const averagePurchasePerVendor = totalVendors > 0 ? totalPurchases / totalVendors : 0;
 
     const topVendor = vendors.length > 0 ? vendors[0] : null;
 
-    // Calculate vendor type breakdown
     const vendorTypes: Record<string, { count: number; spending: number }> = {};
     vendors.forEach(vendor => {
       const type = vendor.vendorType || 'Other';
@@ -230,7 +193,6 @@ export async function GET(request: NextRequest) {
       vendorTypes[type].spending += vendor.totalPurchases;
     });
 
-    // Get top 10 vendors
     const topVendors = vendors.slice(0, 10);
 
     const response: PurchasesByVendorData = {

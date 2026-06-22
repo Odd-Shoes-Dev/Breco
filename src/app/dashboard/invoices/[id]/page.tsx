@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { Button, Card, CardHeader, CardTitle, CardBody, Badge, LoadingSpinner } from '@/components/ui';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import {
@@ -89,19 +88,9 @@ export default function InvoiceDetailPage() {
 
   const fetchInvoice = async () => {
     try {
-      // Fetch invoice with customer
-      const { data: invoiceData, error: invoiceError } = await supabase
-        .from('invoices')
-        .select(`
-          *,
-          customer:customers(*)
-        `)
-        .eq('id', params.id)
-        .single();
+      const res = await fetch(`/api/invoices/${params.id}`, { cache: 'no-store' });
+      const invoiceData = await res.json();
 
-      if (invoiceError) throw invoiceError;
-      
-      // Parse numeric fields that come as strings from Supabase
       const parsedInvoice = {
         ...invoiceData,
         subtotal: parseFloat(invoiceData.subtotal || 0),
@@ -111,27 +100,16 @@ export default function InvoiceDetailPage() {
         amount_paid: parseFloat(invoiceData.amount_paid || 0),
         tax_rate: parseFloat(invoiceData.tax_rate || 0),
       };
-      
+
       setInvoice(parsedInvoice);
 
-      // Fetch line items
-      const { data: itemsData } = await supabase
-        .from('invoice_lines')
-        .select('*')
-        .eq('invoice_id', params.id)
-        .order('line_number');
-
-      // Parse line item numeric fields
-      const parsedItems = (itemsData || []).map(item => {
+      const parsedItems = (invoiceData.line_items || []).map((item: any) => {
         const quantity = parseFloat(item.quantity || 0);
         const unitPrice = parseFloat(item.unit_price || 0);
         const lineTotal = parseFloat(item.line_total || 0);
         const discountAmount = parseFloat(item.discount_amount || 0);
         const taxAmount = parseFloat(item.tax_amount || 0);
-        
-        // Calculate amount if line_total is 0 (legacy data)
         const calculatedAmount = lineTotal || (quantity * unitPrice - discountAmount + taxAmount);
-        
         return {
           ...item,
           quantity,
@@ -140,56 +118,16 @@ export default function InvoiceDetailPage() {
           amount: calculatedAmount,
         };
       });
-
       setLineItems(parsedItems);
 
-      // Fetch payments through payment_applications
-      const { data: paymentsData } = await supabase
-        .from('payment_applications')
-        .select(`
-          *,
-          payment:payments_received(*)
-        `)
-        .eq('invoice_id', params.id)
-        .order('created_at', { ascending: false });
+      const paymentsRes = await fetch(`/api/invoices/${params.id}/payments`, { cache: 'no-store' });
+      const paymentsData = await paymentsRes.json();
+      setPayments(paymentsData.data || []);
 
-      // Parse payment numeric fields and flatten the structure
-      const parsedPayments = (paymentsData || []).map(app => ({
-        id: app.payment.id,
-        payment_number: app.payment.payment_number,
-        payment_date: app.payment.payment_date,
-        amount: parseFloat(app.amount_applied || 0),
-        payment_method: app.payment.payment_method,
-        reference_number: app.payment.reference_number,
-        notes: app.payment.notes,
-      }));
-
-      setPayments(parsedPayments);
-
-      // Fetch related booking if booking_id exists
       if (parsedInvoice.booking_id) {
-        const { data: bookingData } = await supabase
-          .from('bookings')
-          .select(`
-            id,
-            booking_number,
-            booking_type,
-            status,
-            travel_start_date,
-            travel_end_date,
-            num_adults,
-            num_children,
-            total,
-            amount_paid,
-            currency,
-            tour_package:tour_packages (id, name, package_code, duration_days, duration_nights),
-            hotel:hotels (id, name, star_rating),
-            vehicle:vehicles!bookings_assigned_vehicle_id_fkey (id, vehicle_type, registration_number)
-          `)
-          .eq('id', parsedInvoice.booking_id)
-          .single();
-
-        if (bookingData) {
+        const bookingRes = await fetch(`/api/bookings/${parsedInvoice.booking_id}`, { cache: 'no-store' });
+        if (bookingRes.ok) {
+          const bookingData = await bookingRes.json();
           setRelatedBooking(bookingData);
         }
       }
@@ -651,14 +589,10 @@ export default function InvoiceDetailPage() {
 
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete this invoice?')) return;
-    
+
     setActionLoading('delete');
     try {
-      await supabase
-        .from('invoices')
-        .delete()
-        .eq('id', params.id);
-      
+      await fetch(`/api/invoices/${params.id}`, { method: 'DELETE' });
       router.push('/dashboard/invoices');
     } catch (error) {
       console.error('Error deleting invoice:', error);

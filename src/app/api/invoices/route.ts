@@ -1,19 +1,18 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { createInvoiceJournalEntry } from '@/lib/accounting/journal-entry-helpers';
 import { validatePeriodLock } from '@/lib/accounting/period-lock';
 import {
   reduceInventoryForInvoice,
   reserveInventoryForQuotation,
-  releaseReservedInventory,
 } from '@/lib/accounting/inventory-server';
 
 // GET /api/invoices - List invoices
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-    
+
     const status = searchParams.get('status');
     const customerId = searchParams.get('customer_id');
     const search = searchParams.get('search');
@@ -21,41 +20,89 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
 
-    let query = supabase
-      .from('invoices')
-      .select(`
-        *,
-        customers (id, name, email)
-      `, { count: 'exact' })
-      .order('invoice_date', { ascending: false });
+    let rows: any[];
+    let countRows: any[];
 
-    if (status && status !== 'all') {
-      query = query.eq('status', status);
+    if (status && status !== 'all' && customerId && search) {
+      const q = `%${search}%`;
+      rows = await sql`
+        SELECT i.*, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+        WHERE i.status = ${status} AND i.customer_id = ${customerId} AND i.invoice_number ILIKE ${q}
+        ORDER BY i.invoice_date DESC LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`
+        SELECT COUNT(*) FROM invoices WHERE status = ${status} AND customer_id = ${customerId} AND invoice_number ILIKE ${`%${search}%`}
+      `;
+    } else if (status && status !== 'all' && customerId) {
+      rows = await sql`
+        SELECT i.*, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+        WHERE i.status = ${status} AND i.customer_id = ${customerId}
+        ORDER BY i.invoice_date DESC LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) FROM invoices WHERE status = ${status} AND customer_id = ${customerId}`;
+    } else if (status && status !== 'all' && search) {
+      const q = `%${search}%`;
+      rows = await sql`
+        SELECT i.*, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+        WHERE i.status = ${status} AND i.invoice_number ILIKE ${q}
+        ORDER BY i.invoice_date DESC LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) FROM invoices WHERE status = ${status} AND invoice_number ILIKE ${`%${search}%`}`;
+    } else if (customerId && search) {
+      const q = `%${search}%`;
+      rows = await sql`
+        SELECT i.*, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+        WHERE i.customer_id = ${customerId} AND i.invoice_number ILIKE ${q}
+        ORDER BY i.invoice_date DESC LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) FROM invoices WHERE customer_id = ${customerId} AND invoice_number ILIKE ${`%${search}%`}`;
+    } else if (status && status !== 'all') {
+      rows = await sql`
+        SELECT i.*, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+        WHERE i.status = ${status}
+        ORDER BY i.invoice_date DESC LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) FROM invoices WHERE status = ${status}`;
+    } else if (customerId) {
+      rows = await sql`
+        SELECT i.*, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+        WHERE i.customer_id = ${customerId}
+        ORDER BY i.invoice_date DESC LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) FROM invoices WHERE customer_id = ${customerId}`;
+    } else if (search) {
+      const q = `%${search}%`;
+      rows = await sql`
+        SELECT i.*, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+        WHERE i.invoice_number ILIKE ${q}
+        ORDER BY i.invoice_date DESC LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) FROM invoices WHERE invoice_number ILIKE ${`%${search}%`}`;
+    } else {
+      rows = await sql`
+        SELECT i.*, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+        ORDER BY i.invoice_date DESC LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) FROM invoices`;
     }
 
-    if (customerId) {
-      query = query.eq('customer_id', customerId);
-    }
-
-    if (search) {
-      query = query.or(`invoice_number.ilike.%${search}%`);
-    }
-
-    query = query.range(offset, offset + limit - 1);
-
-    const { data, count, error } = await query;
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const count = parseInt(countRows[0].count);
 
     return NextResponse.json({
-      data,
+      data: rows,
       pagination: {
         page,
         limit,
         total: count,
-        totalPages: Math.ceil((count || 0) / limit),
+        totalPages: Math.ceil(count / limit),
       },
     });
   } catch (error: any) {
@@ -66,7 +113,6 @@ export async function GET(request: NextRequest) {
 // POST /api/invoices - Create invoice
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
     // Validate required fields
@@ -78,65 +124,55 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if period is closed
-    const periodError = await validatePeriodLock(supabase, body.invoice_date);
+    const periodError = await validatePeriodLock(sql, body.invoice_date);
     if (periodError) {
       return NextResponse.json({ error: periodError }, { status: 403 });
     }
 
     // Get current user
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Determine document type and generate appropriate number
     const documentType = body.document_type || 'invoice';
-    let documentNumber;
-    let numberField;
+    let documentNumber: string;
+    let numberField: string;
 
     switch (documentType) {
-      case 'quotation':
-        const { data: quotationNum, error: quotationErr } = await supabase.rpc('generate_quotation_number');
-        if (quotationErr) {
-          return NextResponse.json({ error: 'Failed to generate quotation number' }, { status: 500 });
-        }
-        documentNumber = quotationNum;
+      case 'quotation': {
+        const rows = await sql`SELECT generate_quotation_number() AS num`;
+        if (!rows[0]?.num) return NextResponse.json({ error: 'Failed to generate quotation number' }, { status: 500 });
+        documentNumber = rows[0].num;
         numberField = 'quotation_number';
         break;
-      
-      case 'proforma':
-        const { data: proformaNum, error: proformaErr } = await supabase.rpc('generate_proforma_number');
-        if (proformaErr) {
-          return NextResponse.json({ error: 'Failed to generate proforma number' }, { status: 500 });
-        }
-        documentNumber = proformaNum;
+      }
+      case 'proforma': {
+        const rows = await sql`SELECT generate_proforma_number() AS num`;
+        if (!rows[0]?.num) return NextResponse.json({ error: 'Failed to generate proforma number' }, { status: 500 });
+        documentNumber = rows[0].num;
         numberField = 'proforma_number';
         break;
-      
-      case 'receipt':
-        const { data: receiptNum, error: receiptErr } = await supabase.rpc('generate_receipt_number');
-        if (receiptErr) {
-          return NextResponse.json({ error: 'Failed to generate receipt number' }, { status: 500 });
-        }
-        documentNumber = receiptNum;
+      }
+      case 'receipt': {
+        const rows = await sql`SELECT generate_receipt_number() AS num`;
+        if (!rows[0]?.num) return NextResponse.json({ error: 'Failed to generate receipt number' }, { status: 500 });
+        documentNumber = rows[0].num;
         numberField = 'receipt_number';
         break;
-      
-      default: // invoice
-        const { data: invoiceNum, error: invoiceErr } = await supabase.rpc('generate_invoice_number');
-        if (invoiceErr) {
-          return NextResponse.json({ error: 'Failed to generate invoice number' }, { status: 500 });
-        }
-        documentNumber = invoiceNum;
+      }
+      default: {
+        const rows = await sql`SELECT generate_invoice_number() AS num`;
+        if (!rows[0]?.num) return NextResponse.json({ error: 'Failed to generate invoice number' }, { status: 500 });
+        documentNumber = rows[0].num;
         numberField = 'invoice_number';
+      }
     }
 
     // Get AR account
-    const { data: arAccount } = await supabase
-      .from('accounts')
-      .select('id')
-      .eq('code', '1200')
-      .single();
+    const arAccountRows = await sql`SELECT id FROM accounts WHERE code = '1200'`;
+    const arAccountId = arAccountRows[0]?.id || null;
 
     // Calculate totals from lines
     const lines = body.lines || [];
@@ -149,7 +185,6 @@ export async function POST(request: NextRequest) {
       const lineDiscount = lineSubtotal * ((line.discount_percent || 0) / 100);
       const lineNet = lineSubtotal - lineDiscount;
       const lineTax = lineNet * (line.tax_rate || 0);
-
       subtotal += lineNet;
       taxAmount += lineTax;
       discountAmount += lineDiscount;
@@ -157,117 +192,75 @@ export async function POST(request: NextRequest) {
 
     const total = subtotal + taxAmount;
 
-    // Build invoice data object with appropriate number field
-    const invoiceData: any = {
-      customer_id: body.customer_id,
-      invoice_date: body.invoice_date,
-      due_date: body.due_date,
-      payment_terms: body.payment_terms || 30,
-      po_number: body.po_number || null,
-      notes: body.notes || null,
-      currency: body.currency || 'USD',
-      subtotal,
-      tax_amount: taxAmount,
-      discount_amount: discountAmount,
-      total,
-      amount_paid: 0,
-      status: body.status || 'draft',
-      ar_account_id: arAccount?.id,
-      created_by: user.id,
-      document_type: documentType,
-      ...(body.booking_id && { booking_id: body.booking_id }), // Include booking_id if provided
-    };
-
-    // Add the appropriate number field
-    if (documentType === 'quotation') {
-      invoiceData.quotation_number = documentNumber;
-      invoiceData.invoice_number = `TEMP-${Date.now()}`; // Temporary placeholder
-    } else if (documentType === 'proforma') {
-      invoiceData.proforma_number = documentNumber;
-      invoiceData.invoice_number = `TEMP-${Date.now()}`; // Temporary placeholder
-    } else if (documentType === 'receipt') {
-      invoiceData.receipt_number = documentNumber;
-      invoiceData.invoice_number = `TEMP-${Date.now()}`; // Temporary placeholder
-    } else {
-      invoiceData.invoice_number = documentNumber;
-    }
+    // Build number fields
+    const tempNumber = `TEMP-${Date.now()}`;
+    const quotationNumber = documentType === 'quotation' ? documentNumber : null;
+    const proformaNumber = documentType === 'proforma' ? documentNumber : null;
+    const receiptNumber = documentType === 'receipt' ? documentNumber : null;
+    const invoiceNumber = documentType === 'invoice' ? documentNumber : tempNumber;
 
     // Create invoice
-    const { data: invoice, error: invoiceError } = await supabase
-      .from('invoices')
-      .insert(invoiceData)
-      .select()
-      .single();
-
-    if (invoiceError) {
-      return NextResponse.json({ error: invoiceError.message }, { status: 400 });
-    }
+    const invoiceRows = await sql`
+      INSERT INTO invoices (
+        invoice_number, quotation_number, proforma_number, receipt_number,
+        customer_id, invoice_date, due_date, payment_terms, po_number, notes,
+        currency, subtotal, tax_amount, discount_amount, total, amount_paid,
+        status, ar_account_id, created_by, document_type, booking_id
+      ) VALUES (
+        ${invoiceNumber}, ${quotationNumber}, ${proformaNumber}, ${receiptNumber},
+        ${body.customer_id}, ${body.invoice_date}, ${body.due_date},
+        ${body.payment_terms || 30}, ${body.po_number || null}, ${body.notes || null},
+        ${body.currency || 'USD'}, ${subtotal}, ${taxAmount}, ${discountAmount},
+        ${total}, 0, ${body.status || 'draft'}, ${arAccountId}, ${user.id},
+        ${documentType}, ${body.booking_id || null}
+      )
+      RETURNING *
+    `;
+    const invoice = invoiceRows[0];
 
     // Create invoice lines
     if (lines.length > 0) {
-      const invoiceLines = lines.map((line: any, index: number) => {
+      for (let index = 0; index < lines.length; index++) {
+        const line = lines[index];
         const lineSubtotal = line.quantity * line.unit_price;
         const lineDiscount = lineSubtotal * ((line.discount_percent || 0) / 100);
         const lineNet = lineSubtotal - lineDiscount;
         const lineTax = lineNet * (line.tax_rate || 0);
-        const lineTotal = lineNet + lineTax; // Total includes tax
+        const lineTotal = lineNet + lineTax;
 
-        return {
-          invoice_id: invoice.id,
-          line_number: index + 1,
-          product_id: line.product_id || null,
-          description: line.description,
-          quantity: line.quantity,
-          unit_price: line.unit_price,
-          discount_percent: line.discount_percent || 0,
-          discount_amount: lineDiscount,
-          tax_rate: line.tax_rate || 0,
-          tax_amount: lineTax,
-          line_total: lineTotal,
-        };
-      });
-
-      const { error: linesError } = await supabase
-        .from('invoice_lines')
-        .insert(invoiceLines);
-
-      if (linesError) {
-        // Rollback invoice if lines fail
-        await supabase.from('invoices').delete().eq('id', invoice.id);
-        return NextResponse.json({ error: linesError.message }, { status: 400 });
+        try {
+          await sql`
+            INSERT INTO invoice_lines (
+              invoice_id, line_number, product_id, description, quantity,
+              unit_price, discount_percent, discount_amount, tax_rate, tax_amount, line_total
+            ) VALUES (
+              ${invoice.id}, ${index + 1}, ${line.product_id || null}, ${line.description},
+              ${line.quantity}, ${line.unit_price}, ${line.discount_percent || 0},
+              ${lineDiscount}, ${line.tax_rate || 0}, ${lineTax}, ${lineTotal}
+            )
+          `;
+        } catch (linesError: any) {
+          // Rollback invoice if lines fail
+          await sql`DELETE FROM invoices WHERE id = ${invoice.id}`;
+          return NextResponse.json({ error: linesError.message }, { status: 400 });
+        }
       }
     }
 
     // Handle inventory based on document type and status
     if (documentType === 'quotation' || documentType === 'proforma') {
-      // Reserve inventory for quotations and proformas
-      const reserveResult = await reserveInventoryForQuotation(
-        supabase,
-        invoice.id,
-        lines,
-        user.id
-      );
-
+      const reserveResult = await reserveInventoryForQuotation(sql, invoice.id, lines, user.id);
       if (!reserveResult.success) {
-        // Rollback invoice if reservation fails
-        await supabase.from('invoices').delete().eq('id', invoice.id);
+        await sql`DELETE FROM invoices WHERE id = ${invoice.id}`;
         return NextResponse.json(
           { error: reserveResult.error || 'Failed to reserve inventory' },
           { status: 400 }
         );
       }
     } else if (documentType === 'invoice' && (invoice.status === 'posted' || invoice.status === 'sent')) {
-      // Reduce inventory for posted/sent invoices
-      const inventoryResult = await reduceInventoryForInvoice(
-        supabase,
-        invoice.id,
-        lines,
-        user.id
-      );
-
+      const inventoryResult = await reduceInventoryForInvoice(sql, invoice.id, lines, user.id);
       if (!inventoryResult.success) {
-        // Rollback invoice if inventory reduction fails
-        await supabase.from('invoices').delete().eq('id', invoice.id);
+        await sql`DELETE FROM invoices WHERE id = ${invoice.id}`;
         return NextResponse.json(
           { error: inventoryResult.error || 'Insufficient inventory' },
           { status: 400 }
@@ -278,7 +271,7 @@ export async function POST(request: NextRequest) {
     // Create journal entry if invoice is posted
     if (invoice.status === 'posted' && documentType === 'invoice') {
       const journalResult = await createInvoiceJournalEntry(
-        supabase,
+        sql,
         {
           id: invoice.id,
           invoice_number: invoice.invoice_number,
@@ -291,7 +284,6 @@ export async function POST(request: NextRequest) {
 
       if (!journalResult.success) {
         console.error('Failed to create journal entry for invoice:', journalResult.error);
-        // Don't fail the invoice creation, just log the error
       }
     }
 

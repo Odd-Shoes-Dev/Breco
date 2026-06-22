@@ -1,27 +1,26 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { calculateMonthlyDepreciation } from '@/lib/accounting/assets';
 
-// GET /api/depreciation/preview - Preview next depreciation posting
+// GET /api/depreciation/post - Preview next depreciation posting
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-    
-    // Get period from query params or default to current month
+
     const periodEnd = searchParams.get('period_end') || new Date().toISOString().split('T')[0];
     const periodEndDate = new Date(periodEnd);
-    const periodStart = searchParams.get('period_start') || 
+    const periodStart = searchParams.get('period_start') ||
       new Date(periodEndDate.getFullYear(), periodEndDate.getMonth(), 1).toISOString().split('T')[0];
 
     // Check if depreciation already posted for this period
-    const { data: existingPosting } = await supabase
-      .from('depreciation_postings')
-      .select('id, posting_date, total_depreciation')
-      .eq('period_start', periodStart)
-      .eq('period_end', periodEnd)
-      .eq('status', 'posted')
-      .single();
+    const existingRows = await sql`
+      SELECT id, posting_date, total_depreciation
+      FROM depreciation_postings
+      WHERE period_start = ${periodStart} AND period_end = ${periodEnd} AND status = 'posted'
+      LIMIT 1
+    `;
+    const existingPosting = (existingRows as any[])[0];
 
     if (existingPosting) {
       return NextResponse.json({
@@ -30,16 +29,11 @@ export async function GET(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Get all active assets
-    const { data: assets, error: assetsError } = await supabase
-      .from('assets')
-      .select('*')
-      .eq('status', 'active')
-      .lte('depreciation_start_date', periodEnd);
-
-    if (assetsError) {
-      return NextResponse.json({ error: assetsError.message }, { status: 400 });
-    }
+    const assetRows = await sql`
+      SELECT * FROM assets
+      WHERE status = 'active' AND depreciation_start_date <= ${periodEnd}
+    `;
+    const assets = assetRows as any[];
 
     if (!assets || assets.length === 0) {
       return NextResponse.json({
@@ -54,24 +48,22 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Calculate depreciation for each asset
     const assetDetails = [];
     let totalDepreciation = 0;
 
     for (const asset of assets) {
-      // Check if asset is fully depreciated
       if (asset.accumulated_depreciation >= (asset.purchase_price - (asset.salvage_value || 0))) {
         continue;
       }
 
       const monthlyDepreciation = calculateMonthlyDepreciation(asset);
       const monthlyDepreciationNum = monthlyDepreciation.toNumber();
-      
+
       if (monthlyDepreciationNum > 0) {
-        const accumulatedBefore = asset.accumulated_depreciation || 0;
+        const accumulatedBefore = Number(asset.accumulated_depreciation) || 0;
         const accumulatedAfter = Math.min(
           accumulatedBefore + monthlyDepreciationNum,
-          asset.purchase_price - (asset.salvage_value || 0)
+          Number(asset.purchase_price) - (Number(asset.salvage_value) || 0)
         );
         const actualDepreciation = accumulatedAfter - accumulatedBefore;
 
@@ -83,8 +75,8 @@ export async function GET(request: NextRequest) {
           depreciation_amount: actualDepreciation,
           accumulated_before: accumulatedBefore,
           accumulated_after: accumulatedAfter,
-          book_value_before: asset.book_value || (asset.purchase_price - accumulatedBefore),
-          book_value_after: asset.purchase_price - accumulatedAfter,
+          book_value_before: asset.book_value || (Number(asset.purchase_price) - accumulatedBefore),
+          book_value_after: Number(asset.purchase_price) - accumulatedAfter,
           purchase_price: asset.purchase_price,
           salvage_value: asset.salvage_value,
         });
@@ -111,15 +103,13 @@ export async function GET(request: NextRequest) {
 // POST /api/depreciation/post - Post monthly depreciation
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Validate required fields
     if (!body.period_start || !body.period_end) {
       return NextResponse.json(
         { error: 'Missing required fields: period_start, period_end' },
@@ -132,52 +122,43 @@ export async function POST(request: NextRequest) {
     const postingDate = body.posting_date || periodEnd;
 
     // Check if already posted
-    const { data: existingPosting } = await supabase
-      .from('depreciation_postings')
-      .select('id')
-      .eq('period_start', periodStart)
-      .eq('period_end', periodEnd)
-      .eq('status', 'posted')
-      .single();
-
-    if (existingPosting) {
+    const existingRows = await sql`
+      SELECT id FROM depreciation_postings
+      WHERE period_start = ${periodStart} AND period_end = ${periodEnd} AND status = 'posted'
+      LIMIT 1
+    `;
+    if ((existingRows as any[]).length > 0) {
       return NextResponse.json(
         { error: 'Depreciation already posted for this period' },
         { status: 400 }
       );
     }
 
-    // Get active assets
-    const { data: assets } = await supabase
-      .from('assets')
-      .select('*')
-      .eq('status', 'active')
-      .lte('depreciation_start_date', periodEnd);
+    const assetRows = await sql`
+      SELECT * FROM assets WHERE status = 'active' AND depreciation_start_date <= ${periodEnd}
+    `;
+    const assets = assetRows as any[];
 
     if (!assets || assets.length === 0) {
-      return NextResponse.json(
-        { error: 'No active assets to depreciate' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No active assets to depreciate' }, { status: 400 });
     }
 
-    // Calculate depreciation
     const assetDetails = [];
     let totalDepreciation = 0;
 
     for (const asset of assets) {
-      if (asset.accumulated_depreciation >= (asset.purchase_price - (asset.salvage_value || 0))) {
+      if (asset.accumulated_depreciation >= (Number(asset.purchase_price) - (Number(asset.salvage_value) || 0))) {
         continue;
       }
 
       const monthlyDepreciation = calculateMonthlyDepreciation(asset);
       const monthlyDepreciationNum = monthlyDepreciation.toNumber();
-      
+
       if (monthlyDepreciationNum > 0) {
-        const accumulatedBefore = asset.accumulated_depreciation || 0;
+        const accumulatedBefore = Number(asset.accumulated_depreciation) || 0;
         const accumulatedAfter = Math.min(
           accumulatedBefore + monthlyDepreciationNum,
-          asset.purchase_price - (asset.salvage_value || 0)
+          Number(asset.purchase_price) - (Number(asset.salvage_value) || 0)
         );
         const actualDepreciation = accumulatedAfter - accumulatedBefore;
 
@@ -186,8 +167,8 @@ export async function POST(request: NextRequest) {
           depreciation_amount: actualDepreciation,
           accumulated_before: accumulatedBefore,
           accumulated_after: accumulatedAfter,
-          book_value_before: asset.book_value || (asset.purchase_price - accumulatedBefore),
-          book_value_after: asset.purchase_price - accumulatedAfter,
+          book_value_before: asset.book_value || (Number(asset.purchase_price) - accumulatedBefore),
+          book_value_after: Number(asset.purchase_price) - accumulatedAfter,
         });
 
         totalDepreciation += actualDepreciation;
@@ -201,37 +182,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create journal entry
+    // Generate journal entry number
     const year = new Date(postingDate).getFullYear();
-    const { data: lastEntry } = await supabase
-      .from('journal_entries')
-      .select('entry_number')
-      .like('entry_number', `JE-${year}-%`)
-      .order('entry_number', { ascending: false })
-      .limit(1)
-      .single();
-
+    const lastEntryRows = await sql`
+      SELECT entry_number FROM journal_entries
+      WHERE entry_number LIKE ${`JE-${year}-%`}
+      ORDER BY entry_number DESC
+      LIMIT 1
+    `;
+    const lastEntry = (lastEntryRows as any[])[0];
     let nextNumber = 1;
     if (lastEntry?.entry_number) {
       const match = lastEntry.entry_number.match(/JE-\d{4}-(\d+)/);
-      if (match) {
-        nextNumber = parseInt(match[1], 10) + 1;
-      }
+      if (match) nextNumber = parseInt(match[1], 10) + 1;
     }
     const entryNumber = `JE-${year}-${nextNumber.toString().padStart(4, '0')}`;
 
-    // Get depreciation expense and accumulated depreciation accounts
-    const { data: depExpenseAcct } = await supabase
-      .from('accounts')
-      .select('id')
-      .eq('code', '6300') // Depreciation Expense
-      .single();
-
-    const { data: accumDepAcct } = await supabase
-      .from('accounts')
-      .select('id')
-      .eq('code', '1500') // Accumulated Depreciation
-      .single();
+    // Get depreciation accounts
+    const depExpAcctRows = await sql`SELECT id FROM accounts WHERE code = '6300' LIMIT 1`;
+    const accumDepAcctRows = await sql`SELECT id FROM accounts WHERE code = '1500' LIMIT 1`;
+    const depExpenseAcct = (depExpAcctRows as any[])[0];
+    const accumDepAcct = (accumDepAcctRows as any[])[0];
 
     if (!depExpenseAcct || !accumDepAcct) {
       return NextResponse.json(
@@ -241,86 +212,59 @@ export async function POST(request: NextRequest) {
     }
 
     // Create journal entry
-    const { data: journalEntry, error: jeError } = await supabase
-      .from('journal_entries')
-      .insert({
-        entry_number: entryNumber,
-        entry_date: postingDate,
-        description: `Depreciation for period ${periodStart} to ${periodEnd}`,
-        source_module: 'assets',
-        status: 'posted',
-        created_by: user.id,
-        posted_by: user.id,
-        posted_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (jeError) {
-      return NextResponse.json({ error: jeError.message }, { status: 400 });
-    }
+    const jeRows = await sql`
+      INSERT INTO journal_entries (
+        entry_number, entry_date, description, source_module, status,
+        created_by, posted_by, posted_at
+      ) VALUES (
+        ${entryNumber}, ${postingDate},
+        ${`Depreciation for period ${periodStart} to ${periodEnd}`},
+        ${'assets'}, ${'posted'}, ${user.id}, ${user.id}, ${new Date().toISOString()}
+      )
+      RETURNING *
+    `;
+    const journalEntry = (jeRows as any[])[0];
 
     // Create journal lines
-    await supabase.from('journal_lines').insert([
-      {
-        journal_entry_id: journalEntry.id,
-        line_number: 1,
-        account_id: depExpenseAcct.id,
-        description: 'Depreciation Expense',
-        debit: totalDepreciation,
-        credit: 0,
-        base_debit: totalDepreciation,
-        base_credit: 0,
-      },
-      {
-        journal_entry_id: journalEntry.id,
-        line_number: 2,
-        account_id: accumDepAcct.id,
-        description: 'Accumulated Depreciation',
-        debit: 0,
-        credit: totalDepreciation,
-        base_debit: 0,
-        base_credit: totalDepreciation,
-      },
-    ]);
+    await sql`
+      INSERT INTO journal_lines (journal_entry_id, line_number, account_id, description, debit, credit, base_debit, base_credit)
+      VALUES
+        (${journalEntry.id}, ${1}, ${depExpenseAcct.id}, ${'Depreciation Expense'}, ${totalDepreciation}, ${0}, ${totalDepreciation}, ${0}),
+        (${journalEntry.id}, ${2}, ${accumDepAcct.id}, ${'Accumulated Depreciation'}, ${0}, ${totalDepreciation}, ${0}, ${totalDepreciation})
+    `;
 
     // Create depreciation posting record
-    const { data: posting, error: postingError } = await supabase
-      .from('depreciation_postings')
-      .insert({
-        posting_date: postingDate,
-        period_start: periodStart,
-        period_end: periodEnd,
-        total_depreciation: totalDepreciation,
-        assets_count: assetDetails.length,
-        journal_entry_id: journalEntry.id,
-        notes: body.notes || null,
-        posted_by: user.id,
-      })
-      .select()
-      .single();
+    const postingRows = await sql`
+      INSERT INTO depreciation_postings (
+        posting_date, period_start, period_end, total_depreciation,
+        assets_count, journal_entry_id, notes, posted_by
+      ) VALUES (
+        ${postingDate}, ${periodStart}, ${periodEnd}, ${totalDepreciation},
+        ${assetDetails.length}, ${journalEntry.id}, ${body.notes ?? null}, ${user.id}
+      )
+      RETURNING *
+    `;
+    const posting = (postingRows as any[])[0];
 
-    if (postingError) {
-      // Rollback journal entry
-      await supabase.from('journal_entries').delete().eq('id', journalEntry.id);
-      return NextResponse.json({ error: postingError.message }, { status: 400 });
-    }
-
-    // Create posting details (trigger will update assets)
-    const detailRecords = assetDetails.map(detail => ({
-      ...detail,
-      posting_id: posting.id,
-    }));
-
-    const { error: detailsError } = await supabase
-      .from('depreciation_posting_details')
-      .insert(detailRecords);
-
-    if (detailsError) {
+    // Create posting details
+    try {
+      for (const detail of assetDetails) {
+        await sql`
+          INSERT INTO depreciation_posting_details (
+            posting_id, asset_id, depreciation_amount, accumulated_before,
+            accumulated_after, book_value_before, book_value_after
+          ) VALUES (
+            ${posting.id}, ${detail.asset_id}, ${detail.depreciation_amount},
+            ${detail.accumulated_before}, ${detail.accumulated_after},
+            ${detail.book_value_before}, ${detail.book_value_after}
+          )
+        `;
+      }
+    } catch (detailsErr: any) {
       // Rollback
-      await supabase.from('depreciation_postings').delete().eq('id', posting.id);
-      await supabase.from('journal_entries').delete().eq('id', journalEntry.id);
-      return NextResponse.json({ error: detailsError.message }, { status: 400 });
+      await sql`DELETE FROM depreciation_postings WHERE id = ${posting.id}`;
+      await sql`DELETE FROM journal_entries WHERE id = ${journalEntry.id}`;
+      return NextResponse.json({ error: detailsErr.message }, { status: 400 });
     }
 
     return NextResponse.json({

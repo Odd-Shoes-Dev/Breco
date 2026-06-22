@@ -17,7 +17,6 @@ import {
   CheckCircleIcon,
   XCircleIcon,
 } from '@heroicons/react/24/outline';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 
 interface Expense {
@@ -75,31 +74,8 @@ export default function ExpenseDetailPage() {
   const loadExpenseDetails = async () => {
     try {
       setLoading(true);
-
-      // Fetch expense with related data
-      const { data, error } = await supabase
-        .from('expenses')
-        .select(`
-          *,
-          vendors (
-            name,
-            email,
-            company_name,
-            phone
-          ),
-          expense_account:expense_account_id (
-            name,
-            code
-          ),
-          payment_account:payment_account_id (
-            name,
-            code
-          )
-        `)
-        .eq('id', params.id)
-        .single();
-
-      if (error) throw error;
+      const res = await fetch(`/api/expenses/${params.id}`, { cache: 'no-store' });
+      const data = await res.json();
       setExpense(data);
     } catch (error) {
       console.error('Failed to load expense:', error);
@@ -464,16 +440,14 @@ export default function ExpenseDetailPage() {
 
   const handleDelete = async () => {
     if (!confirm('Permanently delete this expense? This action cannot be undone.')) return;
-    
+
     setActionLoading(true);
     try {
-      const { error } = await supabase
-        .from('expenses')
-        .delete()
-        .eq('id', params.id);
-
-      if (error) throw error;
-
+      const res = await fetch(`/api/expenses/${params.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to delete expense');
+      }
       router.push('/dashboard/expenses');
     } catch (error: any) {
       console.error('Failed to delete expense:', error);

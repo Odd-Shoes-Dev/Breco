@@ -3,7 +3,7 @@
 // Breco Safaris Ltd Financial System
 // =====================================================
 
-import { supabase } from '@/lib/supabase/client';
+import { sql } from '@/lib/db';
 import { getAccountBalance, getAccountBalanceForPeriod } from './general-ledger';
 import type {
   TrialBalanceRow,
@@ -23,14 +23,7 @@ import Decimal from 'decimal.js';
 export async function generateTrialBalance(
   asOfDate: string
 ): Promise<{ rows: TrialBalanceRow[]; totalDebits: number; totalCredits: number }> {
-  // Get all active accounts
-  const { data: accounts, error } = await supabase
-    .from('accounts')
-    .select('*')
-    .eq('is_active', true)
-    .order('code');
-
-  if (error) throw new Error(`Failed to get accounts: ${error.message}`);
+  const accounts = await sql`SELECT * FROM accounts WHERE is_active = true ORDER BY code`;
 
   const rows: TrialBalanceRow[] = [];
   let totalDebits = new Decimal(0);
@@ -71,15 +64,12 @@ export async function generateTrialBalance(
  * Generates Balance Sheet as of a specific date
  */
 export async function generateBalanceSheet(asOfDate: string): Promise<BalanceSheet> {
-  // Get all active accounts grouped by type and subtype
-  const { data: accounts, error } = await supabase
-    .from('accounts')
-    .select('*')
-    .eq('is_active', true)
-    .in('account_type', ['asset', 'liability', 'equity'])
-    .order('code');
-
-  if (error) throw new Error(`Failed to get accounts: ${error.message}`);
+  const accounts = await sql`
+    SELECT * FROM accounts
+    WHERE is_active = true
+      AND account_type IN ('asset', 'liability', 'equity')
+    ORDER BY code
+  `;
 
   // Group accounts by subtype
   const assetSubtypes = ['cash', 'bank', 'receivable', 'inventory', 'fixed_asset', 'other_asset'];
@@ -151,14 +141,12 @@ export async function generateProfitLoss(
   startDate: string,
   endDate: string
 ): Promise<ProfitLoss> {
-  const { data: accounts, error } = await supabase
-    .from('accounts')
-    .select('*')
-    .eq('is_active', true)
-    .in('account_type', ['revenue', 'expense'])
-    .order('code');
-
-  if (error) throw new Error(`Failed to get accounts: ${error.message}`);
+  const accounts = await sql`
+    SELECT * FROM accounts
+    WHERE is_active = true
+      AND account_type IN ('revenue', 'expense')
+    ORDER BY code
+  `;
 
   const buildSection = async (
     subtypes: string[],
@@ -234,13 +222,13 @@ export async function generateProfitLoss(
  * Generates AR Aging Report
  */
 export async function generateARAgingReport(asOfDate: string): Promise<ARAgingReport> {
-  const { data: invoices, error } = await supabase
-    .from('invoices')
-    .select('*, customers(name)')
-    .in('status', ['sent', 'partial', 'overdue'])
-    .gt('balance_due', 0);
-
-  if (error) throw new Error(`Failed to get invoices: ${error.message}`);
+  const invoices = await sql`
+    SELECT i.*, c.name AS customer_name
+    FROM invoices i
+    LEFT JOIN customers c ON c.id = i.customer_id
+    WHERE i.status IN ('sent', 'partial', 'overdue')
+      AND i.balance_due > 0
+  `;
 
   const asOf = new Date(asOfDate);
   const customerAging = new Map<string, {
@@ -263,7 +251,7 @@ export async function generateARAgingReport(asOfDate: string): Promise<ARAgingRe
     if (!customerAging.has(invoice.customer_id)) {
       customerAging.set(invoice.customer_id, {
         customerId: invoice.customer_id,
-        customerName: invoice.customers?.name || 'Unknown',
+        customerName: invoice.customer_name || 'Unknown',
         current: 0,
         days30: 0,
         days60: 0,
@@ -312,13 +300,13 @@ export async function generateARAgingReport(asOfDate: string): Promise<ARAgingRe
  * Generates AP Aging Report
  */
 export async function generateAPAgingReport(asOfDate: string): Promise<APAgingReport> {
-  const { data: bills, error } = await supabase
-    .from('bills')
-    .select('*, vendors(name)')
-    .in('status', ['approved', 'partial', 'overdue'])
-    .gt('balance_due', 0);
-
-  if (error) throw new Error(`Failed to get bills: ${error.message}`);
+  const bills = await sql`
+    SELECT b.*, v.name AS vendor_name
+    FROM bills b
+    LEFT JOIN vendors v ON v.id = b.vendor_id
+    WHERE b.status IN ('approved', 'partial', 'overdue')
+      AND b.balance_due > 0
+  `;
 
   const asOf = new Date(asOfDate);
   const vendorAging = new Map<string, {
@@ -341,7 +329,7 @@ export async function generateAPAgingReport(asOfDate: string): Promise<APAgingRe
     if (!vendorAging.has(bill.vendor_id)) {
       vendorAging.set(bill.vendor_id, {
         vendorId: bill.vendor_id,
-        vendorName: bill.vendors?.name || 'Unknown',
+        vendorName: bill.vendor_name || 'Unknown',
         current: 0,
         days30: 0,
         days60: 0,
@@ -408,63 +396,30 @@ export async function getDashboardStats(
   // Get P&L data
   const pnl = await generateProfitLoss(periodStart, periodEnd);
 
-  // Get cash balance (accounts with subtype 'cash' or 'bank')
-  const { data: cashAccounts } = await supabase
-    .from('accounts')
-    .select('id')
-    .in('account_subtype', ['cash', 'bank'])
-    .eq('is_active', true);
-
+  const cashAccountRows = await sql`
+    SELECT id FROM accounts WHERE account_subtype IN ('cash', 'bank') AND is_active = true
+  `;
   let cashBalance = new Decimal(0);
-  for (const account of cashAccounts || []) {
+  for (const account of cashAccountRows) {
     const balance = await getAccountBalance(account.id, today);
     cashBalance = cashBalance.plus(balance);
   }
 
-  // Get AR balance
-  const { data: arAccount } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('code', '1200')
-    .single();
+  const arRows = await sql`SELECT id FROM accounts WHERE code = '1200' LIMIT 1`;
+  const arBalance = arRows[0] ? await getAccountBalance(arRows[0].id, today) : new Decimal(0);
 
-  const arBalance = arAccount
-    ? await getAccountBalance(arAccount.id, today)
-    : new Decimal(0);
+  const apRows = await sql`SELECT id FROM accounts WHERE code = '2000' LIMIT 1`;
+  const apBalance = apRows[0] ? await getAccountBalance(apRows[0].id, today) : new Decimal(0);
 
-  // Get AP balance
-  const { data: apAccount } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('code', '2000')
-    .single();
+  const invRows = await sql`SELECT id FROM accounts WHERE code = '1300' LIMIT 1`;
+  const inventoryValue = invRows[0] ? await getAccountBalance(invRows[0].id, today) : new Decimal(0);
 
-  const apBalance = apAccount
-    ? await getAccountBalance(apAccount.id, today)
-    : new Decimal(0);
-
-  // Get inventory value
-  const { data: inventoryAccount } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('code', '1300')
-    .single();
-
-  const inventoryValue = inventoryAccount
-    ? await getAccountBalance(inventoryAccount.id, today)
-    : new Decimal(0);
-
-  // Count overdue invoices
-  const { count: overdueInvoices } = await supabase
-    .from('invoices')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'overdue');
-
-  // Count overdue bills
-  const { count: overdueBills } = await supabase
-    .from('bills')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'overdue');
+  const [overdueInvoiceRows, overdueBillRows] = await Promise.all([
+    sql`SELECT COUNT(*) AS count FROM invoices WHERE status = 'overdue'`,
+    sql`SELECT COUNT(*) AS count FROM bills WHERE status = 'overdue'`,
+  ]);
+  const overdueInvoices = Number(overdueInvoiceRows[0]?.count || 0);
+  const overdueBills = Number(overdueBillRows[0]?.count || 0);
 
   return {
     totalRevenue: pnl.totalRevenue,

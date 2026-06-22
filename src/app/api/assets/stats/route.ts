@@ -1,18 +1,15 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const supabase = await createClient();
+    const rows = await sql`
+      SELECT purchase_price, accumulated_depreciation, book_value, status
+      FROM fixed_assets
+      WHERE status = 'active'
+    `;
 
-    const { data, error } = await supabase
-      .from('fixed_assets')
-      .select('purchase_price, accumulated_depreciation, book_value, status')
-      .eq('status', 'active');
-
-    if (error) throw error;
-
-    if (!data) {
+    if (!rows || rows.length === 0) {
       return NextResponse.json({
         totalAssets: 0,
         totalCost: 0,
@@ -21,12 +18,10 @@ export async function GET() {
       });
     }
 
-    const totalAssets = data.length;
-    
-    // Sum the values (all in USD - no currency field exists yet in fixed_assets table)
-    const totalCost = data.reduce((sum, asset) => sum + (asset.purchase_price || 0), 0);
-    const totalDepreciation = data.reduce((sum, asset) => sum + (asset.accumulated_depreciation || 0), 0);
-    const totalBookValue = data.reduce((sum, asset) => sum + (asset.book_value || 0), 0);
+    const totalAssets = rows.length;
+    const totalCost = rows.reduce((sum: number, asset: any) => sum + (asset.purchase_price || 0), 0);
+    const totalDepreciation = rows.reduce((sum: number, asset: any) => sum + (asset.accumulated_depreciation || 0), 0);
+    const totalBookValue = rows.reduce((sum: number, asset: any) => sum + (asset.book_value || 0), 0);
 
     return NextResponse.json({
       totalAssets,
@@ -42,4 +37,3 @@ export async function GET() {
     );
   }
 }
-

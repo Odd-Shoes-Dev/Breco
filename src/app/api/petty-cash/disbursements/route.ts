@@ -1,43 +1,86 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/petty-cash/disbursements - List petty cash disbursements
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-    
+
     const cash_account_id = searchParams.get('cash_account_id');
     const status = searchParams.get('status');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
+    const offset = (page - 1) * limit;
 
-    let query = supabase
-      .from('petty_cash_disbursements')
-      .select(`
-        *,
-        cash_account:bank_accounts!petty_cash_disbursements_cash_account_id_fkey(id, account_name),
-        approved_by_user:user_profiles!petty_cash_disbursements_approved_by_fkey(id, full_name)
-      `, { count: 'exact' });
+    let rows: any[];
+    let countRows: any[];
 
-    if (cash_account_id) query = query.eq('cash_account_id', cash_account_id);
-    if (status) query = query.eq('status', status);
-
-    const { data, error, count } = await query
-      .order('disbursement_date', { ascending: false })
-      .range((page - 1) * limit, page * limit - 1);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    if (cash_account_id && status) {
+      rows = await sql`
+        SELECT pcd.*,
+          json_build_object('id', ba.id, 'account_name', ba.account_name) AS cash_account,
+          json_build_object('id', u.id, 'full_name', u.full_name) AS approved_by_user
+        FROM petty_cash_disbursements pcd
+        LEFT JOIN bank_accounts ba ON ba.id = pcd.cash_account_id
+        LEFT JOIN user_profiles u ON u.id = pcd.approved_by
+        WHERE pcd.cash_account_id = ${cash_account_id} AND pcd.status = ${status}
+        ORDER BY pcd.disbursement_date DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`
+        SELECT COUNT(*) FROM petty_cash_disbursements
+        WHERE cash_account_id = ${cash_account_id} AND status = ${status}
+      `;
+    } else if (cash_account_id) {
+      rows = await sql`
+        SELECT pcd.*,
+          json_build_object('id', ba.id, 'account_name', ba.account_name) AS cash_account,
+          json_build_object('id', u.id, 'full_name', u.full_name) AS approved_by_user
+        FROM petty_cash_disbursements pcd
+        LEFT JOIN bank_accounts ba ON ba.id = pcd.cash_account_id
+        LEFT JOIN user_profiles u ON u.id = pcd.approved_by
+        WHERE pcd.cash_account_id = ${cash_account_id}
+        ORDER BY pcd.disbursement_date DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) FROM petty_cash_disbursements WHERE cash_account_id = ${cash_account_id}`;
+    } else if (status) {
+      rows = await sql`
+        SELECT pcd.*,
+          json_build_object('id', ba.id, 'account_name', ba.account_name) AS cash_account,
+          json_build_object('id', u.id, 'full_name', u.full_name) AS approved_by_user
+        FROM petty_cash_disbursements pcd
+        LEFT JOIN bank_accounts ba ON ba.id = pcd.cash_account_id
+        LEFT JOIN user_profiles u ON u.id = pcd.approved_by
+        WHERE pcd.status = ${status}
+        ORDER BY pcd.disbursement_date DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) FROM petty_cash_disbursements WHERE status = ${status}`;
+    } else {
+      rows = await sql`
+        SELECT pcd.*,
+          json_build_object('id', ba.id, 'account_name', ba.account_name) AS cash_account,
+          json_build_object('id', u.id, 'full_name', u.full_name) AS approved_by_user
+        FROM petty_cash_disbursements pcd
+        LEFT JOIN bank_accounts ba ON ba.id = pcd.cash_account_id
+        LEFT JOIN user_profiles u ON u.id = pcd.approved_by
+        ORDER BY pcd.disbursement_date DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) FROM petty_cash_disbursements`;
     }
 
+    const count = parseInt(countRows[0]?.count || '0');
+
     return NextResponse.json({
-      data,
+      data: rows,
       pagination: {
         page,
         limit,
-        total: count || 0,
-        totalPages: Math.ceil((count || 0) / limit),
+        total: count,
+        totalPages: Math.ceil(count / limit),
       },
     });
   } catch (error: any) {
@@ -48,13 +91,12 @@ export async function GET(request: NextRequest) {
 // POST /api/petty-cash/disbursements - Create petty cash disbursement
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const body = await request.json();
-
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const body = await request.json();
 
     // Validate required fields
     if (!body.cash_account_id || !body.amount || !body.category || !body.recipient || !body.disbursement_date) {
@@ -65,12 +107,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate disbursement number
-    const { data: lastDisbursement } = await supabase
-      .from('petty_cash_disbursements')
-      .select('disbursement_number')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    const lastRows = await sql`
+      SELECT disbursement_number FROM petty_cash_disbursements
+      ORDER BY created_at DESC LIMIT 1
+    `;
+    const lastDisbursement = lastRows[0];
 
     let nextNumber = 1;
     if (lastDisbursement?.disbursement_number) {
@@ -79,32 +120,31 @@ export async function POST(request: NextRequest) {
     }
     const disbursement_number = `PC-${String(nextNumber).padStart(6, '0')}`;
 
-    const { data, error } = await supabase
-      .from('petty_cash_disbursements')
-      .insert({
-        disbursement_number,
-        cash_account_id: body.cash_account_id,
-        disbursement_date: body.disbursement_date,
-        amount: body.amount,
-        category: body.category,
-        description: body.description,
-        recipient: body.recipient,
-        receipt_number: body.receipt_number,
-        status: body.status || 'pending',
-        notes: body.notes,
-        created_by: user.id,
-      })
-      .select(`
-        *,
-        cash_account:bank_accounts!petty_cash_disbursements_cash_account_id_fkey(id, account_name)
-      `)
-      .single();
+    const rows = await sql`
+      INSERT INTO petty_cash_disbursements (
+        disbursement_number, cash_account_id, disbursement_date, amount,
+        category, description, recipient, receipt_number, status, notes, created_by
+      ) VALUES (
+        ${disbursement_number}, ${body.cash_account_id}, ${body.disbursement_date},
+        ${body.amount}, ${body.category}, ${body.description ?? null},
+        ${body.recipient}, ${body.receipt_number ?? null},
+        ${body.status || 'pending'}, ${body.notes ?? null}, ${user.id}
+      )
+      RETURNING *
+    `;
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const inserted = rows[0];
 
-    return NextResponse.json(data, { status: 201 });
+    // Fetch with joined data
+    const fullRows = await sql`
+      SELECT pcd.*,
+        json_build_object('id', ba.id, 'account_name', ba.account_name) AS cash_account
+      FROM petty_cash_disbursements pcd
+      LEFT JOIN bank_accounts ba ON ba.id = pcd.cash_account_id
+      WHERE pcd.id = ${inserted.id}
+    `;
+
+    return NextResponse.json(fullRows[0], { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

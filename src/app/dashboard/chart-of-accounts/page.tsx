@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase/client';
 import { MagnifyingGlassIcon, BookOpenIcon } from '@heroicons/react/24/outline';
 
 interface Account {
@@ -26,14 +25,10 @@ export default function ChartOfAccountsPage() {
 
   const loadAccounts = async () => {
     try {
-      const { data, error } = await supabase
-        .from('accounts')
-        .select('*')
-        .eq('is_active', true)
-        .order('code');
-
-      if (error) throw error;
-      setAccounts(data || []);
+      const res = await fetch('/api/accounts');
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to load accounts');
+      setAccounts(result.data || result || []);
     } catch (error) {
       console.error('Failed to load accounts:', error);
     } finally {

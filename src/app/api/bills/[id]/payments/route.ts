@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { createJournalEntry, getAccountByCode } from '@/lib/accounting/journal-entry-helpers';
 
@@ -8,27 +9,30 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { id } = await params;
 
-    const { data, error } = await supabase
-      .from('bill_payment_applications')
-      .select(`
-        *,
-        bill_payment:bill_payments(
-          *,
-          bank_account:bank_accounts(id, name, currency)
-        )
-      `)
-      .eq('bill_id', id)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const rows = await sql`
+      SELECT
+        bpa.*,
+        json_build_object(
+          'id', bp.id,
+          'payment_number', bp.payment_number,
+          'payment_date', bp.payment_date,
+          'amount', bp.amount,
+          'payment_method', bp.payment_method,
+          'reference_number', bp.reference_number,
+          'notes', bp.notes,
+          'bank_account', json_build_object('id', ba.id, 'name', ba.name, 'currency', ba.currency)
+        ) AS bill_payment
+      FROM bill_payment_applications bpa
+      LEFT JOIN bill_payments bp ON bp.id = bpa.bill_payment_id
+      LEFT JOIN bank_accounts ba ON ba.id = bp.bank_account_id
+      WHERE bpa.bill_id = ${id}
+      ORDER BY bpa.created_at DESC
+    `;
 
     // Flatten the structure for easier consumption
-    const payments = (data || []).map(app => ({
+    const payments = (rows || []).map((app: any) => ({
       id: app.id,
       payment_number: app.bill_payment.payment_number,
       payment_date: app.bill_payment.payment_date,
@@ -51,7 +55,6 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { id: billId } = await params;
     const body = await request.json();
 
@@ -62,27 +65,29 @@ export async function POST(
       );
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Get bill details
-    const { data: bill, error: billError } = await supabase
-      .from('bills')
-      .select('*, vendors(name)')
-      .eq('id', billId)
-      .single();
+    const billRows = await sql`
+      SELECT b.*, json_build_object('name', v.name) AS vendors
+      FROM bills b LEFT JOIN vendors v ON v.id = b.vendor_id
+      WHERE b.id = ${billId}
+    `;
 
-    if (billError || !bill) {
+    if (billRows.length === 0) {
       return NextResponse.json({ error: 'Bill not found' }, { status: 404 });
     }
+
+    const bill = billRows[0];
 
     // Check if payment amount exceeds balance
     const balance = Math.round((parseFloat(bill.total || 0) - parseFloat(bill.amount_paid || 0)) * 100) / 100;
     const paymentAmount = Math.round(parseFloat(body.amount) * 100) / 100;
-    
-    if (paymentAmount > balance + 0.01) { // Add tolerance for floating-point precision
+
+    if (paymentAmount > balance + 0.01) {
       return NextResponse.json(
         { error: `Payment amount cannot exceed bill balance of ${balance}` },
         { status: 400 }
@@ -94,47 +99,41 @@ export async function POST(
     const ref = `BP-${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}${date.getDate().toString().padStart(2, '0')}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
 
     // Get the GL account for the bank account
-    const { data: bankAccount } = await supabase
-      .from('bank_accounts')
-      .select('gl_account_id')
-      .eq('id', body.bank_account_id)
-      .single();
+    const bankAccounts = await sql`SELECT gl_account_id FROM bank_accounts WHERE id = ${body.bank_account_id}`;
+    const bankAccount = bankAccounts[0];
 
     // Create bill payment
-    const { data: payment, error: paymentError } = await supabase
-      .from('bill_payments')
-      .insert({
-        vendor_id: bill.vendor_id,
-        payment_number: body.reference || ref,
-        payment_date: body.payment_date,
-        amount: body.amount,
-        payment_method: body.payment_method || 'bank_transfer',
-        pay_from_account_id: bankAccount?.gl_account_id || null,
-        reference_number: body.reference || ref,
-        notes: body.notes || null,
-        currency: body.currency || bill.currency || 'USD',
-        exchange_rate: body.exchange_rate || 1,
-        created_by: user.id,
-      })
-      .select()
-      .single();
+    const paymentRows = await sql`
+      INSERT INTO bill_payments (
+        vendor_id, payment_number, payment_date, amount, payment_method,
+        pay_from_account_id, reference_number, notes, currency, exchange_rate, created_by
+      ) VALUES (
+        ${bill.vendor_id},
+        ${body.reference || ref},
+        ${body.payment_date},
+        ${body.amount},
+        ${body.payment_method || 'bank_transfer'},
+        ${bankAccount?.gl_account_id || null},
+        ${body.reference || ref},
+        ${body.notes || null},
+        ${body.currency || bill.currency || 'USD'},
+        ${body.exchange_rate || 1},
+        ${user.id}
+      )
+      RETURNING *
+    `;
 
-    if (paymentError) {
-      return NextResponse.json({ error: paymentError.message }, { status: 400 });
-    }
+    const payment = paymentRows[0];
 
     // Create bill payment application (junction table)
-    const { error: applicationError } = await supabase
-      .from('bill_payment_applications')
-      .insert({
-        bill_payment_id: payment.id,
-        bill_id: billId,
-        amount_applied: body.amount,
-      });
-
-    if (applicationError) {
+    try {
+      await sql`
+        INSERT INTO bill_payment_applications (bill_payment_id, bill_id, amount_applied)
+        VALUES (${payment.id}, ${billId}, ${body.amount})
+      `;
+    } catch (applicationError: any) {
       // Rollback payment
-      await supabase.from('bill_payments').delete().eq('id', payment.id);
+      await sql`DELETE FROM bill_payments WHERE id = ${payment.id}`;
       return NextResponse.json({ error: applicationError.message }, { status: 400 });
     }
 
@@ -144,44 +143,32 @@ export async function POST(
     const newAmountPaid = currentAmountPaid + body.amount;
     const newStatus = newAmountPaid >= billTotal ? 'paid' : 'partial';
 
-    const { error: updateError } = await supabase
-      .from('bills')
-      .update({
-        amount_paid: newAmountPaid,
-        status: newStatus,
-      })
-      .eq('id', billId);
-
-    if (updateError) {
+    try {
+      await sql`
+        UPDATE bills SET amount_paid = ${newAmountPaid}, status = ${newStatus} WHERE id = ${billId}
+      `;
+    } catch (updateError: any) {
       // Rollback payment
-      await supabase.from('bill_payments').delete().eq('id', payment.id);
+      await sql`DELETE FROM bill_payments WHERE id = ${payment.id}`;
       return NextResponse.json({ error: updateError.message }, { status: 400 });
     }
 
-    // Update vendor balance (increase payable by reducing what we owe)
-    const { error: vendorError } = await supabase.rpc('update_vendor_balance', {
-      p_vendor_id: bill.vendor_id,
-      p_amount: -body.amount, // Negative because we're paying down what we owe
-    });
-
-    if (vendorError) {
+    // Update vendor balance
+    try {
+      await sql`SELECT update_vendor_balance(${bill.vendor_id}, ${-body.amount})`;
+    } catch (vendorError) {
       console.error('Failed to update vendor balance:', vendorError);
     }
 
     // Create journal entry for payment
-    // Debit: Accounts Payable (2000) - reducing liability
-    // Credit: Cash/Bank Account - reducing asset
-    const apAccountId = await getAccountByCode(supabase, '2000');
-    
-    // Use the GL account we already fetched
+    const apAccountId = await getAccountByCode('2000');
     let cashAccountId = bankAccount?.gl_account_id;
     if (!cashAccountId) {
-      cashAccountId = await getAccountByCode(supabase, '1010'); // Default bank account
+      cashAccountId = await getAccountByCode('1010');
     }
 
     if (apAccountId && cashAccountId) {
       const journalResult = await createJournalEntry({
-        supabase,
         entry_date: body.payment_date,
         description: `Payment for Bill ${bill.bill_number} - ${bill.vendors?.name || 'Vendor'}`,
         source_module: 'bill_payment',

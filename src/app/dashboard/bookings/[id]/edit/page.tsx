@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { CurrencySelect } from '@/components/ui';
 import toast from 'react-hot-toast';
 import {
@@ -158,26 +157,32 @@ export default function EditBookingPage({ params }: EditBookingPageProps) {
     try {
       // Load all necessary data in parallel
       const [customersRes, packagesRes, hotelsRes, vehiclesRes, bookingRes] = await Promise.all([
-        supabase.from('customers').select('*').eq('is_active', true).order('name'),
-        supabase.from('tour_packages').select('*').eq('is_active', true).order('name'),
-        supabase.from('hotels').select('*').eq('is_active', true).order('name'),
-        supabase.from('vehicles').select('*').eq('is_active', true).order('vehicle_type'),
-        supabase.from('bookings').select('*').eq('id', bookingId).single(),
+        fetch('/api/customers'),
+        fetch('/api/tours'),
+        fetch('/api/hotels'),
+        fetch('/api/fleet'),
+        fetch(`/api/bookings/${bookingId}`),
       ]);
 
-      if (customersRes.error) throw customersRes.error;
-      if (packagesRes.error) throw packagesRes.error;
-      if (hotelsRes.error) throw hotelsRes.error;
-      if (vehiclesRes.error) throw vehiclesRes.error;
-      if (bookingRes.error) throw bookingRes.error;
+      const customersData = await customersRes.json();
+      const packagesData = await packagesRes.json();
+      const hotelsData = await hotelsRes.json();
+      const vehiclesData = await vehiclesRes.json();
+      const bookingData = await bookingRes.json();
 
-      setCustomers(customersRes.data || []);
-      setTourPackages(packagesRes.data || []);
-      setHotels(hotelsRes.data || []);
-      setVehicles(vehiclesRes.data || []);
+      if (!customersRes.ok) throw new Error(customersData.error || 'Failed to load customers');
+      if (!packagesRes.ok) throw new Error(packagesData.error || 'Failed to load tours');
+      if (!hotelsRes.ok) throw new Error(hotelsData.error || 'Failed to load hotels');
+      if (!vehiclesRes.ok) throw new Error(vehiclesData.error || 'Failed to load vehicles');
+      if (!bookingRes.ok) throw new Error(bookingData.error || 'Failed to load booking');
+
+      setCustomers(customersData.data || []);
+      setTourPackages(packagesData.data || []);
+      setHotels(hotelsData.data || []);
+      setVehicles(vehiclesData.data || []);
 
       // Populate form with existing booking data
-      const booking = bookingRes.data;
+      const booking = bookingData.data || bookingData;
       setFormData({
         customer_id: booking.customer_id || '',
         booking_type: booking.booking_type || 'tour',
@@ -389,12 +394,13 @@ export default function EditBookingPage({ params }: EditBookingPageProps) {
       }
 
       // Update booking
-      const { error } = await supabase
-        .from('bookings')
-        .update(updateData)
-        .eq('id', bookingId);
-
-      if (error) throw error;
+      const res = await fetch(`/api/bookings/${bookingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to update booking');
 
       toast.success('Booking updated successfully!');
       router.push(`/dashboard/bookings/${bookingId}`);

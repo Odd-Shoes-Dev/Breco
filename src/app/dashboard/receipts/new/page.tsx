@@ -3,12 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import { CurrencySelect } from '@/components/ui';
 import { useForm, useFieldArray } from 'react-hook-form';
 import toast from 'react-hot-toast';
-import { createReceiptJournalEntry } from '@/lib/accounting/journal-entry-helpers';
 import {
   ArrowLeftIcon,
   PlusIcon,
@@ -139,15 +137,16 @@ export default function NewReceiptPage() {
 
   const loadData = async () => {
     try {
-      const [customersRes, productsRes, settingsRes] = await Promise.all([
-        supabase.from('customers').select('*').eq('is_active', true).order('name'),
-        supabase.from('products').select('*').eq('is_active', true).order('name'),
-        supabase.from('company_settings').select('sales_tax_rate').single(),
+      const [customersRes, productsRes] = await Promise.all([
+        fetch('/api/customers?active=true', { cache: 'no-store' }),
+        fetch('/api/products?active=true', { cache: 'no-store' }),
       ]);
 
-      setCustomers(customersRes.data || []);
-      setProducts(productsRes.data || []);
-      setDefaultTaxRate(settingsRes.data?.sales_tax_rate || 0);
+      const customersData = await customersRes.json();
+      const productsData = await productsRes.json();
+
+      setCustomers(customersData.data || []);
+      setProducts(productsData.data || []);
     } catch (error) {
       console.error('Failed to load data:', error);
     }
@@ -156,23 +155,13 @@ export default function NewReceiptPage() {
   const fetchCustomerInvoices = async (customerId: string) => {
     try {
       console.log('Fetching invoices for customer:', customerId);
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('id, invoice_number, total, amount_paid, invoice_date, status')
-        .eq('customer_id', customerId)
-        .eq('document_type', 'invoice')
-        .in('status', ['sent', 'partial', 'overdue'])
-        .order('invoice_date', { ascending: false })
-        .limit(20);
+      const res = await fetch(`/api/invoices?customer_id=${customerId}&status=sent,partial,overdue`, { cache: 'no-store' });
+      const result = await res.json();
 
-      if (error) throw error;
-
-      console.log('Fetched invoices:', data);
-
-      const invoicesWithBalance = (data || []).map(inv => ({
+      const invoicesWithBalance = (result.data || []).map((inv: any) => ({
         ...inv,
         balance_due: Number(inv.total) - Number(inv.amount_paid || 0),
-      })).filter(inv => inv.balance_due > 0);
+      })).filter((inv: any) => inv.balance_due > 0);
 
       console.log('Invoices with balance:', invoicesWithBalance);
       setCustomerInvoices(invoicesWithBalance);
@@ -198,7 +187,6 @@ export default function NewReceiptPage() {
 
   const handleInvoiceSelect = async (invoiceNumber: string) => {
     if (!invoiceNumber || invoiceNumber === 'MANUAL') {
-      // Clear line items for manual entry
       setValue('lines', [{
         product_id: '',
         product_name: '',
@@ -213,52 +201,23 @@ export default function NewReceiptPage() {
     }
 
     try {
-      // Fetch invoice with line items
-      const { data: invoiceData, error: invoiceError } = await supabase
-        .from('invoices')
-        .select(`
-          id,
-          invoice_number,
-          total,
-          amount_paid,
-          subtotal,
-          tax_amount,
-          discount_amount,
-          currency,
-          invoice_lines (
-            id,
-            line_number,
-            product_id,
-            description,
-            quantity,
-            unit_price,
-            discount_percent,
-            discount_amount,
-            tax_rate,
-            tax_amount,
-            line_total
-          )
-        `)
-        .eq('invoice_number', invoiceNumber)
-        .single();
+      const res = await fetch(`/api/invoices?invoice_number=${encodeURIComponent(invoiceNumber)}`, { cache: 'no-store' });
+      const result = await res.json();
+      const invoiceData = (result.data || [])[0];
 
-      if (invoiceError) throw invoiceError;
+      if (!invoiceData) throw new Error('Invoice not found');
 
       console.log('Fetched invoice details:', invoiceData);
 
-      // Calculate balance due
       const balanceDue = Number(invoiceData.total) - Number(invoiceData.amount_paid || 0);
 
-      // Update currency if different
       if (invoiceData.currency) {
         setValue('currency', invoiceData.currency);
       }
 
-      // Populate line items from invoice
-      const invoiceLines = (invoiceData.invoice_lines || [])
+      const invoiceLines = (invoiceData.line_items || [])
         .sort((a: any, b: any) => a.line_number - b.line_number)
         .map((line: any) => {
-          // Look up product name if product_id exists
           let productName = '';
           if (line.product_id) {
             const product = products.find(p => p.id === line.product_id);
@@ -279,7 +238,6 @@ export default function NewReceiptPage() {
         setValue('lines', invoiceLines);
       }
 
-      // Set amount paid to balance due
       setValue('amount_paid', balanceDue);
 
       toast.success(`Loaded ${invoiceLines.length} item(s) from invoice`);
@@ -369,153 +327,20 @@ export default function NewReceiptPage() {
 
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      const response = await fetch('/api/receipts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
 
-      // Generate receipt number
-      const { data: receiptNumber, error: numError } = await supabase.rpc('generate_receipt_number');
-      if (numError) throw numError;
-
-      // Calculate totals
-      const subtotal = calculateSubtotal();
-      const tax_amount = calculateTax();
-      const total = calculateTotal();
-      
-      // Use the amount paid from form, default to total if not specified
-      const amountPaid = data.amount_paid && data.amount_paid > 0 ? data.amount_paid : total;
-      
-      // Determine status based on payment
-      const status = amountPaid >= total ? 'paid' : 'partial';
-
-      // Get AR account
-      const { data: arAccount } = await supabase
-        .from('accounts')
-        .select('id')
-        .eq('code', '1200')
-        .single();
-
-      // Create receipt
-      const { data: receipt, error: receiptError } = await supabase
-        .from('invoices')
-        .insert({
-          receipt_number: receiptNumber,
-          invoice_number: `TEMP-${Date.now()}`, // Temporary placeholder
-          document_type: 'receipt',
-          customer_id: data.customer_id,
-          invoice_date: data.receipt_date,
-          due_date: data.receipt_date, // Same as receipt date for receipts
-          payment_terms: data.payment_method === 'cash' ? 0 : 30,
-          reference_invoice_number: data.reference_invoice_number || null,
-          notes: data.notes || null,
-          currency: data.currency || 'USD',
-          subtotal,
-          tax_amount,
-          discount_amount: 0,
-          total,
-          amount_paid: amountPaid,
-          status: status,
-          ar_account_id: arAccount?.id,
-          created_by: user.id,
-        })
-        .select()
-        .single();
-
-      if (receiptError) throw receiptError;
-
-      // Create receipt lines
-      const receiptLines = data.lines.map((line, index) => ({
-        invoice_id: receipt.id,
-        line_number: index + 1,
-        product_id: line.product_id || null,
-        description: line.description,
-        quantity: line.quantity,
-        unit_price: line.unit_price,
-        discount_percent: line.discount_percent,
-        discount_amount: calculateLineTotal(line) - (line.quantity * line.unit_price),
-        tax_rate: line.tax_rate,
-        tax_amount: calculateLineTax(line),
-        line_total: calculateLineTotal(line),
-      }));
-
-      const { error: linesError } = await supabase
-        .from('invoice_lines')
-        .insert(receiptLines);
-
-      if (linesError) throw linesError;
-
-      // Create journal entry for receipt (Debit: Cash, Credit: AR)
-      const journalResult = await createReceiptJournalEntry(
-        supabase,
-        {
-          id: receipt.id,
-          receipt_number: receipt.receipt_number,
-          receipt_date: data.receipt_date,
-          total,
-          payment_method: data.payment_method,
-        },
-        user.id
-      );
-
-      if (!journalResult.success) {
-        console.error('Failed to create journal entry for receipt:', journalResult.error);
-        // Don't fail receipt creation, just log the error
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to create receipt');
       }
 
-      // Update related invoice if reference exists and matches a system invoice
-      if (data.reference_invoice_number && data.reference_invoice_number.trim() !== '') {
-        try {
-          // Check if this invoice exists in the system
-          const { data: relatedInvoice, error: invoiceCheckError } = await supabase
-            .from('invoices')
-            .select('id, invoice_number, total, amount_paid, document_type')
-            .eq('invoice_number', data.reference_invoice_number.trim())
-            .eq('document_type', 'invoice')
-            .single();
-
-          if (!invoiceCheckError && relatedInvoice) {
-            // Calculate new amount paid for the invoice
-            const currentInvoiceAmountPaid = Number(relatedInvoice.amount_paid || 0);
-            const paymentToApply = Number(amountPaid); // Use the amount_paid from receipt
-            const newInvoiceAmountPaid = currentInvoiceAmountPaid + paymentToApply;
-            const invoiceTotal = Number(relatedInvoice.total);
-
-            // Round to avoid floating-point precision issues
-            const roundedNewAmount = Math.round(newInvoiceAmountPaid * 100) / 100;
-            const roundedTotal = Math.round(invoiceTotal * 100) / 100;
-
-            // Determine new invoice status
-            let newInvoiceStatus = 'partial';
-            if (roundedNewAmount >= roundedTotal) {
-              newInvoiceStatus = 'paid';
-            }
-
-            // Update the invoice
-            const { error: updateError } = await supabase
-              .from('invoices')
-              .update({
-                amount_paid: roundedNewAmount,
-                status: newInvoiceStatus,
-              })
-              .eq('id', relatedInvoice.id);
-
-            if (updateError) {
-              console.error('Failed to update related invoice:', updateError);
-              toast.error(`Receipt created but failed to update invoice ${data.reference_invoice_number}`);
-            } else {
-              console.log(`Updated invoice ${data.reference_invoice_number}: amount_paid = ${roundedNewAmount}, status = ${newInvoiceStatus}`);
-            }
-          } else {
-            // Invoice not found in system - probably external invoice
-            console.log(`Invoice ${data.reference_invoice_number} not found in system (likely external)`);
-          }
-        } catch (error) {
-          console.error('Error updating related invoice:', error);
-          // Don't fail receipt creation if invoice update fails
-        }
-      }
-
+      const result = await response.json();
       toast.success('Receipt created successfully!');
-      router.push(`/dashboard/receipts/${receipt.id}`);
+      router.push(`/dashboard/receipts/${result.data.id}`);
     } catch (error: any) {
       console.error('Failed to create receipt:', error);
       toast.error(error.message || 'Failed to create receipt');

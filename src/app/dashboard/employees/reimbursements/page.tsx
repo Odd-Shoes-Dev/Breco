@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { PlusIcon, CheckCircleIcon, XCircleIcon, ClockIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
@@ -45,24 +44,13 @@ export default function ReimbursementsPage() {
 
   const fetchReimbursements = async () => {
     try {
-      let query = supabase
-        .from('employee_reimbursements')
-        .select(`
-          *,
-          employee:employees(first_name, last_name, employee_number),
-          approver:user_profiles!approved_by(full_name),
-          payroll_period:payroll_periods!paid_in_payroll_id(period_name)
-        `)
-        .order('reimbursement_date', { ascending: false });
+      const params = new URLSearchParams();
+      if (statusFilter !== 'all') params.set('status', statusFilter);
 
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setReimbursements(data || []);
+      const res = await fetch(`/api/employees/reimbursements?${params.toString()}`);
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to load reimbursements');
+      setReimbursements(result.data || []);
     } catch (error) {
       console.error('Error fetching reimbursements:', error);
       toast.error('Failed to load reimbursements');
@@ -73,19 +61,11 @@ export default function ReimbursementsPage() {
 
   const handleApprove = async (reimbursementId: string) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { error } = await supabase
-        .from('employee_reimbursements')
-        .update({
-          status: 'approved',
-          approved_by: user.id,
-          approved_at: new Date().toISOString(),
-        })
-        .eq('id', reimbursementId);
-
-      if (error) throw error;
+      const res = await fetch(`/api/employees/reimbursements/${reimbursementId}/approve`, {
+        method: 'POST',
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to approve reimbursement');
 
       toast.success('Reimbursement approved');
       fetchReimbursements();
@@ -97,19 +77,11 @@ export default function ReimbursementsPage() {
 
   const handleReject = async (reimbursementId: string) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { error } = await supabase
-        .from('employee_reimbursements')
-        .update({
-          status: 'rejected',
-          approved_by: user.id,
-          approved_at: new Date().toISOString(),
-        })
-        .eq('id', reimbursementId);
-
-      if (error) throw error;
+      const res = await fetch(`/api/employees/reimbursements/${reimbursementId}/reject`, {
+        method: 'POST',
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to reject reimbursement');
 
       toast.success('Reimbursement rejected');
       fetchReimbursements();

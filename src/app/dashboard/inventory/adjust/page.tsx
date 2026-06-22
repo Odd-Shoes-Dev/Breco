@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import toast from 'react-hot-toast';
 import {
   ArrowLeftIcon,
@@ -42,14 +42,9 @@ export default function InventoryAdjustmentPage() {
 
   const loadProducts = async () => {
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, name, sku, quantity_in_stock')
-        .eq('track_inventory', true)
-        .order('name');
-
-      if (error) throw error;
-      setProducts(data || []);
+      const res = await fetch('/api/inventory');
+      const result = await res.json();
+      setProducts(result.data || result || []);
     } catch (error) {
       console.error('Failed to load products:', error);
       toast.error('Failed to load products');
@@ -110,35 +105,21 @@ export default function InventoryAdjustmentPage() {
 
     setLoading(true);
     try {
-      // Create adjustments and update inventory
       for (const line of lines) {
         if (line.adjustment_quantity === 0) continue;
 
-        // Update product quantity
-        const { error: updateError } = await supabase
-          .from('products')
-          .update({
-            quantity_in_stock: line.new_quantity,
-          })
-          .eq('id', line.product_id);
-
-        if (updateError) throw updateError;
-
-        // Record inventory movement
-        const { error: movementError } = await supabase
-          .from('inventory_movements')
-          .insert({
+        const res = await fetch('/api/inventory-adjustments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             product_id: line.product_id,
-            movement_type: 'adjustment',
-            quantity: line.adjustment_quantity,
-            unit_cost: 0,
-            movement_date: adjustmentDate,
-            reference_type: 'adjustment',
-            reference_id: Math.random().toString(),
-            notes: `${line.reason}: ${notes}`,
-          });
-
-        if (movementError) throw movementError;
+            adjustment_date: adjustmentDate,
+            quantity_change: line.adjustment_quantity,
+            reason: line.reason,
+            notes: notes || null,
+          }),
+        });
+        if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
       }
 
       toast.success('Inventory adjusted successfully');

@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { createJournalEntry } from '@/lib/accounting/journal-entry-helpers';
 import { NextResponse } from 'next/server';
 
@@ -8,9 +9,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -18,16 +17,10 @@ export async function POST(
     const { id: periodId } = await params;
 
     // Check period exists and is draft
-    const { data: period, error: periodError } = await supabase
-      .from('payroll_periods')
-      .select(`
-        *,
-        payslips:payroll_payslips(*)
-      `)
-      .eq('id', periodId)
-      .single();
+    const periodRows = await sql`SELECT * FROM payroll_periods WHERE id = ${periodId}`;
+    const period = periodRows[0];
 
-    if (periodError) {
+    if (!period) {
       return NextResponse.json({ error: 'Payroll period not found' }, { status: 404 });
     }
 
@@ -38,7 +31,9 @@ export async function POST(
       );
     }
 
-    if (!period.payslips || period.payslips.length === 0) {
+    const payslips = await sql`SELECT * FROM payroll_payslips WHERE payroll_period_id = ${periodId}`;
+
+    if (!payslips || payslips.length === 0) {
       return NextResponse.json(
         { error: 'No payslips found. Generate payslips first.' },
         { status: 400 }
@@ -46,25 +41,24 @@ export async function POST(
     }
 
     // Calculate totals
-    const totalGross = period.payslips.reduce((sum: number, p: any) => sum + (p.gross_salary || 0), 0);
-    const totalTax = period.payslips.reduce((sum: number, p: any) => sum + (p.tax_deduction || 0), 0);
-    const totalNHIF = period.payslips.reduce((sum: number, p: any) => sum + (p.nhif_deduction || 0), 0);
-    const totalNSSF = period.payslips.reduce((sum: number, p: any) => sum + (p.nssf_deduction || 0), 0);
-    const totalNet = period.payslips.reduce((sum: number, p: any) => sum + (p.net_salary || 0), 0);
+    const totalGross = payslips.reduce((sum: number, p: any) => sum + (p.gross_salary || 0), 0);
+    const totalTax = payslips.reduce((sum: number, p: any) => sum + (p.tax_deduction || 0), 0);
+    const totalNHIF = payslips.reduce((sum: number, p: any) => sum + (p.nhif_deduction || 0), 0);
+    const totalNSSF = payslips.reduce((sum: number, p: any) => sum + (p.nssf_deduction || 0), 0);
+    const totalNet = payslips.reduce((sum: number, p: any) => sum + (p.net_salary || 0), 0);
 
     // Get account IDs for journal entry
-    const { data: accounts } = await supabase
-      .from('accounts')
-      .select('id, code')
-      .in('code', ['6100', '2300', '2310', '2320', '2330']);
+    const accounts = await sql`
+      SELECT id, code FROM accounts WHERE code IN ('6100', '2300', '2310', '2320', '2330')
+    `;
 
-    const accountMap = new Map(accounts?.map((a: any) => [a.code, a.id]));
+    const accountMap = new Map(accounts.map((a: any) => [a.code, a.id]));
 
-    const salaryExpenseId = accountMap.get('6100'); // Salary & Wages Expense
-    const payrollPayableId = accountMap.get('2300'); // Payroll Payable
-    const taxPayableId = accountMap.get('2310'); // Tax Payable
-    const nhifPayableId = accountMap.get('2320'); // NHIF Payable
-    const nssfPayableId = accountMap.get('2330'); // NSSF Payable
+    const salaryExpenseId = accountMap.get('6100');
+    const payrollPayableId = accountMap.get('2300');
+    const taxPayableId = accountMap.get('2310');
+    const nhifPayableId = accountMap.get('2320');
+    const nssfPayableId = accountMap.get('2330');
 
     if (!salaryExpenseId || !payrollPayableId || !taxPayableId || !nhifPayableId || !nssfPayableId) {
       return NextResponse.json(
@@ -72,13 +66,6 @@ export async function POST(
         { status: 400 }
       );
     }
-
-    // Create journal entry
-    // Debit: Salary Expense (total gross)
-    // Credit: Payroll Payable (net pay)
-    // Credit: Tax Payable (tax deductions)
-    // Credit: NHIF Payable (NHIF deductions)
-    // Credit: NSSF Payable (NSSF deductions)
 
     const lines = [
       {
@@ -123,7 +110,6 @@ export async function POST(
     }
 
     const journalResult = await createJournalEntry({
-      supabase: supabase,
       entry_date: period.payment_date,
       description: `Payroll for period ${period.period_start} to ${period.period_end}`,
       source_module: 'payroll',
@@ -139,34 +125,25 @@ export async function POST(
     }
 
     // Update period status and journal entry reference
-    const { data: updatedPeriod, error: updateError } = await supabase
-      .from('payroll_periods')
-      .update({
-        status: 'processed',
-        journal_entry_id: journalResult.journalEntry.id,
-        processed_by: user.id,
-        processed_at: new Date().toISOString(),
-        total_gross: totalGross,
-        total_deductions: totalTax + totalNHIF + totalNSSF,
-        total_net: totalNet,
-      })
-      .eq('id', periodId)
-      .select()
-      .single();
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
-    }
+    const updatedRows = await sql`
+      UPDATE payroll_periods
+      SET status = 'processed',
+          journal_entry_id = ${journalResult.journalEntry.id},
+          processed_by = ${user.id},
+          processed_at = ${new Date().toISOString()},
+          total_gross = ${totalGross},
+          total_deductions = ${totalTax + totalNHIF + totalNSSF},
+          total_net = ${totalNet}
+      WHERE id = ${periodId}
+      RETURNING *
+    `;
 
     // Update all payslips to processed
-    await supabase
-      .from('payroll_payslips')
-      .update({ status: 'processed' })
-      .eq('payroll_period_id', periodId);
+    await sql`UPDATE payroll_payslips SET status = 'processed' WHERE payroll_period_id = ${periodId}`;
 
     return NextResponse.json({
       message: 'Payroll processed successfully',
-      period: updatedPeriod,
+      period: updatedRows[0],
       journal_entry_id: journalResult.journalEntry.id,
       totals: {
         gross: totalGross,

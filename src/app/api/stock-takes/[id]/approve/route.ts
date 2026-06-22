@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const user = await getSession();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -17,22 +16,21 @@ export async function POST(
     const stockTakeId = id;
 
     // Get stock take with lines
-    const { data: stockTake, error: stockTakeError } = await supabase
-      .from('stock_takes')
-      .select(
-        `
-        *,
-        stock_take_lines (
-          id,
-          product_id,
-          variance
-        )
-      `
-      )
-      .eq('id', stockTakeId)
-      .single();
+    const stockTakeRows = await sql`
+      SELECT st.*,
+        (
+          SELECT json_agg(json_build_object('id', stl.id, 'product_id', stl.product_id, 'variance', stl.variance))
+          FROM stock_take_lines stl
+          WHERE stl.stock_take_id = st.id
+        ) AS stock_take_lines
+      FROM stock_takes st
+      WHERE st.id = ${stockTakeId}
+    `;
+    const stockTake = stockTakeRows[0];
 
-    if (stockTakeError) throw stockTakeError;
+    if (!stockTake) {
+      throw new Error('Stock take not found');
+    }
 
     if (stockTake.status === 'completed') {
       return NextResponse.json(
@@ -42,51 +40,43 @@ export async function POST(
     }
 
     // Update stock take status
-    const { error: updateError } = await supabase
-      .from('stock_takes')
-      .update({
-        status: 'completed',
-        approved_by: user.id,
-        approved_at: new Date().toISOString(),
-      })
-      .eq('id', stockTakeId);
-
-    if (updateError) throw updateError;
+    await sql`
+      UPDATE stock_takes
+      SET status = 'completed', approved_by = ${user.id}, approved_at = ${new Date().toISOString()}
+      WHERE id = ${stockTakeId}
+    `;
 
     // Apply inventory adjustments for each line with variance
     const lines = stockTake.stock_take_lines || [];
     for (const line of lines) {
       if (line.variance !== 0) {
         // Create adjustment record
-        const { error: adjustError } = await supabase
-          .from('inventory_adjustments')
-          .insert({
-            product_id: line.product_id,
-            adjustment_date: new Date().toISOString(),
-            quantity_change: line.variance,
-            reason: 'stock_take',
-            reference_type: 'stock_take',
-            reference_id: stockTakeId,
-            notes: `Stock take ${stockTake.reference_number}`,
-          });
+        await sql`
+          INSERT INTO inventory_adjustments (
+            product_id, adjustment_date, quantity_change, reason,
+            reference_type, reference_id, notes
+          ) VALUES (
+            ${line.product_id}, ${new Date().toISOString()}, ${line.variance},
+            'stock_take', 'stock_take', ${stockTakeId},
+            ${'Stock take ' + stockTake.reference_number}
+          )
+        `;
 
-        if (adjustError) throw adjustError;
+        // Update product stock
+        const productRows = await sql`
+          SELECT current_stock FROM products WHERE id = ${line.product_id}
+        `;
+        const currentProduct = productRows[0];
 
-        // Update product stock using RPC function if it exists, otherwise direct update
-        const { data: currentProduct, error: productError } = await supabase
-          .from('products')
-          .select('current_stock')
-          .eq('id', line.product_id)
-          .single();
+        if (!currentProduct) {
+          throw new Error(`Product ${line.product_id} not found`);
+        }
 
-        if (productError) throw productError;
-
-        const { error: stockError } = await supabase
-          .from('products')
-          .update({ current_stock: (currentProduct.current_stock || 0) + line.variance })
-          .eq('id', line.product_id);
-
-        if (stockError) throw stockError;
+        await sql`
+          UPDATE products
+          SET current_stock = ${(currentProduct.current_stock || 0) + line.variance}
+          WHERE id = ${line.product_id}
+        `;
       }
     }
 

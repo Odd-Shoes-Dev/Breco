@@ -3,7 +3,6 @@
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { CurrencySelect } from '@/components/ui';
 import {
   ArrowLeftIcon,
@@ -51,13 +50,9 @@ export default function EditCustomerPage({ params }: PageProps) {
   const loadCustomer = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
+      const res = await fetch(`/api/customers/${id}`);
+      if (!res.ok) throw new Error('Failed to load customer');
+      const data = await res.json();
 
       if (data) {
         setFormData({

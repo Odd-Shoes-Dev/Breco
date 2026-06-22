@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 
 interface CustomerTransaction {
   id: string;
@@ -44,7 +44,6 @@ interface CustomerStatementData {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const searchParams = request.nextUrl.searchParams;
     const customerId = searchParams.get('customerId');
     const startDate = searchParams.get('startDate') || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
@@ -55,13 +54,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch customer data
-    const { data: customer, error: customerError } = await supabase
-      .from('customers')
-      .select('id, name, company_name, email, phone, address_line1, address_line2, city, state, zip_code')
-      .eq('id', customerId)
-      .single();
+    const customerRows = await sql`
+      SELECT id, name, company_name, email, phone, address_line1, address_line2, city, state, zip_code
+      FROM customers WHERE id = ${customerId}
+    `;
+    const customer = customerRows[0];
 
-    if (customerError || !customer) {
+    if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
@@ -81,38 +80,38 @@ export async function GET(request: NextRequest) {
     };
 
     // Calculate beginning balance (invoices before start date minus payments before start date)
-    const { data: beforeInvoices } = await supabase
-      .from('invoices')
-      .select('total, amount_paid')
-      .eq('customer_id', customerId)
-      .lt('invoice_date', startDate);
+    const beforeInvoices = await sql`
+      SELECT total, amount_paid FROM invoices
+      WHERE customer_id = ${customerId} AND invoice_date < ${startDate}
+    `;
 
-    const beginningBalance = (beforeInvoices || []).reduce((sum, inv) => 
+    const beginningBalance = beforeInvoices.reduce((sum: number, inv: any) =>
       sum + (parseFloat(inv.total) - parseFloat(inv.amount_paid || '0')), 0
     );
 
     // Fetch invoices in the period
-    const { data: invoices } = await supabase
-      .from('invoices')
-      .select('id, invoice_number, invoice_date, due_date, total, amount_paid, status, notes')
-      .eq('customer_id', customerId)
-      .gte('invoice_date', startDate)
-      .lte('invoice_date', endDate)
-      .order('invoice_date', { ascending: true });
+    const invoices = await sql`
+      SELECT id, invoice_number, invoice_date, due_date, total, amount_paid, status, notes
+      FROM invoices
+      WHERE customer_id = ${customerId}
+        AND invoice_date >= ${startDate}
+        AND invoice_date <= ${endDate}
+      ORDER BY invoice_date ASC
+    `;
 
     // Fetch payments in the period
-    const { data: payments } = await supabase
-      .from('payments_received')
-      .select('id, payment_number, payment_date, amount, payment_method, reference_number, notes')
-      .eq('customer_id', customerId)
-      .gte('payment_date', startDate)
-      .lte('payment_date', endDate)
-      .order('payment_date', { ascending: true });
+    const payments = await sql`
+      SELECT id, payment_number, payment_date, amount, payment_method, reference_number, notes
+      FROM payments_received
+      WHERE customer_id = ${customerId}
+        AND payment_date >= ${startDate}
+        AND payment_date <= ${endDate}
+      ORDER BY payment_date ASC
+    `;
 
     // Build transactions list
     const transactions: CustomerTransaction[] = [];
 
-    // Add beginning balance if non-zero
     if (beginningBalance !== 0) {
       transactions.push({
         id: 'beginning-balance',
@@ -125,8 +124,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Add invoices
-    (invoices || []).forEach(invoice => {
+    invoices.forEach((invoice: any) => {
       transactions.push({
         id: invoice.id,
         date: invoice.invoice_date,
@@ -134,12 +132,11 @@ export async function GET(request: NextRequest) {
         reference: invoice.invoice_number,
         description: invoice.notes || 'Invoice',
         amount: parseFloat(invoice.total),
-        balance: 0 // Will be calculated below
+        balance: 0
       });
     });
 
-    // Add payments
-    (payments || []).forEach(payment => {
+    payments.forEach((payment: any) => {
       transactions.push({
         id: payment.id,
         date: payment.payment_date,
@@ -147,7 +144,7 @@ export async function GET(request: NextRequest) {
         reference: payment.payment_number || payment.reference_number || 'Payment',
         description: `Payment via ${payment.payment_method || 'N/A'}${payment.notes ? ' - ' + payment.notes : ''}`,
         amount: -parseFloat(payment.amount),
-        balance: 0 // Will be calculated below
+        balance: 0
       });
     });
 
@@ -162,17 +159,17 @@ export async function GET(request: NextRequest) {
     });
 
     // Calculate summary
-    const totalInvoiced = (invoices || []).reduce((sum, inv) => sum + parseFloat(inv.total), 0);
-    const totalPayments = (payments || []).reduce((sum, pmt) => sum + parseFloat(pmt.amount), 0);
+    const totalInvoiced = invoices.reduce((sum: number, inv: any) => sum + parseFloat(inv.total), 0);
+    const totalPayments = payments.reduce((sum: number, pmt: any) => sum + parseFloat(pmt.amount), 0);
     const endingBalance = runningBalance;
 
-    // Calculate aging (for unpaid invoices as of end date)
-    const { data: unpaidInvoices } = await supabase
-      .from('invoices')
-      .select('invoice_date, due_date, total, amount_paid')
-      .eq('customer_id', customerId)
-      .lte('invoice_date', endDate)
-      .neq('status', 'paid');
+    // Calculate aging
+    const unpaidInvoices = await sql`
+      SELECT invoice_date, due_date, total, amount_paid FROM invoices
+      WHERE customer_id = ${customerId}
+        AND invoice_date <= ${endDate}
+        AND status != 'paid'
+    `;
 
     const endDateObj = new Date(endDate);
     const aging = {
@@ -183,7 +180,7 @@ export async function GET(request: NextRequest) {
       over90: 0
     };
 
-    (unpaidInvoices || []).forEach(invoice => {
+    unpaidInvoices.forEach((invoice: any) => {
       const balance = parseFloat(invoice.total) - parseFloat(invoice.amount_paid || '0');
       if (balance <= 0) return;
 

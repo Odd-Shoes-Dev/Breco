@@ -3,7 +3,6 @@
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter, convertCurrency } from '@/lib/currency';
 import { CurrencySelect } from '@/components/ui';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -100,39 +99,21 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
     try {
       setLoading(true);
 
-      // Load customers, products and settings
-      const [customersRes, productsRes, settingsRes] = await Promise.all([
-        supabase.from('customers').select('*').eq('is_active', true).order('name'),
-        supabase.from('products').select('*').eq('is_active', true).order('name'),
-        supabase.from('company_settings').select('sales_tax_rate').single(),
+      const [customersRes, productsRes, invoiceRes] = await Promise.all([
+        fetch('/api/customers?active=true', { cache: 'no-store' }),
+        fetch('/api/products?active=true', { cache: 'no-store' }),
+        fetch(`/api/invoices/${resolvedParams.id}`, { cache: 'no-store' }),
       ]);
 
-      setCustomers(customersRes.data || []);
-      setProducts(productsRes.data || []);
-      const rate = (settingsRes.data?.sales_tax_rate || 0) * 100;
-      setDefaultTaxRate(rate);
+      const customersData = await customersRes.json();
+      const productsData = await productsRes.json();
+      const invoiceData = await invoiceRes.json();
 
-      // Load invoice data
-      const { data: invoiceData, error: invoiceError } = await supabase
-        .from('invoices')
-        .select('*')
-        .eq('id', resolvedParams.id)
-        .single();
-
-      if (invoiceError) throw invoiceError;
-
-      // Load invoice lines
-      const { data: linesData, error: linesError } = await supabase
-        .from('invoice_lines')
-        .select('*')
-        .eq('invoice_id', resolvedParams.id)
-        .order('line_number');
-
-      if (linesError) throw linesError;
-
+      setCustomers(customersData.data || []);
+      setProducts(productsData.data || []);
+      setDefaultTaxRate(0);
       setInvoice(invoiceData);
 
-      // Populate form with existing data
       const formData = {
         customer_id: invoiceData.customer_id,
         invoice_date: invoiceData.invoice_date,
@@ -141,7 +122,7 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
         po_number: invoiceData.po_number || '',
         notes: invoiceData.notes || '',
         currency: invoiceData.currency || 'USD',
-        lines: linesData.map((line: InvoiceLine) => ({
+        lines: (invoiceData.line_items || []).map((line: InvoiceLine) => ({
           id: line.id,
           product_id: line.product_id || '',
           description: line.description,
@@ -152,7 +133,6 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
         })),
       };
 
-      // Wait for state to update then reset form
       setTimeout(() => {
         reset(formData);
       }, 100);
@@ -179,7 +159,6 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
       if (productCurrency !== invoiceCurrency) {
         // Convert the product price to invoice currency
         const converted = await convertCurrency(
-          supabase,
           product.unit_price,
           productCurrency as any,
           invoiceCurrency as any
@@ -284,76 +263,26 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
 
     setSaving(true);
     try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      const payload = {
+        ...data,
+        lines: data.lines.map(line => ({
+          ...line,
+          tax_rate: (line.tax_rate || 0) / 100,
+        })),
+      };
 
-      // Calculate totals
-      const subtotal = calculateSubtotal();
-      const tax_amount = calculateTax();
-      const total = calculateTotal();
+      const response = await fetch(`/api/invoices/${resolvedParams.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
-      // Get AR account
-      const { data: arAccount } = await supabase
-        .from('accounts')
-        .select('id')
-        .eq('code', '1200')
-        .single();
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to update invoice');
+      }
 
-      // Update invoice
-      const { error: invoiceError } = await supabase
-        .from('invoices')
-        .update({
-          customer_id: data.customer_id,
-          invoice_date: data.invoice_date,
-          due_date: data.due_date,
-          payment_terms: data.payment_terms,
-          po_number: data.po_number || null,
-          notes: data.notes || null,
-          currency: data.currency || 'USD',
-          subtotal,
-          tax_amount,
-          total,
-          ar_account_id: arAccount?.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', resolvedParams.id);
-
-      if (invoiceError) throw invoiceError;
-
-      // Delete existing invoice lines
-      const { error: deleteError } = await supabase
-        .from('invoice_lines')
-        .delete()
-        .eq('invoice_id', resolvedParams.id);
-
-      if (deleteError) throw deleteError;
-
-      // Create new invoice lines (tax_rate stored as decimal in DB)
-      const invoiceLines = data.lines.map((line, index) => ({
-        invoice_id: resolvedParams.id,
-        line_number: index + 1,
-        product_id: line.product_id || null,
-        description: line.description,
-        quantity: line.quantity,
-        unit_price: line.unit_price,
-        discount_percent: line.discount_percent,
-        discount_amount: (line.quantity * line.unit_price) * (line.discount_percent / 100),
-        tax_rate: (line.tax_rate || 0) / 100,
-        tax_amount: calculateLineTax(line),
-        line_total: calculateLineTotal(line),
-      }));
-
-      const { error: linesError } = await supabase
-        .from('invoice_lines')
-        .insert(invoiceLines);
-
-      if (linesError) throw linesError;
-
-      // If invoice was posted, we need to update the journal entry
       if (invoice?.journal_entry_id) {
-        // This would require recalculating and updating the journal entry
-        // For now, we'll just show a warning
         toast.success('Invoice updated successfully! Note: Journal entry may need manual adjustment.', {
           duration: 5000,
         });

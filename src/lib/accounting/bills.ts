@@ -3,7 +3,7 @@
 // Breco Safaris Ltd Financial System
 // =====================================================
 
-import { supabase } from '@/lib/supabase/client';
+import { sql } from '@/lib/db';
 import { createJournalEntry, postJournalEntry } from './general-ledger';
 import type { Bill, BillWithLines } from '@/types/database';
 import Decimal from 'decimal.js';
@@ -19,9 +19,9 @@ interface PostBillResult {
  * Generates the next bill number
  */
 export async function generateBillNumber(): Promise<string> {
-  const { data, error } = await supabase.rpc('generate_bill_number');
-  if (error) throw new Error(`Failed to generate bill number: ${error.message}`);
-  return data;
+  const rows = await sql`SELECT generate_bill_number() AS num`;
+  if (!rows[0]?.num) throw new Error('Failed to generate bill number');
+  return rows[0].num;
 }
 
 /**
@@ -91,70 +91,54 @@ export async function createBill(
   const totals = calculateBillTotals(input.lines);
 
   // Get default AP account
-  const { data: apAccount } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('code', DEFAULT_AP_ACCOUNT_CODE)
-    .single();
+  const apRows = await sql`SELECT id FROM accounts WHERE code = ${DEFAULT_AP_ACCOUNT_CODE} LIMIT 1`;
+  const apAccountId = apRows[0]?.id || null;
 
   // Create bill
-  const { data: bill, error: billError } = await supabase
-    .from('bills')
-    .insert({
-      bill_number: billNumber,
-      vendor_id: input.vendor_id,
-      vendor_invoice_number: input.vendor_invoice_number,
-      bill_date: input.bill_date,
-      due_date: input.due_date,
-      payment_terms: input.payment_terms || 30,
-      notes: input.notes,
-      subtotal: totals.subtotal.toNumber(),
-      tax_amount: totals.taxAmount.toNumber(),
-      total: totals.total.toNumber(),
-      amount_paid: 0,
-      status: 'draft',
-      ap_account_id: apAccount?.id,
-      created_by: userId,
-    })
-    .select()
-    .single();
-
-  if (billError) throw new Error(`Failed to create bill: ${billError.message}`);
+  const billRows = await sql`
+    INSERT INTO bills (
+      bill_number, vendor_id, vendor_invoice_number, bill_date, due_date,
+      payment_terms, notes, subtotal, tax_amount, total, amount_paid,
+      status, ap_account_id, created_by
+    ) VALUES (
+      ${billNumber}, ${input.vendor_id}, ${input.vendor_invoice_number ?? null},
+      ${input.bill_date}, ${input.due_date}, ${input.payment_terms || 30},
+      ${input.notes ?? null}, ${totals.subtotal.toNumber()}, ${totals.taxAmount.toNumber()},
+      ${totals.total.toNumber()}, 0, 'draft', ${apAccountId}, ${userId}
+    )
+    RETURNING *
+  `;
+  const bill = billRows[0];
+  if (!bill) throw new Error('Failed to create bill');
 
   // Create bill lines
-  const billLines = input.lines.map((line, index) => {
+  const lines: any[] = [];
+  for (let index = 0; index < input.lines.length; index++) {
+    const line = input.lines[index];
     const lineTotals = totals.lineTotals[index];
-    return {
-      bill_id: bill.id,
-      line_number: index + 1,
-      description: line.description,
-      quantity: line.quantity,
-      unit_cost: line.unit_cost,
-      tax_rate: line.tax_rate || 0,
-      tax_amount: lineTotals.taxAmount.toNumber(),
-      line_total: lineTotals.lineTotal.toNumber(),
-      expense_account_id: line.expense_account_id,
-      product_id: line.product_id,
-      project_id: line.project_id,
-      department: line.department,
-    };
-  });
-
-  const { data: lines, error: linesError } = await supabase
-    .from('bill_lines')
-    .insert(billLines)
-    .select();
-
-  if (linesError) throw new Error(`Failed to create bill lines: ${linesError.message}`);
+    const lineRows = await sql`
+      INSERT INTO bill_lines (
+        bill_id, line_number, description, quantity, unit_cost, tax_rate,
+        tax_amount, line_total, expense_account_id, product_id, project_id, department
+      ) VALUES (
+        ${bill.id}, ${index + 1}, ${line.description}, ${line.quantity},
+        ${line.unit_cost}, ${line.tax_rate || 0}, ${lineTotals.taxAmount.toNumber()},
+        ${lineTotals.lineTotal.toNumber()}, ${line.expense_account_id},
+        ${line.product_id ?? null}, ${line.project_id ?? null}, ${line.department ?? null}
+      )
+      RETURNING *
+    `;
+    lines.push(lineRows[0]);
+  }
 
   // Log activity
-  await supabase.from('activity_logs').insert({
-    user_id: userId,
-    action: 'create',
-    entity_type: 'bill',
-    entity_id: bill.id,
-    new_values: { bill_number: billNumber, total: totals.total.toNumber() },
-  });
+  await sql`
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    VALUES (
+      ${userId}, 'create', 'bill', ${bill.id},
+      ${JSON.stringify({ bill_number: billNumber, total: totals.total.toNumber() })}
+    )
+  `;
 
   return { ...bill, lines };
 }
@@ -168,30 +152,26 @@ export async function postBill(
   userId: string
 ): Promise<PostBillResult> {
   // Get bill with lines
-  const { data: bill, error: fetchError } = await supabase
-    .from('bills')
-    .select('*, bill_lines(*)')
-    .eq('id', billId)
-    .single();
-
-  if (fetchError) throw new Error(`Bill not found: ${fetchError.message}`);
+  const billRows = await sql`
+    SELECT b.*, json_agg(bl.*) AS bill_lines
+    FROM bills b
+    LEFT JOIN bill_lines bl ON bl.bill_id = b.id
+    WHERE b.id = ${billId}
+    GROUP BY b.id
+  `;
+  const bill = billRows[0];
+  if (!bill) throw new Error('Bill not found');
   if (bill.status !== 'draft' && bill.status !== 'approved') {
     throw new Error(`Cannot post bill with status: ${bill.status}`);
   }
 
   // Get vendor for journal entry description
-  const { data: vendor } = await supabase
-    .from('vendors')
-    .select('name')
-    .eq('id', bill.vendor_id)
-    .single();
+  const vendorRows = await sql`SELECT name FROM vendors WHERE id = ${bill.vendor_id} LIMIT 1`;
+  const vendor = vendorRows[0];
 
   // Get AP account
-  const { data: apAccount } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('code', DEFAULT_AP_ACCOUNT_CODE)
-    .single();
+  const apRows = await sql`SELECT id FROM accounts WHERE code = ${DEFAULT_AP_ACCOUNT_CODE} LIMIT 1`;
+  const apAccount = apRows[0];
 
   // Build journal entry lines
   const journalLines: {
@@ -204,8 +184,10 @@ export async function postBill(
     department?: string;
   }[] = [];
 
+  const billLines = bill.bill_lines || [];
+
   // Debit Expense/Asset accounts for each line
-  for (const line of bill.bill_lines) {
+  for (const line of billLines) {
     journalLines.push({
       account_id: line.expense_account_id,
       description: `Bill ${bill.bill_number} - ${line.description}`,
@@ -218,11 +200,11 @@ export async function postBill(
 
     // If this is an inventory purchase, update inventory
     if (line.product_id) {
-      const { data: product } = await supabase
-        .from('products')
-        .select('track_inventory, quantity_on_hand, cost_price')
-        .eq('id', line.product_id)
-        .single();
+      const productRows = await sql`
+        SELECT track_inventory, quantity_on_hand, cost_price
+        FROM products WHERE id = ${line.product_id} LIMIT 1
+      `;
+      const product = productRows[0];
 
       if (product?.track_inventory) {
         // Update product quantity and weighted average cost
@@ -232,34 +214,27 @@ export async function postBill(
             line.quantity * line.unit_cost) /
           newQty;
 
-        await supabase
-          .from('products')
-          .update({
-            quantity_on_hand: newQty,
-            cost_price: newCost,
-          })
-          .eq('id', line.product_id);
+        await sql`
+          UPDATE products SET quantity_on_hand = ${newQty}, cost_price = ${newCost}
+          WHERE id = ${line.product_id}
+        `;
 
         // Record inventory movement
-        await supabase.from('inventory_movements').insert({
-          product_id: line.product_id,
-          movement_type: 'purchase',
-          quantity: line.quantity,
-          unit_cost: line.unit_cost,
-          total_cost: line.line_total,
-          reference_type: 'bill',
-          reference_id: billId,
-          created_by: userId,
-        });
+        await sql`
+          INSERT INTO inventory_movements (
+            product_id, movement_type, quantity, unit_cost, total_cost,
+            reference_type, reference_id, created_by
+          ) VALUES (
+            ${line.product_id}, 'purchase', ${line.quantity}, ${line.unit_cost},
+            ${line.line_total}, 'bill', ${billId}, ${userId}
+          )
+        `;
 
         // Create inventory lot for FIFO tracking
-        await supabase.from('inventory_lots').insert({
-          product_id: line.product_id,
-          quantity_received: line.quantity,
-          quantity_remaining: line.quantity,
-          unit_cost: line.unit_cost,
-          received_date: bill.bill_date,
-        });
+        await sql`
+          INSERT INTO inventory_lots (product_id, quantity_received, quantity_remaining, unit_cost, received_date)
+          VALUES (${line.product_id}, ${line.quantity}, ${line.quantity}, ${line.unit_cost}, ${bill.bill_date})
+        `;
       }
     }
   }
@@ -288,26 +263,22 @@ export async function postBill(
   await postJournalEntry(journalEntry.id, userId);
 
   // Update bill status
-  const { data: updatedBill, error: updateError } = await supabase
-    .from('bills')
-    .update({
-      status: 'approved',
-      journal_entry_id: journalEntry.id,
-    })
-    .eq('id', billId)
-    .select()
-    .single();
-
-  if (updateError) throw new Error(`Failed to update bill: ${updateError.message}`);
+  const updatedRows = await sql`
+    UPDATE bills SET status = 'approved', journal_entry_id = ${journalEntry.id}
+    WHERE id = ${billId}
+    RETURNING *
+  `;
+  const updatedBill = updatedRows[0];
+  if (!updatedBill) throw new Error('Failed to update bill');
 
   // Log activity
-  await supabase.from('activity_logs').insert({
-    user_id: userId,
-    action: 'post',
-    entity_type: 'bill',
-    entity_id: billId,
-    new_values: { status: 'approved', journal_entry_id: journalEntry.id },
-  });
+  await sql`
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    VALUES (
+      ${userId}, 'post', 'bill', ${billId},
+      ${JSON.stringify({ status: 'approved', journal_entry_id: journalEntry.id })}
+    )
+  `;
 
   return { bill: updatedBill, journalEntryId: journalEntry.id };
 }
@@ -341,14 +312,12 @@ export async function recordBillPayment(
   }
 
   // Generate payment number
-  const { data: paymentNumber } = await supabase.rpc('generate_payment_number');
+  const numRows = await sql`SELECT generate_payment_number() AS num`;
+  const paymentNumber = numRows[0]?.num;
 
   // Get AP account
-  const { data: apAccount } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('code', DEFAULT_AP_ACCOUNT_CODE)
-    .single();
+  const apRows = await sql`SELECT id FROM accounts WHERE code = ${DEFAULT_AP_ACCOUNT_CODE} LIMIT 1`;
+  const apAccount = apRows[0];
 
   // Create journal entry: DR AP, CR Cash/Bank
   const journalEntry = await createJournalEntry(
@@ -379,60 +348,50 @@ export async function recordBillPayment(
   await postJournalEntry(journalEntry.id, userId);
 
   // Create payment record
-  const { data: payment, error: paymentError } = await supabase
-    .from('bill_payments')
-    .insert({
-      payment_number: paymentNumber,
-      vendor_id: input.vendor_id,
-      payment_date: input.payment_date,
-      amount: input.amount,
-      payment_method: input.payment_method,
-      reference_number: input.reference_number,
-      pay_from_account_id: input.pay_from_account_id,
-      journal_entry_id: journalEntry.id,
-      notes: input.notes,
-      created_by: userId,
-    })
-    .select()
-    .single();
-
-  if (paymentError) throw new Error(`Failed to create bill payment: ${paymentError.message}`);
+  const paymentRows = await sql`
+    INSERT INTO bill_payments (
+      payment_number, vendor_id, payment_date, amount, payment_method,
+      reference_number, pay_from_account_id, journal_entry_id, notes, created_by
+    ) VALUES (
+      ${paymentNumber}, ${input.vendor_id}, ${input.payment_date}, ${input.amount},
+      ${input.payment_method}, ${input.reference_number ?? null}, ${input.pay_from_account_id},
+      ${journalEntry.id}, ${input.notes ?? null}, ${userId}
+    )
+    RETURNING *
+  `;
+  const payment = paymentRows[0];
+  if (!payment) throw new Error('Failed to create bill payment');
 
   // Create payment applications and update bills
   for (const app of input.applications) {
-    await supabase.from('bill_payment_applications').insert({
-      bill_payment_id: payment.id,
-      bill_id: app.bill_id,
-      amount_applied: app.amount_applied,
-    });
+    await sql`
+      INSERT INTO bill_payment_applications (bill_payment_id, bill_id, amount_applied)
+      VALUES (${payment.id}, ${app.bill_id}, ${app.amount_applied})
+    `;
 
     // Update bill amount_paid and status
-    const { data: bill } = await supabase
-      .from('bills')
-      .select('amount_paid, total')
-      .eq('id', app.bill_id)
-      .single();
+    const billRows = await sql`
+      SELECT amount_paid, total FROM bills WHERE id = ${app.bill_id} LIMIT 1
+    `;
+    const bill = billRows[0];
 
     const newAmountPaid = (bill?.amount_paid || 0) + app.amount_applied;
     const newStatus = newAmountPaid >= (bill?.total || 0) ? 'paid' : 'partial';
 
-    await supabase
-      .from('bills')
-      .update({
-        amount_paid: newAmountPaid,
-        status: newStatus,
-      })
-      .eq('id', app.bill_id);
+    await sql`
+      UPDATE bills SET amount_paid = ${newAmountPaid}, status = ${newStatus}
+      WHERE id = ${app.bill_id}
+    `;
   }
 
   // Log activity
-  await supabase.from('activity_logs').insert({
-    user_id: userId,
-    action: 'create',
-    entity_type: 'bill_payment',
-    entity_id: payment.id,
-    new_values: { payment_number: paymentNumber, amount: input.amount },
-  });
+  await sql`
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    VALUES (
+      ${userId}, 'create', 'bill_payment', ${payment.id},
+      ${JSON.stringify({ payment_number: paymentNumber, amount: input.amount })}
+    )
+  `;
 
   return { paymentId: payment.id, journalEntryId: journalEntry.id };
 }
@@ -443,14 +402,13 @@ export async function recordBillPayment(
 export async function updateOverdueBills(): Promise<number> {
   const today = new Date().toISOString().split('T')[0];
 
-  const { data: overdueBills, error } = await supabase
-    .from('bills')
-    .update({ status: 'overdue' })
-    .in('status', ['approved', 'partial'])
-    .lt('due_date', today)
-    .select('id');
+  const rows = await sql`
+    UPDATE bills
+    SET status = 'overdue'
+    WHERE status IN ('approved', 'partial')
+      AND due_date < ${today}
+    RETURNING id
+  `;
 
-  if (error) throw new Error(`Failed to update overdue bills: ${error.message}`);
-
-  return overdueBills?.length || 0;
+  return rows.length;
 }

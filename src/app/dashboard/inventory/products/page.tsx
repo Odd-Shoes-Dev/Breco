@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import toast from 'react-hot-toast';
 import {
   PlusIcon,
@@ -39,12 +39,8 @@ export default function ProductsPage() {
 
   const loadCategories = async () => {
     try {
-      const { data, error } = await supabase
-        .from('product_categories')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
+      const res = await fetch('/api/product-categories');
+      const data = await res.json();
       setCategories(data || []);
     } catch (error) {
       console.error('Failed to load categories:', error);
@@ -54,36 +50,15 @@ export default function ProductsPage() {
   const loadProducts = async () => {
     try {
       setLoading(true);
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      if (categoryFilter) params.set('category_id', categoryFilter);
+      if (showLowStock) params.set('stock_filter', 'low');
 
-      let query = supabase
-        .from('products')
-        .select(`
-          *,
-          product_categories (name)
-        `)
-        .order('name');
-
-      if (search) {
-        query = query.or(`name.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%`);
-      }
-
-      if (categoryFilter) {
-        query = query.eq('category_id', categoryFilter);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      let filteredData = data || [];
-
-      if (showLowStock) {
-        filteredData = filteredData.filter(
-          p => p.reorder_point && p.quantity_in_stock <= p.reorder_point
-        );
-      }
-
-      setProducts(filteredData);
+      const res = await fetch(`/api/inventory?${params}`);
+      const result = await res.json();
+      const data = result.data || result || [];
+      setProducts(data);
     } catch (error) {
       console.error('Failed to load products:', error);
       toast.error('Failed to load products');

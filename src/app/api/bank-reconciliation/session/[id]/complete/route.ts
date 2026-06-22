@@ -1,28 +1,31 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/bank-reconciliation/session/[id]/complete - Complete reconciliation
 export async function POST(request: NextRequest, context: any) {
   const { params } = context || {};
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Get reconciliation with current totals
-    const { data: reconciliation, error: reconError } = await supabase
-      .from('bank_reconciliations')
-      .select('*, bank_account:bank_accounts(account_name)')
-      .eq('id', params.id)
-      .single();
+    const reconRows = await sql`
+      SELECT br.*, json_build_object('account_name', ba.account_name) AS bank_account
+      FROM bank_reconciliations br
+      LEFT JOIN bank_accounts ba ON ba.id = br.bank_account_id
+      WHERE br.id = ${params.id}
+    `;
 
-    if (reconError || !reconciliation) {
+    if (reconRows.length === 0) {
       return NextResponse.json({ error: 'Reconciliation not found' }, { status: 404 });
     }
+
+    const reconciliation = reconRows[0];
 
     if (reconciliation.status !== 'in_progress') {
       return NextResponse.json(
@@ -32,7 +35,7 @@ export async function POST(request: NextRequest, context: any) {
     }
 
     // Check if reconciliation balances
-    const tolerance = body.tolerance || 0.01; // Allow 1 cent difference by default
+    const tolerance = body.tolerance || 0.01;
     if (Math.abs(reconciliation.difference) > tolerance) {
       return NextResponse.json(
         {
@@ -45,34 +48,37 @@ export async function POST(request: NextRequest, context: any) {
       );
     }
 
-    // Complete the reconciliation (trigger will mark transactions as reconciled)
-    const { data, error: updateError } = await supabase
-      .from('bank_reconciliations')
-      .update({
-        status: 'completed',
-        completed_by: user.id,
-        completed_at: new Date().toISOString(),
-      })
-      .eq('id', params.id)
-      .select(`
-        *,
-        bank_account:bank_accounts(id, account_name, account_number),
-        completed_by_user:user_profiles!bank_reconciliations_completed_by_fkey(id, full_name, email)
-      `)
-      .single();
+    // Complete the reconciliation
+    const updatedRows = await sql`
+      UPDATE bank_reconciliations
+      SET
+        status = 'completed',
+        completed_by = ${user.id},
+        completed_at = NOW()
+      WHERE id = ${params.id}
+      RETURNING *
+    `;
 
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
-    }
+    // Fetch with joins
+    const fullRows = await sql`
+      SELECT
+        br.*,
+        json_build_object('id', ba.id, 'account_name', ba.account_name, 'account_number', ba.account_number) AS bank_account,
+        json_build_object('id', cu.id, 'full_name', cu.full_name, 'email', cu.email) AS completed_by_user
+      FROM bank_reconciliations br
+      LEFT JOIN bank_accounts ba ON ba.id = br.bank_account_id
+      LEFT JOIN user_profiles cu ON cu.id = br.completed_by
+      WHERE br.id = ${params.id}
+    `;
 
     // Get count of reconciled transactions
-    const { count } = await supabase
-      .from('bank_reconciliation_items')
-      .select('*', { count: 'exact', head: true })
-      .eq('reconciliation_id', params.id);
+    const countRows = await sql`
+      SELECT COUNT(*) as count FROM bank_reconciliation_items WHERE reconciliation_id = ${params.id}
+    `;
+    const count = parseInt(countRows[0].count);
 
     return NextResponse.json({
-      data,
+      data: fullRows[0],
       message: `Reconciliation completed successfully. ${count} transactions reconciled.`,
       reconciled_count: count,
     });

@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import { ScaledNumber } from '@/components/ui/scaled-number';
 import {
@@ -47,36 +46,18 @@ export default function ExpensesPage() {
   const loadExpenses = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('expenses')
-        .select(`
-          *,
-          vendors (name),
-          accounts:expense_account_id (name, code)
-        `, { count: 'exact' })
-        .order('expense_date', { ascending: false });
+      const params = new URLSearchParams();
+      if (searchQuery) params.set('search', searchQuery);
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      if (departmentFilter !== 'all') params.set('department', departmentFilter);
+      params.set('page', String(currentPage));
+      params.set('pageSize', String(pageSize));
 
-      if (searchQuery) {
-        query = query.or(`expense_number.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`);
-      }
+      const res = await fetch(`/api/expenses?${params.toString()}`, { cache: 'no-store' });
+      const result = await res.json();
 
-      if (departmentFilter && departmentFilter !== 'all') {
-        query = query.eq('department', departmentFilter);
-      }
-
-      if (statusFilter && statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
-
-      const from = (currentPage - 1) * pageSize;
-      const to = from + pageSize - 1;
-      query = query.range(from, to);
-
-      const { data, count, error } = await query;
-      if (error) throw error;
-
-      setExpenses(data || []);
-      setTotalCount(count || 0);
+      setExpenses(result.data || []);
+      setTotalCount(result.total || 0);
     } catch (error) {
       console.error('Failed to load expenses:', error);
     } finally {

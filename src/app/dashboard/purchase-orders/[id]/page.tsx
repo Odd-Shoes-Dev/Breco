@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import toast from 'react-hot-toast';
 import {
@@ -68,38 +68,11 @@ export default function PurchaseOrderDetailPage() {
   const loadPO = async () => {
     try {
       setLoading(true);
-      const { data: poData, error: poError } = await supabase
-        .from('purchase_orders')
-        .select(`
-          *,
-          vendors (
-            id,
-            name,
-            company_name,
-            email,
-            phone
-          )
-        `)
-        .eq('id', params.id)
-        .single();
-
-      if (poError) throw poError;
-      setPO(poData);
-
-      const { data: linesData, error: linesError } = await supabase
-        .from('purchase_order_lines')
-        .select(`
-          *,
-          products (
-            name,
-            sku
-          )
-        `)
-        .eq('purchase_order_id', params.id)
-        .order('line_number');
-
-      if (linesError) throw linesError;
-      setLines(linesData || []);
+      const res = await fetch(`/api/purchase-orders/${params.id}`);
+      if (!res.ok) throw new Error('Failed to load PO');
+      const result = await res.json();
+      setPO(result.purchaseOrder || result);
+      setLines(result.lines || result.purchaseOrder?.lines || []);
     } catch (error) {
       console.error('Failed to load PO:', error);
       toast.error('Failed to load purchase order');

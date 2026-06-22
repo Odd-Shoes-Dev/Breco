@@ -1,28 +1,30 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { releaseReservedInventory, reduceInventoryForInvoice } from '@/lib/accounting/inventory-server';
 
 // POST /api/quotations/[id]/convert - Convert quotation to invoice
 export async function POST(request: NextRequest, context: any) {
   const params = await context.params;
-  
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
 
+  try {
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get the quotation
-    const { data: quotation, error: fetchError } = await supabase
-      .from('invoices')
-      .select('*, invoice_lines(*)')
-      .eq('id', params.id)
-      .eq('document_type', 'quotation')
-      .single();
+    // Get the quotation with lines
+    const rows = await sql`
+      SELECT i.*,
+        COALESCE(json_agg(row_to_json(il.*)) FILTER (WHERE il.id IS NOT NULL), '[]') AS invoice_lines
+      FROM invoices i
+      LEFT JOIN invoice_lines il ON il.invoice_id = i.id
+      WHERE i.id = ${params.id} AND i.document_type = 'quotation'
+      GROUP BY i.id
+    `;
+    const quotation = rows[0];
 
-    if (fetchError || !quotation) {
+    if (!quotation) {
       return NextResponse.json({ error: 'Quotation not found' }, { status: 404 });
     }
 
@@ -32,32 +34,29 @@ export async function POST(request: NextRequest, context: any) {
     }
 
     // Generate new invoice number
-    const { data: invoiceNumber } = await supabase.rpc('generate_invoice_number');
+    const numberRows = await sql`SELECT generate_invoice_number()`;
+    const invoiceNumber = numberRows[0]?.generate_invoice_number;
 
     // Update the quotation to invoice
-    const { data: updatedInvoice, error: updateError } = await supabase
-      .from('invoices')
-      .update({
-        document_type: 'invoice',
-        invoice_number: invoiceNumber,
-        status: 'draft',
-      })
-      .eq('id', params.id)
-      .select()
-      .single();
+    const updatedRows = await sql`
+      UPDATE invoices
+      SET document_type = 'invoice',
+          invoice_number = ${invoiceNumber},
+          status = 'draft'
+      WHERE id = ${params.id}
+      RETURNING *
+    `;
+    const updatedInvoice = updatedRows[0];
 
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
+    if (!updatedInvoice) {
+      return NextResponse.json({ error: 'Failed to convert quotation' }, { status: 400 });
     }
 
     // Release reserved inventory (quotations have reserved stock)
-    await releaseReservedInventory(supabase, params.id, quotation.invoice_lines);
+    await releaseReservedInventory(null, params.id, quotation.invoice_lines);
 
     // Mark original quotation status
-    await supabase
-      .from('invoices')
-      .update({ status: 'converted' })
-      .eq('id', params.id);
+    await sql`UPDATE invoices SET status = 'converted' WHERE id = ${params.id}`;
 
     return NextResponse.json({
       success: true,

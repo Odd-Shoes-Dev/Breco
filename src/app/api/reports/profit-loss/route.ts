@@ -1,11 +1,10 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { getCompanySettings } from '@/lib/company-settings';
 
 // GET /api/reports/profit-loss
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const settings = await getCompanySettings();
     const baseCurrency = settings.base_currency;
 
@@ -15,58 +14,51 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('end_date') || new Date().toISOString().split('T')[0];
 
     // Get all revenue accounts (4xxx)
-    const { data: revenueAccounts } = await supabase
-      .from('accounts')
-      .select('id, code, name')
-      .gte('code', '4000')
-      .lt('code', '5000')
-      .order('code');
+    const revenueAccounts = await sql`
+      SELECT id, code, name FROM accounts
+      WHERE code >= '4000' AND code < '5000'
+      ORDER BY code
+    `;
 
     // Get all expense accounts (5xxx-9xxx)
-    const { data: expenseAccounts } = await supabase
-      .from('accounts')
-      .select('id, code, name')
-      .gte('code', '5000')
-      .order('code');
+    const expenseAccounts = await sql`
+      SELECT id, code, name FROM accounts
+      WHERE code >= '5000'
+      ORDER BY code
+    `;
 
     // Get invoices for the period (revenue)
-    const { data: invoices } = await supabase
-      .from('invoices')
-      .select('id, total, currency, invoice_date, status')
-      .gte('invoice_date', startDate)
-      .lte('invoice_date', endDate);
+    const invoices = await sql`
+      SELECT id, total, currency, invoice_date, status FROM invoices
+      WHERE invoice_date >= ${startDate} AND invoice_date <= ${endDate}
+    `;
 
     // Get bills for the period (expenses)
-    const { data: bills } = await supabase
-      .from('bills')
-      .select('id, total, currency, bill_date, status')
-      .gte('bill_date', startDate)
-      .lte('bill_date', endDate);
+    const bills = await sql`
+      SELECT id, total, currency, bill_date, status FROM bills
+      WHERE bill_date >= ${startDate} AND bill_date <= ${endDate}
+    `;
 
     // Get expenses for the period
-    const { data: expenses } = await supabase
-      .from('expenses')
-      .select('id, amount, currency, date, category')
-      .gte('date', startDate)
-      .lte('date', endDate);
+    const expenses = await sql`
+      SELECT id, amount, currency, date, category FROM expenses
+      WHERE date >= ${startDate} AND date <= ${endDate}
+    `;
 
     // Get journal entry lines for the period
-    const { data: entries } = await supabase
-      .from('journal_lines')
-      .select(`
-        account_id,
-        debit,
-        credit,
-        journal_entry:journal_entries!inner (entry_date, status)
-      `)
-      .eq('journal_entry.status', 'posted')
-      .gte('journal_entry.entry_date', startDate)
-      .lte('journal_entries.entry_date', endDate);
+    const entries = await sql`
+      SELECT jl.account_id, jl.debit, jl.credit
+      FROM journal_lines jl
+      JOIN journal_entries je ON je.id = jl.journal_entry_id
+      WHERE je.status = 'posted'
+        AND je.entry_date >= ${startDate}
+        AND je.entry_date <= ${endDate}
+    `;
 
     // Calculate totals by account
     const accountTotals: Record<string, { debit: number; credit: number }> = {};
 
-    entries?.forEach((entry: any) => {
+    entries.forEach((entry: any) => {
       if (!accountTotals[entry.account_id]) {
         accountTotals[entry.account_id] = { debit: 0, credit: 0 };
       }
@@ -78,7 +70,7 @@ export async function GET(request: NextRequest) {
     const revenue: any[] = [];
     let totalRevenue = 0;
 
-    revenueAccounts?.forEach((account) => {
+    revenueAccounts.forEach((account: any) => {
       const totals = accountTotals[account.id] || { debit: 0, credit: 0 };
       const balance = totals.credit - totals.debit;
       if (balance !== 0) {
@@ -92,18 +84,13 @@ export async function GET(request: NextRequest) {
     });
 
     // Add invoice revenue (convert to base currency)
-    for (const invoice of invoices || []) {
+    for (const invoice of invoices) {
       let amountInBase = invoice.total;
       const currency = invoice.currency || baseCurrency;
 
       if (currency !== baseCurrency) {
-        const { data: convertedValue } = await supabase.rpc('convert_currency', {
-          p_amount: invoice.total,
-          p_from_currency: currency,
-          p_to_currency: baseCurrency,
-          p_date: invoice.invoice_date,
-        });
-        amountInBase = convertedValue ?? 0;
+        const converted = await sql`SELECT convert_currency(${invoice.total}, ${currency}, ${baseCurrency}, ${invoice.invoice_date}) AS val`;
+        amountInBase = converted[0]?.val ?? 0;
       }
 
       totalRevenue += amountInBase;
@@ -113,7 +100,7 @@ export async function GET(request: NextRequest) {
       revenue.push({
         code: '4000',
         name: 'Sales Revenue',
-        amount: totalRevenue - revenue.reduce((sum, item) => sum + item.amount, 0),
+        amount: totalRevenue - revenue.reduce((sum: number, item: any) => sum + item.amount, 0),
       });
     }
 
@@ -125,7 +112,7 @@ export async function GET(request: NextRequest) {
     let totalOperatingExpenses = 0;
     let totalOtherExpenses = 0;
 
-    expenseAccounts?.forEach((account) => {
+    expenseAccounts.forEach((account: any) => {
       const totals = accountTotals[account.id] || { debit: 0, credit: 0 };
       const balance = totals.debit - totals.credit;
       if (balance !== 0) {
@@ -149,43 +136,33 @@ export async function GET(request: NextRequest) {
     });
 
     // Add bills to operating expenses (convert to base currency)
-    for (const bill of bills || []) {
+    for (const bill of bills) {
       let amountInBase = bill.total;
       const currency = bill.currency || baseCurrency;
 
       if (currency !== baseCurrency) {
-        const { data: convertedValue } = await supabase.rpc('convert_currency', {
-          p_amount: bill.total,
-          p_from_currency: currency,
-          p_to_currency: baseCurrency,
-          p_date: bill.bill_date,
-        });
-        amountInBase = convertedValue ?? 0;
+        const converted = await sql`SELECT convert_currency(${bill.total}, ${currency}, ${baseCurrency}, ${bill.bill_date}) AS val`;
+        amountInBase = converted[0]?.val ?? 0;
       }
 
       totalOperatingExpenses += amountInBase;
     }
 
     // Add expenses to operating expenses (convert to base currency)
-    for (const expense of expenses || []) {
+    for (const expense of expenses) {
       let amountInBase = expense.amount;
       const currency = expense.currency || baseCurrency;
 
       if (currency !== baseCurrency) {
-        const { data: convertedValue } = await supabase.rpc('convert_currency', {
-          p_amount: expense.amount,
-          p_from_currency: currency,
-          p_to_currency: baseCurrency,
-          p_date: expense.date,
-        });
-        amountInBase = convertedValue ?? 0;
+        const converted = await sql`SELECT convert_currency(${expense.amount}, ${currency}, ${baseCurrency}, ${expense.date}) AS val`;
+        amountInBase = converted[0]?.val ?? 0;
       }
 
       totalOperatingExpenses += amountInBase;
     }
 
     if (bills && bills.length > 0) {
-      const billsTotal = bills.reduce((sum, bill) => sum + bill.total, 0);
+      const billsTotal = bills.reduce((sum: number, bill: any) => sum + bill.total, 0);
       operatingExpenses.push({
         code: '5000',
         name: 'Vendor Bills',
@@ -194,7 +171,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (expenses && expenses.length > 0) {
-      const expensesTotal = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+      const expensesTotal = expenses.reduce((sum: number, exp: any) => sum + exp.amount, 0);
       operatingExpenses.push({
         code: '5100',
         name: 'Operating Expenses',

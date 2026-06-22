@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter, SupportedCurrency } from '@/lib/currency';
 import { Button, Card, CardHeader, CardTitle, CardBody, Input, Select, Textarea, LoadingSpinner } from '@/components/ui';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
@@ -42,21 +41,10 @@ export default function RecordPaymentPage() {
 
   const fetchInvoice = async () => {
     try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select(`
-          id,
-          invoice_number,
-          total,
-          amount_paid,
-          customer_id,
-          customer:customers(name)
-        `)
-        .eq('id', params.id)
-        .single();
+      const res = await fetch(`/api/invoices/${params.id}`, { cache: 'no-store' });
+      const data = await res.json();
 
-      if (error) throw error;
-      const customerData = (data as any).customer;
+      const customerData = data.customer;
       setInvoice({
         id: data.id,
         invoice_number: data.invoice_number,
@@ -67,8 +55,7 @@ export default function RecordPaymentPage() {
           ? customerData[0] ?? null
           : customerData ?? null,
       });
-      
-      // Pre-fill with balance due
+
       const balanceDue = Number(data.total) - Number(data.amount_paid);
       setFormData(prev => ({
         ...prev,
@@ -97,116 +84,20 @@ export default function RecordPaymentPage() {
         throw new Error(`Amount cannot exceed balance due (${formatCurrency(balanceDue)})`);
       }
 
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-
-      // Generate payment number
-      const { data: lastPayment } = await supabase
-        .from('payments_received')
-        .select('payment_number')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-
-      let paymentNumber = 'PMT-2025-00001';
-      if (lastPayment?.payment_number) {
-        const match = lastPayment.payment_number.match(/PMT-(\d{4})-(\d{5})/);
-        if (match) {
-          const year = new Date().getFullYear();
-          const num = parseInt(match[2]) + 1;
-          paymentNumber = `PMT-${year}-${num.toString().padStart(5, '0')}`;
-        }
-      }
-
-      // Create payment record
-      const { data: paymentData, error: paymentError } = await supabase
-        .from('payments_received')
-        .insert({
-          payment_number: paymentNumber,
-          customer_id: invoice!.customer_id,
+      const res = await fetch(`/api/invoices/${params.id}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           payment_date: formData.payment_date,
-          amount: amount,
+          amount,
           payment_method: formData.payment_method,
           reference_number: formData.reference_number || null,
           notes: formData.notes || null,
-          created_by: user?.id,
-        })
-        .select()
-        .single();
+        }),
+      });
 
-      if (paymentError) throw paymentError;
-
-      // Create payment application (link payment to invoice)
-      const { error: applicationError } = await supabase
-        .from('payment_applications')
-        .insert({
-          payment_id: paymentData.id,
-          invoice_id: params.id,
-          amount_applied: amount,
-        });
-
-      if (applicationError) throw applicationError;
-
-      // Update invoice amount_paid and status
-      const newAmountPaid = Number(invoice!.amount_paid) + amount;
-      const newStatus = newAmountPaid >= Number(invoice!.total) ? 'paid' : 'partial';
-
-      await supabase
-        .from('invoices')
-        .update({
-          amount_paid: newAmountPaid,
-          status: newStatus,
-        })
-        .eq('id', params.id);
-
-      // Create journal entry for payment
-      // Debit: Cash/Bank, Credit: Accounts Receivable
-      const { data: cashAccount } = await supabase
-        .from('chart_of_accounts')
-        .select('id')
-        .eq('account_number', '1010')
-        .single();
-
-      const { data: arAccount } = await supabase
-        .from('chart_of_accounts')
-        .select('id')
-        .eq('account_number', '1200')
-        .single();
-
-      if (cashAccount && arAccount) {
-        // Create journal entry
-        const { data: journalEntry } = await supabase
-          .from('journal_entries')
-          .insert({
-            entry_date: formData.payment_date,
-            description: `Payment received for Invoice ${invoice!.invoice_number}`,
-            reference_type: 'invoice_payment',
-            reference_id: params.id,
-            status: 'posted',
-          })
-          .select()
-          .single();
-
-        if (journalEntry) {
-          // Create journal lines
-          await supabase.from('journal_entry_lines').insert([
-            {
-              journal_entry_id: journalEntry.id,
-              account_id: cashAccount.id,
-              debit_amount: amount,
-              credit_amount: 0,
-              description: `Payment from ${invoice!.customer?.name ?? 'Customer'}`,
-            },
-            {
-              journal_entry_id: journalEntry.id,
-              account_id: arAccount.id,
-              debit_amount: 0,
-              credit_amount: amount,
-              description: `Payment from ${invoice!.customer?.name ?? 'Customer'}`,
-            },
-          ]);
-        }
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to record payment');
 
       router.push(`/dashboard/invoices/${params.id}`);
     } catch (err: any) {

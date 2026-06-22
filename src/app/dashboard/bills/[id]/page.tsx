@@ -13,7 +13,6 @@ import {
   XMarkIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
-import { supabase } from '@/lib/supabase/client';
 import { printBill } from '@/lib/pdf/bill';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 
@@ -84,39 +83,12 @@ export default function BillDetailPage() {
     try {
       setLoading(true);
 
-      // Fetch bill with vendor
-      const { data: billData, error: billError } = await supabase
-        .from('bills')
-        .select(`
-          *,
-          vendors (
-            name,
-            email,
-            company_name,
-            phone,
-            address_line1,
-            address_line2,
-            city,
-            state,
-            zip_code,
-            country
-          )
-        `)
-        .eq('id', params.id)
-        .single();
-
-      if (billError) throw billError;
-      setBill(billData);
-
-      // Fetch bill lines
-      const { data: linesData, error: linesError } = await supabase
-        .from('bill_lines')
-        .select('*')
-        .eq('bill_id', params.id)
-        .order('line_number');
-
-      if (linesError) throw linesError;
-      setLines(linesData || []);
+      // Fetch bill with vendor and lines
+      const billRes = await fetch(`/api/bills/${params.id}`);
+      if (!billRes.ok) throw new Error('Failed to load bill');
+      const billResult = await billRes.json();
+      setBill(billResult.data || billResult);
+      setLines(billResult.lines || []);
 
       // Fetch bill payments
       const paymentsResponse = await fetch(`/api/bills/${params.id}/payments`);

@@ -1,24 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPaymentIntent, createCheckoutSession } from '@/lib/stripe';
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const body = await request.json();
     const { invoiceId, method } = body;
 
-    // Fetch the invoice
-    const { data: invoice, error: invoiceError } = await supabase
-      .from('invoices')
-      .select(`
-        *,
-        customer:customers(id, name, email, stripe_customer_id)
-      `)
-      .eq('id', invoiceId)
-      .single();
+    // Fetch the invoice with customer info
+    const rows = await sql`
+      SELECT i.*,
+        json_build_object(
+          'id', c.id,
+          'name', c.name,
+          'email', c.email,
+          'stripe_customer_id', c.stripe_customer_id
+        ) AS customer
+      FROM invoices i
+      LEFT JOIN customers c ON c.id = i.customer_id
+      WHERE i.id = ${invoiceId}
+    `;
+    const invoice = rows[0];
 
-    if (invoiceError || !invoice) {
+    if (!invoice) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
@@ -32,7 +36,7 @@ export async function POST(request: NextRequest) {
     if (method === 'checkout') {
       // Create a Stripe Checkout session
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-      
+
       const session = await createCheckoutSession({
         invoiceId: invoice.id,
         invoiceNumber: invoice.invoice_number,
@@ -61,10 +65,9 @@ export async function POST(request: NextRequest) {
       });
 
       // Store the payment intent ID on the invoice
-      await supabase
-        .from('invoices')
-        .update({ stripe_payment_intent_id: paymentIntentId })
-        .eq('id', invoiceId);
+      await sql`
+        UPDATE invoices SET stripe_payment_intent_id = ${paymentIntentId} WHERE id = ${invoiceId}
+      `;
 
       return NextResponse.json({
         clientSecret,

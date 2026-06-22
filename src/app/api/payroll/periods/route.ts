@@ -1,12 +1,11 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 
 // GET /api/payroll/periods - List payroll periods
 export async function GET(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -15,32 +14,51 @@ export async function GET(request: Request) {
     const status = url.searchParams.get('status');
     const year = url.searchParams.get('year');
 
-    let query = supabase
-      .from('payroll_periods')
-      .select(`
-        *,
-        processed_by_user:user_profiles!payroll_periods_processed_by_fkey(id, full_name, email)
-      `)
-      .order('period_start', { ascending: false });
+    let rows: any[];
 
-    if (status) {
-      query = query.eq('status', status);
-    }
-
-    if (year) {
+    if (status && year) {
       const yearInt = parseInt(year);
-      query = query
-        .gte('period_start', `${yearInt}-01-01`)
-        .lte('period_start', `${yearInt}-12-31`);
+      rows = await sql`
+        SELECT pp.*,
+          json_build_object('id', u.id, 'full_name', u.full_name, 'email', u.email) AS processed_by_user
+        FROM payroll_periods pp
+        LEFT JOIN user_profiles u ON u.id = pp.processed_by
+        WHERE pp.status = ${status}
+          AND pp.period_start >= ${`${yearInt}-01-01`}
+          AND pp.period_start <= ${`${yearInt}-12-31`}
+        ORDER BY pp.period_start DESC
+      `;
+    } else if (status) {
+      rows = await sql`
+        SELECT pp.*,
+          json_build_object('id', u.id, 'full_name', u.full_name, 'email', u.email) AS processed_by_user
+        FROM payroll_periods pp
+        LEFT JOIN user_profiles u ON u.id = pp.processed_by
+        WHERE pp.status = ${status}
+        ORDER BY pp.period_start DESC
+      `;
+    } else if (year) {
+      const yearInt = parseInt(year);
+      rows = await sql`
+        SELECT pp.*,
+          json_build_object('id', u.id, 'full_name', u.full_name, 'email', u.email) AS processed_by_user
+        FROM payroll_periods pp
+        LEFT JOIN user_profiles u ON u.id = pp.processed_by
+        WHERE pp.period_start >= ${`${yearInt}-01-01`}
+          AND pp.period_start <= ${`${yearInt}-12-31`}
+        ORDER BY pp.period_start DESC
+      `;
+    } else {
+      rows = await sql`
+        SELECT pp.*,
+          json_build_object('id', u.id, 'full_name', u.full_name, 'email', u.email) AS processed_by_user
+        FROM payroll_periods pp
+        LEFT JOIN user_profiles u ON u.id = pp.processed_by
+        ORDER BY pp.period_start DESC
+      `;
     }
 
-    const { data: periods, error } = await query;
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    return NextResponse.json(periods);
+    return NextResponse.json(rows);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -49,9 +67,7 @@ export async function GET(request: Request) {
 // POST /api/payroll/periods - Create a new payroll period
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -87,17 +103,13 @@ export async function POST(request: Request) {
     }
 
     // Check for overlapping periods
-    const { data: existing, error: checkError } = await supabase
-      .from('payroll_periods')
-      .select('id')
-      .or(`period_start.lte.${period_end},period_end.gte.${period_start}`)
-      .limit(1);
+    const existing = await sql`
+      SELECT id FROM payroll_periods
+      WHERE period_start <= ${period_end} AND period_end >= ${period_start}
+      LIMIT 1
+    `;
 
-    if (checkError) {
-      return NextResponse.json({ error: checkError.message }, { status: 400 });
-    }
-
-    if (existing && existing.length > 0) {
+    if (existing.length > 0) {
       return NextResponse.json(
         { error: 'A payroll period already exists that overlaps with this date range' },
         { status: 400 }
@@ -105,23 +117,13 @@ export async function POST(request: Request) {
     }
 
     // Create the payroll period
-    const { data: period, error: periodError } = await supabase
-      .from('payroll_periods')
-      .insert({
-        period_start,
-        period_end,
-        payment_date,
-        status: 'draft',
-        created_by: user.id,
-      })
-      .select()
-      .single();
+    const rows = await sql`
+      INSERT INTO payroll_periods (period_start, period_end, payment_date, status, created_by)
+      VALUES (${period_start}, ${period_end}, ${payment_date}, 'draft', ${user.id})
+      RETURNING *
+    `;
 
-    if (periodError) {
-      return NextResponse.json({ error: periodError.message }, { status: 400 });
-    }
-
-    return NextResponse.json(period, { status: 201 });
+    return NextResponse.json(rows[0], { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

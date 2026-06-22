@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/purchase-orders/[id]/approve - Approve purchase order
@@ -7,22 +8,23 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { id } = await context.params;
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Get PO
-    const { data: po, error: fetchError } = await supabase
-      .from('purchase_orders')
-      .select('*, vendor:vendors(name)')
-      .eq('id', id)
-      .single();
+    const rows = await sql`
+      SELECT po.*, json_build_object('name', v.name) AS vendor
+      FROM purchase_orders po
+      LEFT JOIN vendors v ON v.id = po.vendor_id
+      WHERE po.id = ${id}
+    `;
+    const po = rows[0];
 
-    if (fetchError || !po) {
+    if (!po) {
       return NextResponse.json({ error: 'Purchase order not found' }, { status: 404 });
     }
 
@@ -34,28 +36,28 @@ export async function POST(
     }
 
     // Approve PO
-    const { data, error } = await supabase
-      .from('purchase_orders')
-      .update({
-        status: 'approved',
-        approved_by: user.id,
-        approved_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .select(`
-        *,
-        vendor:vendors(id, name, email),
-        purchase_order_lines(*)
-      `)
-      .single();
+    await sql`
+      UPDATE purchase_orders
+      SET status = 'approved',
+          approved_by = ${user.id},
+          approved_at = ${new Date().toISOString()}
+      WHERE id = ${id}
+    `;
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const updatedRows = await sql`
+      SELECT po.*,
+        json_build_object('id', v.id, 'name', v.name, 'email', v.email) AS vendor,
+        COALESCE(json_agg(row_to_json(pol.*)) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
+      FROM purchase_orders po
+      LEFT JOIN vendors v ON v.id = po.vendor_id
+      LEFT JOIN purchase_order_lines pol ON pol.purchase_order_id = po.id
+      WHERE po.id = ${id}
+      GROUP BY po.id, v.id, v.name, v.email
+    `;
 
     return NextResponse.json({
       message: 'Purchase order approved successfully',
-      purchase_order: data,
+      purchase_order: updatedRows[0],
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
+
 import toast from 'react-hot-toast';
 import {
   PlusIcon,
@@ -63,27 +63,14 @@ export default function NewStockTakePage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      
-      // Load locations
-      const { data: locationsData, error: locationsError } = await supabase
-        .from('inventory_locations')
-        .select('id, name, type')
-        .eq('is_active', true)
-        .order('name');
-
-      if (locationsError) throw locationsError;
+      const [locationsRes, productsRes] = await Promise.all([
+        fetch('/api/locations'),
+        fetch('/api/inventory'),
+      ]);
+      const locationsData = await locationsRes.json();
+      const productsResult = await productsRes.json();
       setLocations(locationsData || []);
-
-      // Load products with current stock
-      const { data: productsData, error: productsError } = await supabase
-        .from('products')
-        .select('id, name, sku, current_stock, unit')
-        .eq('is_active', true)
-        .eq('type', 'inventory')
-        .order('name');
-
-      if (productsError) throw productsError;
-      setProducts(productsData || []);
+      setProducts(productsResult.data || productsResult || []);
     } catch (error) {
       console.error('Failed to load data:', error);
       toast.error('Failed to load data');
@@ -94,13 +81,10 @@ export default function NewStockTakePage() {
 
   const generateReference = async () => {
     try {
-      const { count, error } = await supabase
-        .from('stock_takes')
-        .select('*', { count: 'exact', head: true });
-
-      if (error) throw error;
-
-      const nextNumber = (count || 0) + 1;
+      const res = await fetch('/api/stock-takes');
+      const result = await res.json();
+      const count = result.total || (result.data || result || []).length || 0;
+      const nextNumber = count + 1;
       const ref = `ST-${String(nextNumber).padStart(5, '0')}`;
       setFormData((prev) => ({ ...prev, reference_number: ref }));
     } catch (error) {
@@ -112,24 +96,18 @@ export default function NewStockTakePage() {
     if (!locationId) return;
 
     try {
-      // For full count, load all products with expected quantities
-      const { data: productsData, error } = await supabase
-        .from('products')
-        .select('id, name, sku, current_stock, unit')
-        .eq('is_active', true)
-        .eq('type', 'inventory')
-        .order('name');
+      const res = await fetch('/api/inventory');
+      const result = await res.json();
+      const productsData = result.data || result || [];
 
-      if (error) throw error;
-
-      const newLines: StockTakeLine[] = (productsData || []).map((product) => ({
+      const newLines: StockTakeLine[] = productsData.map((product: any) => ({
         product_id: product.id,
         product_name: product.name,
         sku: product.sku || '',
-        expected_quantity: product.current_stock || 0,
+        expected_quantity: product.current_stock || product.quantity_on_hand || 0,
         counted_quantity: 0,
-        unit: product.unit || 'pcs',
-        variance: 0 - (product.current_stock || 0),
+        unit: product.unit || product.unit_of_measure || 'pcs',
+        variance: 0 - (product.current_stock || product.quantity_on_hand || 0),
         notes: '',
       }));
 
@@ -215,43 +193,26 @@ export default function NewStockTakePage() {
     try {
       setSaving(true);
 
-      // Get user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      // Create stock take
-      const { data: stockTake, error: stockTakeError } = await supabase
-        .from('stock_takes')
-        .insert({
+      const res = await fetch('/api/stock-takes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           reference_number: formData.reference_number,
           stock_take_date: formData.stock_take_date,
           location_id: formData.location_id,
           type: formData.type,
-          status: 'draft',
-          counted_by: user.id,
           notes: formData.notes || null,
-        })
-        .select()
-        .single();
-
-      if (stockTakeError) throw stockTakeError;
-
-      // Create lines
-      const linesData = lines.map((line) => ({
-        stock_take_id: stockTake.id,
-        product_id: line.product_id,
-        expected_quantity: line.expected_quantity,
-        counted_quantity: line.counted_quantity,
-        variance: line.variance,
-        notes: line.notes || null,
-      }));
-
-      const { error: linesError } = await supabase
-        .from('stock_take_lines')
-        .insert(linesData);
-
-      if (linesError) throw linesError;
-
+          lines: lines.map((line) => ({
+            product_id: line.product_id,
+            expected_quantity: line.expected_quantity,
+            counted_quantity: line.counted_quantity,
+            variance: line.variance,
+            notes: line.notes || null,
+          })),
+        }),
+      });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
+      const stockTake = await res.json();
       toast.success('Stock take created successfully');
       router.push(`/dashboard/inventory/stock-takes/${stockTake.id}`);
     } catch (error: any) {

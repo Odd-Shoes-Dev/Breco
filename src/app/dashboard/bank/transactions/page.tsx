@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import {
   PlusIcon,
@@ -43,14 +42,9 @@ export default function BankTransactionsPage() {
 
   const loadAccounts = async () => {
     try {
-      const { data, error } = await supabase
-        .from('bank_accounts')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-
-      if (error) throw error;
-      setAccounts(data || []);
+      const res = await fetch('/api/bank-accounts?active=true');
+      const result = await res.json();
+      setAccounts(result.data || []);
     } catch (error) {
       console.error('Error loading accounts:', error);
     }
@@ -59,38 +53,15 @@ export default function BankTransactionsPage() {
   const loadTransactions = async () => {
     try {
       setLoading(true);
+      const params = new URLSearchParams();
+      if (selectedAccount !== 'all') params.append('bank_account_id', selectedAccount);
+      if (selectedType !== 'all') params.append('type', selectedType);
+      if (reconcileFilter === 'reconciled') params.append('reconciled', 'true');
+      else if (reconcileFilter === 'unreconciled') params.append('reconciled', 'false');
 
-      let query = supabase
-        .from('bank_transactions')
-        .select(`
-          *,
-          bank_accounts:bank_account_id (
-            id,
-            name,
-            bank_name
-          )
-        `)
-        .order('transaction_date', { ascending: false })
-        .order('created_at', { ascending: false });
-
-      if (selectedAccount !== 'all') {
-        query = query.eq('bank_account_id', selectedAccount);
-      }
-
-      if (selectedType !== 'all') {
-        query = query.eq('transaction_type', selectedType);
-      }
-
-      if (reconcileFilter === 'reconciled') {
-        query = query.eq('is_reconciled', true);
-      } else if (reconcileFilter === 'unreconciled') {
-        query = query.eq('is_reconciled', false);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setTransactions(data || []);
+      const res = await fetch(`/api/bank-transactions?${params.toString()}`);
+      const result = await res.json();
+      setTransactions(result.data || []);
     } catch (error) {
       console.error('Error loading transactions:', error);
     } finally {

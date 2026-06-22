@@ -1,25 +1,19 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/fiscal-periods/close - Close a fiscal period
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Check if user is admin
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (profile?.role !== 'admin') {
+    if (user.role !== 'admin') {
       return NextResponse.json(
         { error: 'Only administrators can close fiscal periods' },
         { status: 403 }
@@ -34,20 +28,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Update period status to closed
-    const { data, error } = await supabase
-      .from('fiscal_periods')
-      .update({
-        status: 'closed',
-        closed_by: user.id,
-        closed_at: new Date().toISOString(),
-      })
-      .eq('id', body.period_id)
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const rows = await sql`
+      UPDATE fiscal_periods
+      SET status = 'closed', closed_by = ${user.id}, closed_at = ${new Date().toISOString()}
+      WHERE id = ${body.period_id}
+      RETURNING *
+    `;
+    const data = rows[0];
 
     return NextResponse.json({
       data,

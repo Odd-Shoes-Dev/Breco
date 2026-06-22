@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import { ScaledNumber } from '@/components/ui/scaled-number';
 import {
@@ -41,37 +40,30 @@ export default function DashboardPage() {
 
   const loadDashboardData = async () => {
     try {
-      // Get recent invoices
-      const { data: invoices } = await supabase
-        .from('invoices')
-        .select('*, customers(name)')
-        .order('created_at', { ascending: false })
-        .limit(5);
+      const [invoicesRes, billsRes, statsRes] = await Promise.all([
+        fetch('/api/invoices?limit=5', { cache: 'no-store' }),
+        fetch('/api/bills?limit=5', { cache: 'no-store' }),
+        fetch('/api/dashboard/stats', { cache: 'no-store' }),
+      ]);
 
-      setRecentInvoices(invoices || []);
+      const invoicesData = await invoicesRes.json();
+      const billsData = await billsRes.json();
+      const invoices = invoicesData.data || [];
+      const bills = billsData.data || [];
 
-      // Get recent bills
-      const { data: bills } = await supabase
-        .from('bills')
-        .select('*, vendors(name)')
-        .order('created_at', { ascending: false })
-        .limit(5);
+      setRecentInvoices(invoices);
+      setRecentBills(bills);
 
-      setRecentBills(bills || []);
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
 
-      // Load stats with currency conversion from API
-      const response = await fetch('/api/dashboard/stats');
-      if (response.ok) {
-        const statsData = await response.json();
-        
-        // Calculate overdue counts
         const now = new Date();
-        const overdueInvoices = (invoices || []).filter(inv => 
-          inv.status !== 'paid' && inv.status !== 'void' && 
+        const overdueInvoices = invoices.filter((inv: any) =>
+          inv.status !== 'paid' && inv.status !== 'void' &&
           inv.status !== 'cancelled' && new Date(inv.due_date) < now
         ).length;
 
-        const overdueBills = (bills || []).filter(bill =>
+        const overdueBills = bills.filter((bill: any) =>
           bill.status !== 'paid' && bill.status !== 'void' &&
           new Date(bill.due_date) < now
         ).length;

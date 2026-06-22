@@ -3,7 +3,7 @@
 // Breco Safaris Ltd Financial System
 // =====================================================
 
-import { supabase } from '@/lib/supabase/client';
+import { sql } from '@/lib/db';
 import { createJournalEntry, postJournalEntry } from './general-ledger';
 import type { Invoice, InvoiceWithLines } from '@/types/database';
 import Decimal from 'decimal.js';
@@ -21,9 +21,9 @@ interface PostInvoiceResult {
  * Generates the next invoice number
  */
 export async function generateInvoiceNumber(): Promise<string> {
-  const { data, error } = await supabase.rpc('generate_invoice_number');
-  if (error) throw new Error(`Failed to generate invoice number: ${error.message}`);
-  return data;
+  const rows = await sql`SELECT generate_invoice_number() AS num`;
+  if (!rows[0]?.num) throw new Error('Failed to generate invoice number');
+  return rows[0].num;
 }
 
 /**
@@ -110,71 +110,58 @@ export async function createInvoice(
   const totals = calculateInvoiceTotals(input.lines, taxRate);
 
   // Get default AR account
-  const { data: arAccount } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('code', DEFAULT_AR_ACCOUNT_CODE)
-    .single();
+  const arRows = await sql`SELECT id FROM accounts WHERE code = ${DEFAULT_AR_ACCOUNT_CODE} LIMIT 1`;
+  const arAccountId = arRows[0]?.id || null;
 
   // Create invoice
-  const { data: invoice, error: invoiceError } = await supabase
-    .from('invoices')
-    .insert({
-      invoice_number: invoiceNumber,
-      customer_id: input.customer_id,
-      invoice_date: input.invoice_date,
-      due_date: input.due_date,
-      payment_terms: input.payment_terms || 30,
-      po_number: input.po_number,
-      notes: input.notes,
-      subtotal: totals.subtotal.toNumber(),
-      tax_amount: totals.taxAmount.toNumber(),
-      discount_amount: totals.discountAmount.toNumber(),
-      total: totals.total.toNumber(),
-      amount_paid: 0,
-      status: 'draft',
-      ar_account_id: arAccount?.id,
-      created_by: userId,
-    })
-    .select()
-    .single();
-
-  if (invoiceError) throw new Error(`Failed to create invoice: ${invoiceError.message}`);
+  const invoiceRows = await sql`
+    INSERT INTO invoices (
+      invoice_number, customer_id, invoice_date, due_date, payment_terms,
+      po_number, notes, subtotal, tax_amount, discount_amount, total,
+      amount_paid, status, ar_account_id, created_by
+    ) VALUES (
+      ${invoiceNumber}, ${input.customer_id}, ${input.invoice_date}, ${input.due_date},
+      ${input.payment_terms || 30}, ${input.po_number ?? null}, ${input.notes ?? null},
+      ${totals.subtotal.toNumber()}, ${totals.taxAmount.toNumber()},
+      ${totals.discountAmount.toNumber()}, ${totals.total.toNumber()},
+      0, 'draft', ${arAccountId}, ${userId}
+    )
+    RETURNING *
+  `;
+  const invoice = invoiceRows[0];
+  if (!invoice) throw new Error('Failed to create invoice');
 
   // Create invoice lines
-  const invoiceLines = input.lines.map((line, index) => {
+  const lines: any[] = [];
+  for (let index = 0; index < input.lines.length; index++) {
+    const line = input.lines[index];
     const lineTotals = totals.lineTotals[index];
-    return {
-      invoice_id: invoice.id,
-      line_number: index + 1,
-      product_id: line.product_id,
-      description: line.description,
-      quantity: line.quantity,
-      unit_price: line.unit_price,
-      discount_percent: line.discount_percent || 0,
-      discount_amount: lineTotals.discountAmount.toNumber(),
-      tax_rate: line.tax_rate !== undefined ? line.tax_rate : taxRate,
-      tax_amount: lineTotals.taxAmount.toNumber(),
-      line_total: lineTotals.lineTotal.toNumber(),
-      revenue_account_id: line.revenue_account_id,
-    };
-  });
-
-  const { data: lines, error: linesError } = await supabase
-    .from('invoice_lines')
-    .insert(invoiceLines)
-    .select();
-
-  if (linesError) throw new Error(`Failed to create invoice lines: ${linesError.message}`);
+    const lineRows = await sql`
+      INSERT INTO invoice_lines (
+        invoice_id, line_number, product_id, description, quantity,
+        unit_price, discount_percent, discount_amount, tax_rate, tax_amount,
+        line_total, revenue_account_id
+      ) VALUES (
+        ${invoice.id}, ${index + 1}, ${line.product_id ?? null}, ${line.description},
+        ${line.quantity}, ${line.unit_price}, ${line.discount_percent || 0},
+        ${lineTotals.discountAmount.toNumber()},
+        ${line.tax_rate !== undefined ? line.tax_rate : taxRate},
+        ${lineTotals.taxAmount.toNumber()}, ${lineTotals.lineTotal.toNumber()},
+        ${line.revenue_account_id ?? null}
+      )
+      RETURNING *
+    `;
+    lines.push(lineRows[0]);
+  }
 
   // Log activity
-  await supabase.from('activity_logs').insert({
-    user_id: userId,
-    action: 'create',
-    entity_type: 'invoice',
-    entity_id: invoice.id,
-    new_values: { invoice_number: invoiceNumber, total: totals.total.toNumber() },
-  });
+  await sql`
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    VALUES (
+      ${userId}, 'create', 'invoice', ${invoice.id},
+      ${JSON.stringify({ invoice_number: invoiceNumber, total: totals.total.toNumber() })}
+    )
+  `;
 
   return { ...invoice, lines };
 }
@@ -188,42 +175,32 @@ export async function postInvoice(
   userId: string
 ): Promise<PostInvoiceResult> {
   // Get invoice with lines
-  const { data: invoice, error: fetchError } = await supabase
-    .from('invoices')
-    .select('*, invoice_lines(*)')
-    .eq('id', invoiceId)
-    .single();
-
-  if (fetchError) throw new Error(`Invoice not found: ${fetchError.message}`);
+  const invoiceRows = await sql`
+    SELECT i.*, json_agg(il.*) AS invoice_lines
+    FROM invoices i
+    LEFT JOIN invoice_lines il ON il.invoice_id = i.id
+    WHERE i.id = ${invoiceId}
+    GROUP BY i.id
+  `;
+  const invoice = invoiceRows[0];
+  if (!invoice) throw new Error('Invoice not found');
   if (invoice.status !== 'draft') {
     throw new Error(`Cannot post invoice with status: ${invoice.status}`);
   }
 
   // Get customer for journal entry description
-  const { data: customer } = await supabase
-    .from('customers')
-    .select('name')
-    .eq('id', invoice.customer_id)
-    .single();
+  const customerRows = await sql`SELECT name FROM customers WHERE id = ${invoice.customer_id} LIMIT 1`;
+  const customer = customerRows[0];
 
   // Get account IDs
-  const { data: arAccount } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('code', DEFAULT_AR_ACCOUNT_CODE)
-    .single();
+  const arRows = await sql`SELECT id FROM accounts WHERE code = ${DEFAULT_AR_ACCOUNT_CODE} LIMIT 1`;
+  const arAccount = arRows[0];
 
-  const { data: taxAccount } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('code', DEFAULT_SALES_TAX_ACCOUNT_CODE)
-    .single();
+  const taxRows = await sql`SELECT id FROM accounts WHERE code = ${DEFAULT_SALES_TAX_ACCOUNT_CODE} LIMIT 1`;
+  const taxAccount = taxRows[0];
 
-  const { data: defaultRevenueAccount } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('code', DEFAULT_REVENUE_ACCOUNT_CODE)
-    .single();
+  const revRows = await sql`SELECT id FROM accounts WHERE code = ${DEFAULT_REVENUE_ACCOUNT_CODE} LIMIT 1`;
+  const defaultRevenueAccount = revRows[0];
 
   // Build journal entry lines
   const journalLines: {
@@ -244,8 +221,9 @@ export async function postInvoice(
   });
 
   // Credit Revenue for each line (grouped by account)
+  const invoiceLines = invoice.invoice_lines || [];
   const revenueByAccount = new Map<string, number>();
-  for (const line of invoice.invoice_lines) {
+  for (const line of invoiceLines) {
     const accountId = line.revenue_account_id || defaultRevenueAccount!.id;
     const current = revenueByAccount.get(accountId) || 0;
     revenueByAccount.set(accountId, current + line.line_total);
@@ -287,57 +265,48 @@ export async function postInvoice(
   await postJournalEntry(journalEntry.id, userId);
 
   // Update invoice status
-  const { data: updatedInvoice, error: updateError } = await supabase
-    .from('invoices')
-    .update({
-      status: 'sent',
-      journal_entry_id: journalEntry.id,
-    })
-    .eq('id', invoiceId)
-    .select()
-    .single();
-
-  if (updateError) throw new Error(`Failed to update invoice: ${updateError.message}`);
+  const updatedRows = await sql`
+    UPDATE invoices
+    SET status = 'sent', journal_entry_id = ${journalEntry.id}
+    WHERE id = ${invoiceId}
+    RETURNING *
+  `;
+  const updatedInvoice = updatedRows[0];
+  if (!updatedInvoice) throw new Error('Failed to update invoice');
 
   // Update inventory if products are inventory items
-  for (const line of invoice.invoice_lines) {
+  for (const line of invoiceLines) {
     if (line.product_id) {
-      const { data: product } = await supabase
-        .from('products')
-        .select('track_inventory, quantity_on_hand')
-        .eq('id', line.product_id)
-        .single();
+      const productRows = await sql`
+        SELECT track_inventory, quantity_on_hand FROM products WHERE id = ${line.product_id} LIMIT 1
+      `;
+      const product = productRows[0];
 
       if (product?.track_inventory) {
         // Reduce inventory
-        await supabase
-          .from('products')
-          .update({
-            quantity_on_hand: product.quantity_on_hand - line.quantity,
-          })
-          .eq('id', line.product_id);
+        await sql`
+          UPDATE products
+          SET quantity_on_hand = ${product.quantity_on_hand - line.quantity}
+          WHERE id = ${line.product_id}
+        `;
 
         // Record movement
-        await supabase.from('inventory_movements').insert({
-          product_id: line.product_id,
-          movement_type: 'sale',
-          quantity: -line.quantity,
-          reference_type: 'invoice',
-          reference_id: invoiceId,
-          created_by: userId,
-        });
+        await sql`
+          INSERT INTO inventory_movements (product_id, movement_type, quantity, reference_type, reference_id, created_by)
+          VALUES (${line.product_id}, 'sale', ${-line.quantity}, 'invoice', ${invoiceId}, ${userId})
+        `;
       }
     }
   }
 
   // Log activity
-  await supabase.from('activity_logs').insert({
-    user_id: userId,
-    action: 'post',
-    entity_type: 'invoice',
-    entity_id: invoiceId,
-    new_values: { status: 'sent', journal_entry_id: journalEntry.id },
-  });
+  await sql`
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    VALUES (
+      ${userId}, 'post', 'invoice', ${invoiceId},
+      ${JSON.stringify({ status: 'sent', journal_entry_id: journalEntry.id })}
+    )
+  `;
 
   return { invoice: updatedInvoice, journalEntryId: journalEntry.id };
 }
@@ -371,14 +340,12 @@ export async function recordPaymentReceived(
   }
 
   // Generate payment number
-  const { data: paymentNumber } = await supabase.rpc('generate_payment_number');
+  const numRows = await sql`SELECT generate_payment_number() AS num`;
+  const paymentNumber = numRows[0]?.num;
 
   // Get AR account
-  const { data: arAccount } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('code', DEFAULT_AR_ACCOUNT_CODE)
-    .single();
+  const arRows = await sql`SELECT id FROM accounts WHERE code = ${DEFAULT_AR_ACCOUNT_CODE} LIMIT 1`;
+  const arAccount = arRows[0];
 
   // Create journal entry: DR Cash/Bank, CR AR
   const journalEntry = await createJournalEntry(
@@ -409,61 +376,51 @@ export async function recordPaymentReceived(
   await postJournalEntry(journalEntry.id, userId);
 
   // Create payment record
-  const { data: payment, error: paymentError } = await supabase
-    .from('payments_received')
-    .insert({
-      payment_number: paymentNumber,
-      customer_id: input.customer_id,
-      payment_date: input.payment_date,
-      amount: input.amount,
-      payment_method: input.payment_method,
-      reference_number: input.reference_number,
-      deposit_to_account_id: input.deposit_to_account_id,
-      journal_entry_id: journalEntry.id,
-      notes: input.notes,
-      created_by: userId,
-    })
-    .select()
-    .single();
-
-  if (paymentError) throw new Error(`Failed to create payment: ${paymentError.message}`);
+  const paymentRows = await sql`
+    INSERT INTO payments_received (
+      payment_number, customer_id, payment_date, amount, payment_method,
+      reference_number, deposit_to_account_id, journal_entry_id, notes, created_by
+    ) VALUES (
+      ${paymentNumber}, ${input.customer_id}, ${input.payment_date}, ${input.amount},
+      ${input.payment_method}, ${input.reference_number ?? null}, ${input.deposit_to_account_id},
+      ${journalEntry.id}, ${input.notes ?? null}, ${userId}
+    )
+    RETURNING *
+  `;
+  const payment = paymentRows[0];
+  if (!payment) throw new Error('Failed to create payment');
 
   // Create payment applications and update invoices
   for (const app of input.applications) {
-    await supabase.from('payment_applications').insert({
-      payment_id: payment.id,
-      invoice_id: app.invoice_id,
-      amount_applied: app.amount_applied,
-    });
+    await sql`
+      INSERT INTO payment_applications (payment_id, invoice_id, amount_applied)
+      VALUES (${payment.id}, ${app.invoice_id}, ${app.amount_applied})
+    `;
 
     // Update invoice amount_paid and status
-    const { data: invoice } = await supabase
-      .from('invoices')
-      .select('amount_paid, total')
-      .eq('id', app.invoice_id)
-      .single();
+    const invoiceRows = await sql`
+      SELECT amount_paid, total FROM invoices WHERE id = ${app.invoice_id} LIMIT 1
+    `;
+    const invoice = invoiceRows[0];
 
     const newAmountPaid = (invoice?.amount_paid || 0) + app.amount_applied;
     const newStatus =
       newAmountPaid >= (invoice?.total || 0) ? 'paid' : 'partial';
 
-    await supabase
-      .from('invoices')
-      .update({
-        amount_paid: newAmountPaid,
-        status: newStatus,
-      })
-      .eq('id', app.invoice_id);
+    await sql`
+      UPDATE invoices SET amount_paid = ${newAmountPaid}, status = ${newStatus}
+      WHERE id = ${app.invoice_id}
+    `;
   }
 
   // Log activity
-  await supabase.from('activity_logs').insert({
-    user_id: userId,
-    action: 'create',
-    entity_type: 'payment_received',
-    entity_id: payment.id,
-    new_values: { payment_number: paymentNumber, amount: input.amount },
-  });
+  await sql`
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    VALUES (
+      ${userId}, 'create', 'payment_received', ${payment.id},
+      ${JSON.stringify({ payment_number: paymentNumber, amount: input.amount })}
+    )
+  `;
 
   return { paymentId: payment.id, journalEntryId: journalEntry.id };
 }
@@ -474,14 +431,13 @@ export async function recordPaymentReceived(
 export async function updateOverdueInvoices(): Promise<number> {
   const today = new Date().toISOString().split('T')[0];
 
-  const { data: overdueInvoices, error } = await supabase
-    .from('invoices')
-    .update({ status: 'overdue' })
-    .in('status', ['sent', 'partial'])
-    .lt('due_date', today)
-    .select('id');
+  const rows = await sql`
+    UPDATE invoices
+    SET status = 'overdue'
+    WHERE status IN ('sent', 'partial')
+      AND due_date < ${today}
+    RETURNING id
+  `;
 
-  if (error) throw new Error(`Failed to update overdue invoices: ${error.message}`);
-
-  return overdueInvoices?.length || 0;
+  return rows.length;
 }

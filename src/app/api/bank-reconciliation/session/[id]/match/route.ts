@@ -1,14 +1,14 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/bank-reconciliation/session/[id]/match - Match/unmatch transaction
 export async function POST(request: NextRequest, context: any) {
   const { params } = context || {};
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -22,15 +22,15 @@ export async function POST(request: NextRequest, context: any) {
     }
 
     // Get reconciliation
-    const { data: reconciliation, error: reconError } = await supabase
-      .from('bank_reconciliations')
-      .select('status, bank_account_id')
-      .eq('id', params.id)
-      .single();
+    const reconRows = await sql`
+      SELECT status, bank_account_id FROM bank_reconciliations WHERE id = ${params.id}
+    `;
 
-    if (reconError || !reconciliation) {
+    if (reconRows.length === 0) {
       return NextResponse.json({ error: 'Reconciliation not found' }, { status: 404 });
     }
+
+    const reconciliation = reconRows[0];
 
     if (reconciliation.status !== 'in_progress') {
       return NextResponse.json(
@@ -40,15 +40,15 @@ export async function POST(request: NextRequest, context: any) {
     }
 
     // Verify transaction belongs to the bank account
-    const { data: transaction } = await supabase
-      .from('bank_transactions')
-      .select('bank_account_id, is_reconciled')
-      .eq('id', body.transaction_id)
-      .single();
+    const txRows = await sql`
+      SELECT bank_account_id, is_reconciled FROM bank_transactions WHERE id = ${body.transaction_id}
+    `;
 
-    if (!transaction) {
+    if (txRows.length === 0) {
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
     }
+
+    const transaction = txRows[0];
 
     if (transaction.bank_account_id !== reconciliation.bank_account_id) {
       return NextResponse.json(
@@ -64,24 +64,23 @@ export async function POST(request: NextRequest, context: any) {
       );
     }
 
-    // Check if match action
-    const action = body.action || 'match'; // match or unmatch
+    const action = body.action || 'match';
 
     if (action === 'match') {
-      // Add to reconciliation items
-      const { data, error } = await supabase
-        .from('bank_reconciliation_items')
-        .insert({
-          reconciliation_id: params.id,
-          transaction_id: body.transaction_id,
-          cleared_date: body.cleared_date || new Date().toISOString().split('T')[0],
-          matched_by: user.id,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        if (error.code === '23505') { // Unique constraint violation
+      try {
+        const rows = await sql`
+          INSERT INTO bank_reconciliation_items (reconciliation_id, transaction_id, cleared_date, matched_by)
+          VALUES (
+            ${params.id},
+            ${body.transaction_id},
+            ${body.cleared_date || new Date().toISOString().split('T')[0]},
+            ${user.id}
+          )
+          RETURNING *
+        `;
+        return NextResponse.json({ data: rows[0], message: 'Transaction matched successfully' });
+      } catch (error: any) {
+        if (error.message && error.message.includes('unique') || error.code === '23505') {
           return NextResponse.json(
             { error: 'Transaction is already matched in this reconciliation' },
             { status: 400 }
@@ -89,20 +88,11 @@ export async function POST(request: NextRequest, context: any) {
         }
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
-
-      return NextResponse.json({ data, message: 'Transaction matched successfully' });
     } else if (action === 'unmatch') {
-      // Remove from reconciliation items
-      const { error } = await supabase
-        .from('bank_reconciliation_items')
-        .delete()
-        .eq('reconciliation_id', params.id)
-        .eq('transaction_id', body.transaction_id);
-
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 400 });
-      }
-
+      await sql`
+        DELETE FROM bank_reconciliation_items
+        WHERE reconciliation_id = ${params.id} AND transaction_id = ${body.transaction_id}
+      `;
       return NextResponse.json({ message: 'Transaction unmatched successfully' });
     } else {
       return NextResponse.json(

@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import toast from 'react-hot-toast';
 import {
@@ -35,16 +34,10 @@ export default function ReceiptDetailPage() {
 
   const fetchReceipt = async () => {
     try {
-      const { data: receiptData, error: receiptError } = await supabase
-        .from('invoices')
-        .select('*')
-        .eq('id', params.id)
-        .eq('document_type', 'receipt')
-        .single();
+      const res = await fetch(`/api/receipts/${params.id}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to fetch receipt');
+      const receiptData = await res.json();
 
-      if (receiptError) throw receiptError;
-      
-      // Ensure numeric fields are properly parsed
       const parsedReceipt = {
         ...receiptData,
         subtotal: Number(receiptData.subtotal) || 0,
@@ -54,39 +47,15 @@ export default function ReceiptDetailPage() {
         amount_paid: Number(receiptData.amount_paid) || 0,
         balance_due: Number(receiptData.balance_due) || 0,
       };
-      
+
       setReceipt(parsedReceipt);
+      setCustomer(receiptData.customer || null);
+      setLineItems(receiptData.line_items || []);
 
-      // Fetch customer
-      const { data: customerData } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('id', receiptData.customer_id)
-        .single();
-      setCustomer(customerData);
-
-      // Fetch line items
-      const { data: itemsData } = await supabase
-        .from('invoice_lines')
-        .select('*')
-        .eq('invoice_id', params.id)
-        .order('line_number');
-      setLineItems(itemsData || []);
-
-      // Fetch related invoice ID if reference exists
-      const refNumber = (receiptData as any).reference_invoice_number;
+      const refNumber = receiptData.reference_invoice_number;
       if (refNumber) {
-        const { data: invoiceData } = await supabase
-          .from('invoices')
-          .select('id')
-          .eq('invoice_number', refNumber)
-          .eq('document_type', 'invoice')
-          .single();
-        if (invoiceData) {
-          setRelatedInvoiceId(invoiceData.id);
-        }
+        setRelatedInvoiceId(receiptData.related_invoice_id || null);
       }
-
     } catch (error) {
       console.error('Error fetching receipt:', error);
       toast.error('Failed to load receipt');
@@ -464,12 +433,8 @@ export default function ReceiptDetailPage() {
     if (!confirm('Are you sure you want to delete this receipt?')) return;
 
     try {
-      const { error } = await supabase
-        .from('invoices')
-        .delete()
-        .eq('id', params.id);
-
-      if (error) throw error;
+      const res = await fetch(`/api/receipts/${params.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete receipt');
 
       toast.success('Receipt deleted successfully');
       router.push('/dashboard/receipts');

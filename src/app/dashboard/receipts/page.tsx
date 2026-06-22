@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import type { Invoice, Customer } from '@/types/database';
@@ -24,32 +23,9 @@ export default function ReceiptsPage() {
 
   const loadReceipts = async () => {
     try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*, customers(*)')
-        .eq('document_type', 'receipt')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      
-      // Fetch related invoice IDs for receipts that have reference numbers
-      const receiptsWithInvoiceIds = await Promise.all(
-        (data || []).map(async (receipt) => {
-          const refNumber = (receipt as any).reference_invoice_number;
-          if (refNumber) {
-            const { data: invoiceData } = await supabase
-              .from('invoices')
-              .select('id')
-              .eq('invoice_number', refNumber)
-              .eq('document_type', 'invoice')
-              .single();
-            return { ...receipt, related_invoice_id: invoiceData?.id };
-          }
-          return receipt;
-        })
-      );
-      
-      setReceipts(receiptsWithInvoiceIds || []);
+      const res = await fetch('/api/receipts', { cache: 'no-store' });
+      const data = await res.json();
+      setReceipts(data.data || []);
     } catch (error) {
       console.error('Failed to load receipts:', error);
     } finally {

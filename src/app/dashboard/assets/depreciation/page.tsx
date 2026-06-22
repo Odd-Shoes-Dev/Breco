@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import {
   ArrowLeftIcon,
@@ -38,14 +38,9 @@ export default function DepreciationPage() {
   const loadAssets = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('fixed_assets')
-        .select('*')
-        .eq('status', 'active')
-        .order('name');
-
-      if (error) throw error;
-      setAssets(data || []);
+      const res = await fetch('/api/assets?status=active');
+      const result = await res.json();
+      setAssets(result.data || result || []);
     } catch (error) {
       console.error('Failed to load assets:', error);
     } finally {
@@ -70,33 +65,15 @@ export default function DepreciationPage() {
     setSuccess(false);
 
     try {
-      const depreciationDate = `${selectedMonth}-01`;
-      
-      for (const asset of assets) {
-        const monthlyDepreciation = calculateMonthlyDepreciation(asset);
-        
-        if (monthlyDepreciation > 0) {
-          // Update accumulated depreciation
-          const newAccumulatedDepreciation = asset.accumulated_depreciation + monthlyDepreciation;
-          
-          await supabase
-            .from('fixed_assets')
-            .update({
-              accumulated_depreciation: newAccumulatedDepreciation,
-            })
-            .eq('id', asset.id);
-
-          // Create depreciation entry
-          await supabase
-            .from('depreciation_entries')
-            .insert({
-              asset_id: asset.id,
-              depreciation_date: depreciationDate,
-              amount: monthlyDepreciation,
-            });
-        }
+      const res = await fetch('/api/depreciation/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period: selectedMonth }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to run depreciation');
       }
-
       setSuccess(true);
       await loadAssets(); // Reload to show updated values
     } catch (error) {

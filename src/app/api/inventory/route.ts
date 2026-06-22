@@ -1,12 +1,11 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/inventory - List inventory items
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-    
+
     const search = searchParams.get('search');
     const lowStock = searchParams.get('low_stock');
     const category = searchParams.get('category');
@@ -14,34 +13,31 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
 
-    let query = supabase
-      .from('products')
-      .select('*', { count: 'exact' })
-      .order('name');
-
-    if (search) {
-      query = query.or(`name.ilike.%${search}%,sku.ilike.%${search}%,description.ilike.%${search}%`);
-    }
-
-    if (category) {
-      query = query.eq('category_id', category);
-    }
-
-    // Apply pagination unless we need to post-filter for low stock
-    if (lowStock !== 'true') {
-      query = query.range(offset, offset + limit - 1);
-    }
-
-    const { data, count, error } = await query;
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    // When filtering by low stock, compare columns in JS because PostgREST
-    // lacks a simple column-to-column comparator.
+    // When filtering for low stock we need all rows first, then filter in JS
     if (lowStock === 'true') {
-      const filtered = (data || []).filter(
+      let allRows: any[];
+      if (search && category) {
+        const q = `%${search}%`;
+        allRows = await sql`
+          SELECT * FROM products
+          WHERE (name ILIKE ${q} OR sku ILIKE ${q} OR description ILIKE ${q})
+            AND category_id = ${category}
+          ORDER BY name
+        `;
+      } else if (search) {
+        const q = `%${search}%`;
+        allRows = await sql`
+          SELECT * FROM products
+          WHERE name ILIKE ${q} OR sku ILIKE ${q} OR description ILIKE ${q}
+          ORDER BY name
+        `;
+      } else if (category) {
+        allRows = await sql`SELECT * FROM products WHERE category_id = ${category} ORDER BY name`;
+      } else {
+        allRows = await sql`SELECT * FROM products ORDER BY name`;
+      }
+
+      const filtered = allRows.filter(
         (item: any) => (item?.quantity_on_hand ?? 0) <= (item?.reorder_point ?? 0)
       );
       const paged = filtered.slice(offset, offset + limit);
@@ -57,13 +53,54 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    let rows: any[];
+    let countRows: any[];
+
+    if (search && category) {
+      const q = `%${search}%`;
+      rows = await sql`
+        SELECT * FROM products
+        WHERE (name ILIKE ${q} OR sku ILIKE ${q} OR description ILIKE ${q})
+          AND category_id = ${category}
+        ORDER BY name
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`
+        SELECT COUNT(*) FROM products
+        WHERE (name ILIKE ${q} OR sku ILIKE ${q} OR description ILIKE ${q})
+          AND category_id = ${category}
+      `;
+    } else if (search) {
+      const q = `%${search}%`;
+      rows = await sql`
+        SELECT * FROM products
+        WHERE name ILIKE ${q} OR sku ILIKE ${q} OR description ILIKE ${q}
+        ORDER BY name
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`
+        SELECT COUNT(*) FROM products
+        WHERE name ILIKE ${q} OR sku ILIKE ${q} OR description ILIKE ${q}
+      `;
+    } else if (category) {
+      rows = await sql`
+        SELECT * FROM products WHERE category_id = ${category} ORDER BY name LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) FROM products WHERE category_id = ${category}`;
+    } else {
+      rows = await sql`SELECT * FROM products ORDER BY name LIMIT ${limit} OFFSET ${offset}`;
+      countRows = await sql`SELECT COUNT(*) FROM products`;
+    }
+
+    const count = parseInt(countRows[0].count);
+
     return NextResponse.json({
-      data,
+      data: rows,
       pagination: {
         page,
         limit,
         total: count,
-        totalPages: Math.ceil((count || 0) / limit),
+        totalPages: Math.ceil(count / limit),
       },
     });
   } catch (error: any) {
@@ -74,7 +111,6 @@ export async function GET(request: NextRequest) {
 // POST /api/inventory - Create inventory item
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
     if (!body.name || !body.sku) {
@@ -85,13 +121,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check SKU uniqueness
-    const { data: existing } = await supabase
-      .from('products')
-      .select('id')
-      .eq('sku', body.sku)
-      .single();
-
-    if (existing) {
+    const existing = await sql`SELECT id FROM products WHERE sku = ${body.sku}`;
+    if (existing.length > 0) {
       return NextResponse.json(
         { error: 'An item with this SKU already exists' },
         { status: 400 }
@@ -99,49 +130,32 @@ export async function POST(request: NextRequest) {
     }
 
     // Get inventory asset account
-    const { data: inventoryAccount } = await supabase
-      .from('accounts')
-      .select('id')
-      .eq('code', '1300')
-      .single();
+    const inventoryAccountRows = await sql`SELECT id FROM accounts WHERE code = '1300'`;
+    const inventoryAccountId = inventoryAccountRows[0]?.id || null;
 
     // Get COGS account
-    const { data: cogsAccount } = await supabase
-      .from('accounts')
-      .select('id')
-      .eq('code', '5100')
-      .single();
+    const cogsAccountRows = await sql`SELECT id FROM accounts WHERE code = '5100'`;
+    const cogsAccountId = cogsAccountRows[0]?.id || null;
 
-    const { data, error } = await supabase
-      .from('products')
-      .insert({
-        sku: body.sku,
-        name: body.name,
-        description: body.description || null,
-        category_id: body.category_id || null,
-        product_type: 'inventory',
-        unit_of_measure: body.unit_of_measure || 'each',
-        cost_price: body.unit_cost || 0,
-        unit_price: body.unit_price || 0,
-        currency: body.currency || 'USD',
-        quantity_on_hand: body.quantity_on_hand || 0,
-        quantity_reserved: 0,
-        reorder_point: body.reorder_point || 0,
-        reorder_quantity: body.reorder_quantity || 0,
-        inventory_account_id: inventoryAccount?.id,
-        cogs_account_id: cogsAccount?.id,
-        revenue_account_id: null,
-        is_active: body.is_active !== false,
-        track_inventory: body.track_inventory !== false,
-        is_taxable: body.is_taxable !== false,
-        tax_rate: body.tax_rate || null,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const rows = await sql`
+      INSERT INTO products (
+        sku, name, description, category_id, product_type, unit_of_measure,
+        cost_price, unit_price, currency, quantity_on_hand, quantity_reserved,
+        reorder_point, reorder_quantity, inventory_account_id, cogs_account_id,
+        revenue_account_id, is_active, track_inventory, is_taxable, tax_rate
+      ) VALUES (
+        ${body.sku}, ${body.name}, ${body.description || null}, ${body.category_id || null},
+        'inventory', ${body.unit_of_measure || 'each'},
+        ${body.unit_cost || 0}, ${body.unit_price || 0}, ${body.currency || 'USD'},
+        ${body.quantity_on_hand || 0}, 0,
+        ${body.reorder_point || 0}, ${body.reorder_quantity || 0},
+        ${inventoryAccountId}, ${cogsAccountId}, NULL,
+        ${body.is_active !== false}, ${body.track_inventory !== false},
+        ${body.is_taxable !== false}, ${body.tax_rate || null}
+      )
+      RETURNING *
+    `;
+    const data = rows[0];
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error: any) {

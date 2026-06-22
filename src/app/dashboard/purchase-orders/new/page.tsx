@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import toast from 'react-hot-toast';
 import {
@@ -73,13 +73,8 @@ export default function NewPurchaseOrderPage() {
 
   const loadVendors = async () => {
     try {
-      const { data, error } = await supabase
-        .from('vendors')
-        .select('id, name, company_name, email')
-        .eq('is_active', true)
-        .order('name');
-
-      if (error) throw error;
+      const res = await fetch('/api/vendors');
+      const data = await res.json();
       setVendors(data || []);
     } catch (error) {
       console.error('Failed to load vendors:', error);
@@ -89,15 +84,9 @@ export default function NewPurchaseOrderPage() {
 
   const loadProducts = async () => {
     try {
-      const { data, error} = await supabase
-        .from('products')
-        .select('id, name, sku, cost_price, unit_of_measure')
-        .eq('is_active', true)
-        .order('name')
-        .limit(100);
-
-      if (error) throw error;
-      setProducts(data || []);
+      const res = await fetch('/api/inventory?limit=100');
+      const result = await res.json();
+      setProducts(result.data || result || []);
     } catch (error) {
       console.error('Failed to load products:', error);
     }

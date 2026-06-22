@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -42,37 +42,13 @@ export default function GoodsReceiptsPage() {
   const loadReceipts = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('goods_receipts')
-        .select(`
-          *,
-          purchase_orders (
-            po_number,
-            vendors (
-              name,
-              company_name
-            )
-          )
-        `, { count: 'exact' })
-        .order('received_date', { ascending: false });
-
-      if (searchQuery) {
-        query = query.ilike('receipt_number', `%${searchQuery}%`);
-      }
-
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
-
-      const from = (currentPage - 1) * pageSize;
-      const to = from + pageSize - 1;
-      query = query.range(from, to);
-
-      const { data, count, error } = await query;
-      if (error) throw error;
-
-      setReceipts(data || []);
-      setTotalCount(count || 0);
+      const params = new URLSearchParams({ page: String(currentPage), limit: String(pageSize) });
+      if (searchQuery) params.set('search', searchQuery);
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      const res = await fetch(`/api/goods-receipts?${params}`);
+      const result = await res.json();
+      setReceipts(result.data || result || []);
+      setTotalCount(result.total || result.count || 0);
     } catch (error) {
       console.error('Failed to load goods receipts:', error);
     } finally {

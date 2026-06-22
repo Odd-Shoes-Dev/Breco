@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const user = await getSession();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -27,13 +26,15 @@ export async function POST(
     }
 
     // Get assignment details
-    const { data: assignment, error: getError } = await supabase
-      .from('asset_assignments')
-      .select('asset_id, status')
-      .eq('id', assignmentId)
-      .single();
+    const assignments = await sql`
+      SELECT asset_id, status FROM asset_assignments WHERE id = ${assignmentId}
+    `;
 
-    if (getError) throw getError;
+    if (assignments.length === 0) {
+      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+    }
+
+    const assignment = assignments[0];
 
     if (assignment.status === 'returned') {
       return NextResponse.json(
@@ -43,25 +44,18 @@ export async function POST(
     }
 
     // Update assignment
-    const { error: updateError } = await supabase
-      .from('asset_assignments')
-      .update({
-        return_date,
-        condition_at_return: condition_at_return || null,
-        return_notes: return_notes || null,
-        status: 'returned',
-      })
-      .eq('id', assignmentId);
-
-    if (updateError) throw updateError;
+    await sql`
+      UPDATE asset_assignments
+      SET
+        return_date = ${return_date},
+        condition_at_return = ${condition_at_return || null},
+        return_notes = ${return_notes || null},
+        status = 'returned'
+      WHERE id = ${assignmentId}
+    `;
 
     // Update asset status back to active
-    const { error: assetError } = await supabase
-      .from('assets')
-      .update({ status: 'active' })
-      .eq('id', assignment.asset_id);
-
-    if (assetError) throw assetError;
+    await sql`UPDATE assets SET status = 'active' WHERE id = ${assignment.asset_id}`;
 
     return NextResponse.json({
       message: 'Asset returned successfully',

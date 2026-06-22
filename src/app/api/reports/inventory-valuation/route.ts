@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { convertCurrency, SupportedCurrency } from '@/lib/currency';
+import { sql } from '@/lib/db';
 
 interface InventoryItem {
   itemId: string;
@@ -55,58 +54,42 @@ interface InventoryValuationData {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const searchParams = request.nextUrl.searchParams;
     const category = searchParams.get('category') || 'all';
     const location = searchParams.get('location') || 'all';
     const status = searchParams.get('status') || 'all';
     const sortBy = searchParams.get('sortBy') || 'totalValue';
 
+    const today = new Date().toISOString().split('T')[0];
+
     // Fetch inventory items from products table
-    let query = supabase
-      .from('products')
-      .select(`
-        id,
-        sku,
-        name,
-        quantity_on_hand,
-        cost_price,
-        currency,
-        reorder_point,
-        unit_of_measure,
-        product_categories (
-          name
-        )
-      `)
-      .eq('track_inventory', true)
-      .order('id');
-
-    const { data: inventory, error: inventoryError } = await query;
-
-    if (inventoryError) {
-      console.error('Error fetching inventory:', inventoryError);
-      return NextResponse.json({ error: inventoryError.message }, { status: 500 });
-    }
+    const inventory = await sql`
+      SELECT p.id, p.sku, p.name, p.quantity_on_hand, p.cost_price, p.currency,
+             p.reorder_point, p.unit_of_measure,
+             pc.name AS category_name
+      FROM products p
+      LEFT JOIN product_categories pc ON pc.id = p.product_category_id
+      WHERE p.track_inventory = true
+      ORDER BY p.id
+    `;
 
     // Transform inventory data and convert to USD
     let items: InventoryItem[] = [];
-    
-    for (const item of inventory || []) {
+
+    for (const item of inventory) {
       const quantityOnHand = item.quantity_on_hand || 0;
       const unitCost = item.cost_price || 0;
-      
-      // Convert unit cost to USD if needed
-      const unitCostUSD = await convertCurrency(
-        supabase,
-        unitCost,
-        (item.currency || 'USD') as SupportedCurrency,
-        'USD' as SupportedCurrency
-      ) || unitCost;
-      
+
+      let unitCostUSD = unitCost;
+      const itemCurrency = item.currency || 'USD';
+      if (itemCurrency !== 'USD') {
+        const res = await sql`SELECT convert_currency(${unitCost}, ${itemCurrency}, 'USD', ${today}) AS val`;
+        unitCostUSD = res[0]?.val ?? unitCost;
+      }
+
       const totalValue = quantityOnHand * unitCostUSD;
       const reorderLevel = item.reorder_point || 0;
 
-      // Determine status
       let itemStatus: 'In Stock' | 'Low Stock' | 'Out of Stock' = 'In Stock';
       if (quantityOnHand === 0) {
         itemStatus = 'Out of Stock';
@@ -114,13 +97,11 @@ export async function GET(request: NextRequest) {
         itemStatus = 'Low Stock';
       }
 
-      const category: any = Array.isArray(item.product_categories) ? item.product_categories[0] : item.product_categories;
-      
       items.push({
         itemId: item.id,
         itemCode: item.sku || `ITEM-${item.id}`,
         itemName: item.name || 'Unknown Product',
-        category: category?.name || 'Uncategorized',
+        category: item.category_name || 'Uncategorized',
         location: 'Main Warehouse',
         quantityOnHand,
         unitOfMeasure: item.unit_of_measure || 'EA',
@@ -166,7 +147,6 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Calculate summary statistics
     const totalValue = items.reduce((sum, item) => sum + item.totalValue, 0);
     const totalItems = items.length;
     const totalQuantity = items.reduce((sum, item) => sum + item.quantityOnHand, 0);
@@ -174,7 +154,6 @@ export async function GET(request: NextRequest) {
     const lowStockItems = items.filter(item => item.status === 'Low Stock').length;
     const outOfStockItems = items.filter(item => item.status === 'Out of Stock').length;
 
-    // Calculate category breakdown
     const categoryBreakdown: Record<string, { count: number; value: number; percentage: number }> = {};
     items.forEach(item => {
       const cat = item.category || 'Uncategorized';
@@ -185,12 +164,10 @@ export async function GET(request: NextRequest) {
       categoryBreakdown[cat].value += item.totalValue;
     });
 
-    // Calculate percentages
     Object.values(categoryBreakdown).forEach(cat => {
       cat.percentage = totalValue > 0 ? (cat.value / totalValue) * 100 : 0;
     });
 
-    // Calculate location breakdown
     const locationBreakdown: Record<string, { count: number; value: number }> = {};
     items.forEach(item => {
       const loc = item.location || 'Unknown';
@@ -204,9 +181,9 @@ export async function GET(request: NextRequest) {
     const categories = Object.keys(categoryBreakdown).length;
 
     const response: InventoryValuationData = {
-      reportDate: new Date().toISOString().split('T')[0],
+      reportDate: today,
       reportPeriod: {
-        asOfDate: new Date().toISOString().split('T')[0]
+        asOfDate: today
       },
       summary: {
         totalItems,

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import toast from 'react-hot-toast';
 import {
   ArrowLeftIcon,
@@ -69,16 +69,9 @@ function ProductDetailPageClient({ productId }: { productId: string }) {
   const loadProduct = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          *,
-          product_categories (name)
-        `)
-        .eq('id', productId)
-        .single();
-
-      if (error) throw error;
+      const res = await fetch(`/api/inventory/${productId}`);
+      if (!res.ok) throw new Error('Failed to load product');
+      const data = await res.json();
       setProduct(data);
       setFormData(data);
     } catch (error) {
@@ -91,15 +84,9 @@ function ProductDetailPageClient({ productId }: { productId: string }) {
 
   const loadMovements = async () => {
     try {
-      const { data, error } = await supabase
-        .from('inventory_movements')
-        .select('*')
-        .eq('product_id', productId)
-        .order('movement_date', { ascending: false })
-        .limit(50);
-
-      if (error) throw error;
-      setMovements(data || []);
+      const res = await fetch(`/api/inventory-adjustments?product_id=${productId}&limit=50`);
+      const data = await res.json();
+      setMovements(data.data || data || []);
     } catch (error) {
       console.error('Failed to load movements:', error);
     }
@@ -109,20 +96,22 @@ function ProductDetailPageClient({ productId }: { productId: string }) {
     e.preventDefault();
 
     try {
-      const { error } = await supabase
-        .from('products')
-        .update({
+      const res = await fetch(`/api/inventory/${productId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           ...formData,
           unit_price: parseFloat(formData.unit_price) || 0,
           cost: parseFloat(formData.cost) || 0,
           quantity_in_stock: parseFloat(formData.quantity_in_stock) || 0,
           reorder_point: formData.reorder_point ? parseFloat(formData.reorder_point) : null,
           weight: formData.weight ? parseFloat(formData.weight) : null,
-        })
-        .eq('id', productId);
-
-      if (error) throw error;
-
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to update product');
+      }
       toast.success('Product updated successfully');
       setEditing(false);
       loadProduct();
@@ -138,13 +127,11 @@ function ProductDetailPageClient({ productId }: { productId: string }) {
     }
 
     try {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', productId);
-
-      if (error) throw error;
-
+      const res = await fetch(`/api/inventory/${productId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to delete product');
+      }
       toast.success('Product deleted successfully');
       router.push('/dashboard/inventory/products');
     } catch (error: any) {

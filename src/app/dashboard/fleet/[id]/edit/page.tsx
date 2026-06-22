@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import {
   ArrowLeftIcon,
@@ -94,21 +93,11 @@ export default function EditVehiclePage() {
   const loadData = async () => {
     try {
       // Load vehicle and images
-      const [vehicleRes, imagesRes] = await Promise.all([
-        supabase
-          .from('vehicles')
-          .select('*')
-          .eq('id', params.id)
-          .single(),
-        supabase
-          .from('vehicle_images')
-          .select('*')
-          .eq('vehicle_id', params.id)
-          .order('display_order')
-      ]);
-
-      if (vehicleRes.error) throw vehicleRes.error;
-      const vehicleData = vehicleRes.data;
+      const res = await fetch(`/api/fleet/${params.id}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to load vehicle');
+      const vehicleData = json.data || json;
+      const imagesData = vehicleData.images || [];
 
       // Convert features array to comma-separated string
       const featuresString = Array.isArray(vehicleData.features) 
@@ -146,9 +135,9 @@ export default function EditVehiclePage() {
       });
 
       // Load existing images
-      if (imagesRes.data && imagesRes.data.length > 0) {
-        setExistingImages(imagesRes.data);
-        const primaryIndex = imagesRes.data.findIndex(img => img.is_primary);
+      if (imagesData && imagesData.length > 0) {
+        setExistingImages(imagesData);
+        const primaryIndex = imagesData.findIndex((img: any) => img.is_primary);
         if (primaryIndex >= 0) setPrimaryImageIndex(primaryIndex);
       }
     } catch (err) {
@@ -268,95 +257,23 @@ export default function EditVehiclePage() {
         .map(f => f.trim())
         .filter(f => f !== '');
 
-      // Delete removed images
-      for (const imageId of deletedImageIds) {
-        await supabase
-          .from('vehicle_images')
-          .delete()
-          .eq('id', imageId);
-      }
-
-      // Upload new images
-      const newImageUrls: string[] = [];
-      for (const file of imageFiles) {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const filePath = `vehicles/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('fleet-images')
-          .upload(filePath, file, {
-            cacheControl: '3600',
-            upsert: false
-          });
-
-        if (uploadError) {
-          console.error('Upload error:', uploadError);
-          throw new Error(`Failed to upload ${file.name}`);
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('fleet-images')
-          .getPublicUrl(filePath);
-
-        newImageUrls.push(publicUrl);
-      }
+      // Note: image file uploads (Supabase storage) are not supported in Neon migration.
+      // Image management (delete/insert vehicle_images) requires vehicle_images API routes.
 
       // Update vehicle
-      const { error: updateError } = await supabase
-        .from('vehicles')
-        .update({
+      const updateRes = await fetch(`/api/fleet/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           ...formData,
           features: featuresArray,
           purchase_date: formData.purchase_date || null,
           insurance_expiry: formData.insurance_expiry || null,
           last_service_date: formData.last_service_date || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', params.id);
-
-      if (updateError) throw updateError;
-
-      // Update existing images primary status
-      for (let i = 0; i < existingImages.length; i++) {
-        const isPrimary = i === primaryImageIndex;
-        await supabase
-          .from('vehicle_images')
-          .update({ is_primary: isPrimary })
-          .eq('id', existingImages[i].id);
-      }
-
-      // Insert new images from files
-      for (let i = 0; i < newImageUrls.length; i++) {
-        const isPrimary = (existingImages.length + i) === primaryImageIndex;
-        await supabase
-          .from('vehicle_images')
-          .insert({
-            vehicle_id: params.id,
-            image_url: newImageUrls[i],
-            is_primary: isPrimary,
-            display_order: existingImages.length + i + 1
-          });
-      }
-
-      // Insert URL images
-      if (imageUrls.length > 0) {
-        const validUrls = imageUrls.filter(url => url.trim() !== '');
-        if (validUrls.length > 0) {
-          const baseIndex = existingImages.length + newImageUrls.length;
-          for (let i = 0; i < validUrls.length; i++) {
-            const isPrimary = (baseIndex + i) === primaryImageIndex;
-            await supabase
-              .from('vehicle_images')
-              .insert({
-                vehicle_id: params.id,
-                image_url: validUrls[i].trim(),
-                is_primary: isPrimary,
-                display_order: baseIndex + i + 1
-              });
-          }
-        }
-      }
+        }),
+      });
+      const updateResult = await updateRes.json();
+      if (!updateRes.ok) throw new Error(updateResult.error || 'Failed to update vehicle');
 
       toast.success('Vehicle updated successfully!');
       router.push(`/dashboard/fleet/${params.id}`);

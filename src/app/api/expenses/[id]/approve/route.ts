@@ -1,31 +1,23 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/expenses/[id]/approve - Approve expense
 export async function POST(request: NextRequest, context: any) {
   const { params } = context || {};
   try {
-    const supabase = await createClient();
-    const body = await request.json();
-
-    // Get current user
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get expense
-    const { data: expense, error: fetchError } = await supabase
-      .from('expenses')
-      .select('*, created_by')
-      .eq('id', params.id)
-      .single();
+    const expenseRows = await sql`SELECT *, created_by FROM expenses WHERE id = ${params.id}`;
+    const expense = (expenseRows as any[])[0];
 
-    if (fetchError) {
+    if (!expense) {
       return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
     }
 
-    // Check if expense is in pending status
     if (expense.status !== 'pending') {
       return NextResponse.json(
         { error: `Cannot approve expense with status: ${expense.status}` },
@@ -33,27 +25,23 @@ export async function POST(request: NextRequest, context: any) {
       );
     }
 
-    // Update expense to approved
-    const { data: updatedExpense, error: updateError } = await supabase
-      .from('expenses')
-      .update({
-        status: 'approved',
-        approved_by: user.id,
-        approved_at: new Date().toISOString(),
-      })
-      .eq('id', params.id)
-      .select(`
-        *,
-        approved_by_user:user_profiles!expenses_approved_by_fkey(id, full_name, email)
-      `)
-      .single();
+    await sql`
+      UPDATE expenses SET
+        status = 'approved',
+        approved_by = ${user.id},
+        approved_at = ${new Date().toISOString()}
+      WHERE id = ${params.id}
+    `;
 
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
-    }
-
-    // TODO: Send notification to expense creator
-    // await sendExpenseApprovalNotification(expense.created_by, updatedExpense);
+    const dataRows = await sql`
+      SELECT
+        e.*,
+        json_build_object('id', up.id, 'full_name', up.full_name, 'email', up.email) AS approved_by_user
+      FROM expenses e
+      LEFT JOIN user_profiles up ON up.id = e.approved_by
+      WHERE e.id = ${params.id}
+    `;
+    const updatedExpense = (dataRows as any[])[0];
 
     return NextResponse.json({
       data: updatedExpense,

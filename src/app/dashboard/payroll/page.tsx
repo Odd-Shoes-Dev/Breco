@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter, type SupportedCurrency } from '@/lib/currency';
 import { ScaledNumber } from '@/components/ui/scaled-number';
 import type { PayrollPeriod, Payslip, Employee } from '@/types/breco';
@@ -103,16 +102,10 @@ export default function PayrollPage() {
 
   const fetchPayrollPeriods = async () => {
     try {
-      const { data, error } = await supabase
-        .from('payroll_periods')
-        .select(`
-          *,
-          payslips(*, employee:employees(*))
-        `)
-        .order('start_date', { ascending: false });
-
-      if (error) throw error;
-      setPayrollPeriods(data || []);
+      const res = await fetch('/api/payroll/periods');
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to load payroll periods');
+      setPayrollPeriods(result.data || []);
     } catch (error) {
       console.error('Error fetching payroll periods:', error);
       toast.error('Failed to load payroll periods');
@@ -123,14 +116,10 @@ export default function PayrollPage() {
 
   const fetchEmployees = async () => {
     try {
-      const { data, error } = await supabase
-        .from('employees')
-        .select('*')
-        .eq('is_active', true)
-        .order('first_name');
-
-      if (error) throw error;
-      setEmployees(data || []);
+      const res = await fetch('/api/employees');
+      const result = await res.json();
+      if (!res.ok) return;
+      setEmployees(result.data || []);
     } catch (error) {
       console.error('Error fetching employees:', error);
     }
@@ -138,16 +127,17 @@ export default function PayrollPage() {
 
   const handleCreatePeriod = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    try {
-      const { data, error } = await supabase
-        .from('payroll_periods')
-        .insert([formData])
-        .select()
-        .single();
 
-      if (error) throw error;
-      
+    try {
+      const res = await fetch('/api/payroll/periods', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to create payroll period');
+
       toast.success('Payroll period created');
       setShowCreateModal(false);
       setFormData({
@@ -166,168 +156,14 @@ export default function PayrollPage() {
 
   const processPayroll = async (period: PayrollPeriodWithPayslips) => {
     setProcessing(true);
-    
+
     try {
-      // Check if payslips already exist for this period
-      const { data: existingPayslips } = await supabase
-        .from('payslips')
-        .select('id')
-        .eq('payroll_period_id', period.id)
-        .limit(1);
-
-      if (existingPayslips && existingPayslips.length > 0) {
-        toast.error('Payslips already exist for this period');
-        setProcessing(false);
-        setShowProcessModal(false);
-        return;
-      }
-
-      // Update period status to processing
-      await supabase
-        .from('payroll_periods')
-        .update({ status: 'processing' })
-        .eq('id', period.id);
-
-      // Fetch allowances and deductions for all employees
-      const { data: allowancesData } = await supabase
-        .from('employee_allowances')
-        .select('*')
-        .in('employee_id', employees.map(e => e.id))
-        .eq('is_active', true)
-        .lte('effective_from', period.end_date)
-        .or(`effective_to.is.null,effective_to.gte.${period.end_date}`);
-
-      const { data: deductionsData } = await supabase
-        .from('employee_deductions')
-        .select('*')
-        .in('employee_id', employees.map(e => e.id))
-        .eq('is_active', true)
-        .lte('effective_from', period.end_date)
-        .or(`effective_to.is.null,effective_to.gte.${period.end_date}`);
-
-      // Group allowances and deductions by employee
-      const allowancesByEmployee = new Map();
-      const deductionsByEmployee = new Map();
-      
-      allowancesData?.forEach(a => {
-        if (!allowancesByEmployee.has(a.employee_id)) {
-          allowancesByEmployee.set(a.employee_id, []);
-        }
-        allowancesByEmployee.get(a.employee_id).push(a);
+      const res = await fetch(`/api/payroll/periods/${period.id}/generate`, {
+        method: 'POST',
       });
 
-      deductionsData?.forEach(d => {
-        if (!deductionsByEmployee.has(d.employee_id)) {
-          deductionsByEmployee.set(d.employee_id, []);
-        }
-        deductionsByEmployee.get(d.employee_id).push(d);
-      });
-
-      // Generate payslips for all active employees
-      const payslips = employees.map(emp => {
-        const basicSalary = emp.basic_salary || 0;
-        
-        // Calculate total allowances
-        const empAllowances = allowancesByEmployee.get(emp.id) || [];
-        const totalAllowances = empAllowances.reduce((sum: number, a: any) => sum + (a.amount || 0), 0);
-        const taxableAllowances = empAllowances
-          .filter((a: any) => a.is_taxable)
-          .reduce((sum: number, a: any) => sum + (a.amount || 0), 0);
-        
-        // Gross salary = basic + allowances
-        const grossSalary = basicSalary + totalAllowances;
-        
-        // NSSF on basic salary only (Uganda rule)
-        const nssf = calculateNSSF(basicSalary);
-        
-        // PAYE on taxable income (basic + taxable allowances - NSSF employee)
-        const taxableIncome = basicSalary + taxableAllowances - nssf.employee;
-        const paye = calculatePAYE(taxableIncome);
-        
-        // Calculate other deductions
-        const empDeductions = deductionsByEmployee.get(emp.id) || [];
-        const otherDeductions = empDeductions.reduce((sum: number, d: any) => {
-          if (d.is_percentage) {
-            return sum + (grossSalary * (d.amount / 100));
-          }
-          return sum + (d.amount || 0);
-        }, 0);
-        
-        const totalDeductions = nssf.employee + paye + otherDeductions;
-        const netSalary = grossSalary - totalDeductions;
-        
-        return {
-          payroll_period_id: period.id,
-          employee_id: emp.id,
-          payslip_number: `PS-${period.id.substring(0,8)}-${emp.employee_number}`,
-          basic_salary: basicSalary,
-          total_allowances: totalAllowances,
-          gross_salary: grossSalary,
-          nssf_employee: nssf.employee,
-          nssf_employer: nssf.employer,
-          paye: paye,
-          other_deductions: otherDeductions,
-          total_deductions: totalDeductions,
-          net_salary: netSalary,
-        };
-      });
-
-      // Insert payslips
-      const { data: insertedPayslips, error: payslipError } = await supabase
-        .from('payslips')
-        .insert(payslips)
-        .select();
-
-      if (payslipError) throw payslipError;
-
-      // Create payslip line items for detailed breakdown
-      const payslipItems = [];
-      
-      for (const payslip of insertedPayslips || []) {
-        const empAllowances = allowancesByEmployee.get(payslip.employee_id) || [];
-        const empDeductions = deductionsByEmployee.get(payslip.employee_id) || [];
-        
-        // Add allowance items
-        for (const allowance of empAllowances) {
-          payslipItems.push({
-            payslip_id: payslip.id,
-            item_type: 'earning',
-            item_name: allowance.allowance_type,
-            amount: allowance.amount,
-            is_taxable: allowance.is_taxable,
-          });
-        }
-        
-        // Add deduction items
-        for (const deduction of empDeductions) {
-          let amount = deduction.amount;
-          if (deduction.is_percentage) {
-            amount = payslip.gross_salary * (deduction.amount / 100);
-          }
-          payslipItems.push({
-            payslip_id: payslip.id,
-            item_type: 'deduction',
-            item_name: deduction.deduction_type,
-            amount: amount,
-            is_taxable: false,
-          });
-        }
-      }
-
-      // Insert payslip items if any
-      if (payslipItems.length > 0) {
-        await supabase
-          .from('payslip_items')
-          .insert(payslipItems);
-      }
-
-      // Totals will be auto-calculated by trigger
-      await supabase
-        .from('payroll_periods')
-        .update({
-          status: 'draft',
-        })
-        .eq('id', period.id);
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to process payroll');
 
       toast.success('Payroll processed successfully with allowances and deductions');
       setShowProcessModal(false);
@@ -342,35 +178,24 @@ export default function PayrollPage() {
 
   const updatePeriodStatus = async (period: PayrollPeriod, newStatus: PayrollStatus) => {
     try {
-      const updateData: any = { status: newStatus };
+      const response = await fetch(`/api/payroll/periods/${period.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
 
-      // Use API route for paid status to trigger journal entry creation
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update payroll status');
+      }
+
       if (newStatus === 'paid') {
-        const response = await fetch(`/api/payroll/${period.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updateData),
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          throw new Error(result.error || 'Failed to update payroll status');
-        }
-
-        toast.success(`Payroll marked as paid and posted to general ledger`);
+        toast.success('Payroll marked as paid and posted to general ledger');
       } else {
-        // For other statuses, update directly
-        const { error } = await supabase
-          .from('payroll_periods')
-          .update(updateData)
-          .eq('id', period.id);
-
-        if (error) throw error;
-        
         toast.success(`Status updated to ${newStatus}`);
       }
-      
+
       fetchPayrollPeriods();
     } catch (error: any) {
       console.error('Failed to update status:', error);
@@ -558,13 +383,10 @@ export default function PayrollPage() {
     if (!confirm('Are you sure you want to delete this payroll period? This will also delete all associated payslips.')) return;
 
     try {
-      const { error } = await supabase
-        .from('payroll_periods')
-        .delete()
-        .eq('id', id);
+      const res = await fetch(`/api/payroll/periods/${id}`, { method: 'DELETE' });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to delete payroll period');
 
-      if (error) throw error;
-      
       setPayrollPeriods(prev => prev.filter(p => p.id !== id));
       toast.success('Payroll period deleted');
     } catch (error) {

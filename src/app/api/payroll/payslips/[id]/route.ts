@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 
 // GET /api/payroll/payslips/[id] - Get payslip details
@@ -7,27 +8,40 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { id } = await params;
 
-    const { data: payslip, error } = await supabase
-      .from('payroll_payslips')
-      .select(`
-        *,
-        employee:employees(id, employee_id, first_name, last_name, email, department, position),
-        period:payroll_periods(id, period_start, period_end, payment_date, status)
-      `)
-      .eq('id', id)
-      .single();
+    const rows = await sql`
+      SELECT ps.*,
+        json_build_object(
+          'id', e.id,
+          'employee_id', e.employee_id,
+          'first_name', e.first_name,
+          'last_name', e.last_name,
+          'email', e.email,
+          'department', e.department,
+          'position', e.position
+        ) AS employee,
+        json_build_object(
+          'id', pp.id,
+          'period_start', pp.period_start,
+          'period_end', pp.period_end,
+          'payment_date', pp.payment_date,
+          'status', pp.status
+        ) AS period
+      FROM payroll_payslips ps
+      LEFT JOIN employees e ON e.id = ps.employee_id
+      LEFT JOIN payroll_periods pp ON pp.id = ps.payroll_period_id
+      WHERE ps.id = ${id}
+    `;
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 404 });
+    const payslip = rows[0];
+    if (!payslip) {
+      return NextResponse.json({ error: 'Payslip not found' }, { status: 404 });
     }
 
     return NextResponse.json(payslip);
@@ -42,9 +56,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -53,20 +65,19 @@ export async function PATCH(
     const body = await request.json();
 
     // Check payslip exists and period is draft
-    const { data: payslip, error: fetchError } = await supabase
-      .from('payroll_payslips')
-      .select(`
-        *,
-        period:payroll_periods(id, status)
-      `)
-      .eq('id', id)
-      .single();
+    const rows = await sql`
+      SELECT ps.*, pp.status AS period_status
+      FROM payroll_payslips ps
+      LEFT JOIN payroll_periods pp ON pp.id = ps.payroll_period_id
+      WHERE ps.id = ${id}
+    `;
+    const payslip = rows[0];
 
-    if (fetchError) {
+    if (!payslip) {
       return NextResponse.json({ error: 'Payslip not found' }, { status: 404 });
     }
 
-    if ((payslip.period as any)?.status !== 'draft') {
+    if (payslip.period_status !== 'draft') {
       return NextResponse.json(
         { error: 'Can only update payslips for draft periods' },
         { status: 400 }
@@ -75,19 +86,9 @@ export async function PATCH(
 
     // Allow updating specific fields
     const allowedFields = [
-      'basic_salary',
-      'allowances',
-      'housing_allowance',
-      'transport_allowance',
-      'other_allowances',
-      'deductions',
-      'tax_deduction',
-      'nhif_deduction',
-      'nssf_deduction',
-      'loan_deduction',
-      'advance_deduction',
-      'days_worked',
-      'notes',
+      'basic_salary', 'allowances', 'housing_allowance', 'transport_allowance',
+      'other_allowances', 'deductions', 'tax_deduction', 'nhif_deduction',
+      'nssf_deduction', 'loan_deduction', 'advance_deduction', 'days_worked', 'notes',
     ];
 
     const updates: any = {};
@@ -110,19 +111,27 @@ export async function PATCH(
       updates.net_salary = grossSalary - deductions;
     }
 
-    // Update payslip
-    const { data: updatedPayslip, error: updateError } = await supabase
-      .from('payroll_payslips')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
+    // Apply updates for each field
+    for (const [field, value] of Object.entries(updates)) {
+      if (field === 'basic_salary') await sql`UPDATE payroll_payslips SET basic_salary = ${value} WHERE id = ${id}`;
+      else if (field === 'allowances') await sql`UPDATE payroll_payslips SET allowances = ${value} WHERE id = ${id}`;
+      else if (field === 'housing_allowance') await sql`UPDATE payroll_payslips SET housing_allowance = ${value} WHERE id = ${id}`;
+      else if (field === 'transport_allowance') await sql`UPDATE payroll_payslips SET transport_allowance = ${value} WHERE id = ${id}`;
+      else if (field === 'other_allowances') await sql`UPDATE payroll_payslips SET other_allowances = ${value} WHERE id = ${id}`;
+      else if (field === 'gross_salary') await sql`UPDATE payroll_payslips SET gross_salary = ${value} WHERE id = ${id}`;
+      else if (field === 'deductions') await sql`UPDATE payroll_payslips SET deductions = ${value} WHERE id = ${id}`;
+      else if (field === 'tax_deduction') await sql`UPDATE payroll_payslips SET tax_deduction = ${value} WHERE id = ${id}`;
+      else if (field === 'nhif_deduction') await sql`UPDATE payroll_payslips SET nhif_deduction = ${value} WHERE id = ${id}`;
+      else if (field === 'nssf_deduction') await sql`UPDATE payroll_payslips SET nssf_deduction = ${value} WHERE id = ${id}`;
+      else if (field === 'loan_deduction') await sql`UPDATE payroll_payslips SET loan_deduction = ${value} WHERE id = ${id}`;
+      else if (field === 'advance_deduction') await sql`UPDATE payroll_payslips SET advance_deduction = ${value} WHERE id = ${id}`;
+      else if (field === 'net_salary') await sql`UPDATE payroll_payslips SET net_salary = ${value} WHERE id = ${id}`;
+      else if (field === 'days_worked') await sql`UPDATE payroll_payslips SET days_worked = ${value} WHERE id = ${id}`;
+      else if (field === 'notes') await sql`UPDATE payroll_payslips SET notes = ${value} WHERE id = ${id}`;
     }
 
-    return NextResponse.json(updatedPayslip);
+    const updatedRows = await sql`SELECT * FROM payroll_payslips WHERE id = ${id}`;
+    return NextResponse.json(updatedRows[0]);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -134,9 +143,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -144,35 +151,26 @@ export async function DELETE(
     const { id } = await params;
 
     // Check payslip exists and period is draft
-    const { data: payslip, error: fetchError } = await supabase
-      .from('payroll_payslips')
-      .select(`
-        *,
-        period:payroll_periods(id, status)
-      `)
-      .eq('id', id)
-      .single();
+    const rows = await sql`
+      SELECT ps.*, pp.status AS period_status
+      FROM payroll_payslips ps
+      LEFT JOIN payroll_periods pp ON pp.id = ps.payroll_period_id
+      WHERE ps.id = ${id}
+    `;
+    const payslip = rows[0];
 
-    if (fetchError) {
+    if (!payslip) {
       return NextResponse.json({ error: 'Payslip not found' }, { status: 404 });
     }
 
-    if ((payslip.period as any)?.status !== 'draft') {
+    if (payslip.period_status !== 'draft') {
       return NextResponse.json(
         { error: 'Can only delete payslips for draft periods' },
         { status: 400 }
       );
     }
 
-    // Delete payslip
-    const { error: deleteError } = await supabase
-      .from('payroll_payslips')
-      .delete()
-      .eq('id', id);
-
-    if (deleteError) {
-      return NextResponse.json({ error: deleteError.message }, { status: 400 });
-    }
+    await sql`DELETE FROM payroll_payslips WHERE id = ${id}`;
 
     return NextResponse.json({ message: 'Payslip deleted successfully' });
   } catch (error: any) {

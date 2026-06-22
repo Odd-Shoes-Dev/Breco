@@ -1,81 +1,74 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { getCompanySettings } from '@/lib/company-settings';
 
 // GET /api/reports/balance-sheet
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const settings = await getCompanySettings();
     const baseCurrency = settings.base_currency;
 
     const { searchParams } = new URL(request.url);
-
     const asOfDate = searchParams.get('asOfDate') || searchParams.get('as_of_date') || new Date().toISOString().split('T')[0];
 
     // Get all accounts
-    const { data: accounts } = await supabase
-      .from('accounts')
-      .select('id, code, name, account_type, normal_balance')
-      .order('code');
+    const accounts = await sql`
+      SELECT id, code, name, account_type, normal_balance
+      FROM accounts
+      ORDER BY code
+    `;
 
     // Get all posted journal entry lines up to the date
-    const { data: entries, error: entriesError } = await supabase
-      .from('journal_lines')
-      .select(`
-        account_id,
-        debit,
-        credit,
-        journal_entries!inner (entry_date, status)
-      `)
-      .eq('journal_entries.status', 'posted')
-      .lte('journal_entries.entry_date', asOfDate);
-
-    if (entriesError) {
-      console.error('Error fetching journal entries:', entriesError);
-    }
+    const entries = await sql`
+      SELECT jl.account_id, jl.debit, jl.credit
+      FROM journal_lines jl
+      INNER JOIN journal_entries je ON je.id = jl.journal_entry_id
+      WHERE je.status = 'posted'
+        AND je.entry_date <= ${asOfDate}
+    `;
 
     // Calculate balances by account
     const accountBalances: Record<string, number> = {};
-
-    entries?.forEach((entry: any) => {
+    for (const entry of entries) {
       if (!accountBalances[entry.account_id]) {
         accountBalances[entry.account_id] = 0;
       }
       accountBalances[entry.account_id] += (entry.debit || 0) - (entry.credit || 0);
-    });
+    }
 
     // Get fixed assets purchased on or before asOfDate
-    const { data: assets } = await supabase
-      .from('fixed_assets')
-      .select('id, name, purchase_price, accumulated_depreciation, status, purchase_date, currency')
-      .lte('purchase_date', asOfDate)
-      .in('status', ['active', 'fully_depreciated']);
+    const assets = await sql`
+      SELECT id, name, purchase_price, accumulated_depreciation, status, purchase_date, currency
+      FROM fixed_assets
+      WHERE purchase_date <= ${asOfDate}
+        AND status IN ('active', 'fully_depreciated')
+    `;
 
     // Get inventory as of date
-    const { data: inventory } = await supabase
-      .from('products')
-      .select('id, name, quantity_on_hand, cost, currency')
-      .gt('quantity_on_hand', 0);
+    const inventory = await sql`
+      SELECT id, name, quantity_on_hand, cost, currency
+      FROM products
+      WHERE quantity_on_hand > 0
+    `;
 
     // Get bank accounts and their transactions
-    const { data: bankAccounts } = await supabase
-      .from('bank_accounts')
-      .select('id, name, currency, created_at');
+    const bankAccounts = await sql`
+      SELECT id, name, currency, created_at FROM bank_accounts
+    `;
 
     // Get accounts receivable (unpaid invoices)
-    const { data: invoices } = await supabase
-      .from('invoices')
-      .select('id, total, currency, invoice_date')
-      .lte('invoice_date', asOfDate)
-      .neq('status', 'paid');
+    const invoices = await sql`
+      SELECT id, total, currency, invoice_date
+      FROM invoices
+      WHERE invoice_date <= ${asOfDate} AND status != 'paid'
+    `;
 
     // Get accounts payable (unpaid bills)
-    const { data: bills } = await supabase
-      .from('bills')
-      .select('id, total, currency, bill_date')
-      .lte('bill_date', asOfDate)
-      .neq('status', 'paid');
+    const bills = await sql`
+      SELECT id, total, currency, bill_date
+      FROM bills
+      WHERE bill_date <= ${asOfDate} AND status != 'paid'
+    `;
 
     // Build sections
     const currentAssets: any[] = [];
@@ -92,14 +85,14 @@ export async function GET(request: NextRequest) {
     let totalLongTermLiabilities = 0;
     let totalEquity = 0;
 
-    accounts?.forEach((account) => {
+    for (const account of accounts) {
       let balance = accountBalances[account.id] || 0;
 
       if (account.normal_balance === 'credit') {
         balance = -balance;
       }
 
-      if (balance === 0) return;
+      if (balance === 0) continue;
 
       const item = {
         code: account.code,
@@ -132,10 +125,10 @@ export async function GET(request: NextRequest) {
         equity.push(item);
         totalEquity += balance;
       }
-    });
+    }
 
     // Add fixed assets from fixed_assets table (convert to base currency)
-    for (const asset of assets || []) {
+    for (const asset of assets) {
       const bookValue = asset.purchase_price - (asset.accumulated_depreciation || 0);
       if (bookValue <= 0) continue;
 
@@ -143,13 +136,10 @@ export async function GET(request: NextRequest) {
       const currency = asset.currency || baseCurrency;
 
       if (currency !== baseCurrency) {
-        const { data: convertedValue } = await supabase.rpc('convert_currency', {
-          p_amount: bookValue,
-          p_from_currency: currency,
-          p_to_currency: baseCurrency,
-          p_date: asOfDate,
-        });
-        bookValueInBase = convertedValue ?? 0;
+        const convertRows = await sql`
+          SELECT convert_currency(${bookValue}, ${currency}, ${baseCurrency}, ${asOfDate}) AS result
+        `;
+        bookValueInBase = convertRows[0]?.result ?? 0;
       }
 
       fixedAssets.push({
@@ -162,19 +152,16 @@ export async function GET(request: NextRequest) {
 
     // Add inventory (convert to base currency)
     let inventoryTotal = 0;
-    for (const item of inventory || []) {
+    for (const item of inventory) {
       const inventoryValue = item.quantity_on_hand * item.cost;
       let valueInBase = inventoryValue;
       const currency = item.currency || baseCurrency;
 
       if (currency !== baseCurrency) {
-        const { data: convertedValue } = await supabase.rpc('convert_currency', {
-          p_amount: inventoryValue,
-          p_from_currency: currency,
-          p_to_currency: baseCurrency,
-          p_date: asOfDate,
-        });
-        valueInBase = convertedValue ?? 0;
+        const convertRows = await sql`
+          SELECT convert_currency(${inventoryValue}, ${currency}, ${baseCurrency}, ${asOfDate}) AS result
+        `;
+        valueInBase = convertRows[0]?.result ?? 0;
       }
 
       inventoryTotal += valueInBase;
@@ -190,12 +177,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Add bank account balances from transactions (convert to base currency)
-    for (const account of bankAccounts || []) {
-      const { data: transactions } = await supabase
-        .from('bank_transactions')
-        .select('amount, transaction_date')
-        .eq('bank_account_id', account.id)
-        .lte('transaction_date', asOfDate);
+    for (const account of bankAccounts) {
+      const transactions = await sql`
+        SELECT amount, transaction_date
+        FROM bank_transactions
+        WHERE bank_account_id = ${account.id}
+          AND transaction_date <= ${asOfDate}
+      `;
 
       if (!transactions || transactions.length === 0) continue;
 
@@ -205,13 +193,11 @@ export async function GET(request: NextRequest) {
         const currency = account.currency || baseCurrency;
 
         if (currency !== baseCurrency) {
-          const { data: convertedValue } = await supabase.rpc('convert_currency', {
-            p_amount: Math.abs(txn.amount),
-            p_from_currency: currency,
-            p_to_currency: baseCurrency,
-            p_date: txn.transaction_date,
-          });
-          if (convertedValue !== null) {
+          const convertRows = await sql`
+            SELECT convert_currency(${Math.abs(txn.amount)}, ${currency}, ${baseCurrency}, ${txn.transaction_date}) AS result
+          `;
+          const convertedValue = convertRows[0]?.result;
+          if (convertedValue !== null && convertedValue !== undefined) {
             amountInBase = txn.amount < 0 ? -convertedValue : convertedValue;
           } else {
             amountInBase = 0;
@@ -232,18 +218,15 @@ export async function GET(request: NextRequest) {
 
     // Add accounts receivable (convert to base currency)
     let totalAR = 0;
-    for (const invoice of invoices || []) {
+    for (const invoice of invoices) {
       let amountInBase = invoice.total;
       const currency = invoice.currency || baseCurrency;
 
       if (currency !== baseCurrency) {
-        const { data: convertedValue } = await supabase.rpc('convert_currency', {
-          p_amount: invoice.total,
-          p_from_currency: currency,
-          p_to_currency: baseCurrency,
-          p_date: invoice.invoice_date,
-        });
-        amountInBase = convertedValue ?? 0;
+        const convertRows = await sql`
+          SELECT convert_currency(${invoice.total}, ${currency}, ${baseCurrency}, ${invoice.invoice_date}) AS result
+        `;
+        amountInBase = convertRows[0]?.result ?? 0;
       }
 
       totalAR += amountInBase;
@@ -260,18 +243,15 @@ export async function GET(request: NextRequest) {
 
     // Add accounts payable (convert to base currency)
     let totalAP = 0;
-    for (const bill of bills || []) {
+    for (const bill of bills) {
       let amountInBase = bill.total;
       const currency = bill.currency || baseCurrency;
 
       if (currency !== baseCurrency) {
-        const { data: convertedValue } = await supabase.rpc('convert_currency', {
-          p_amount: bill.total,
-          p_from_currency: currency,
-          p_to_currency: baseCurrency,
-          p_date: bill.bill_date,
-        });
-        amountInBase = convertedValue ?? 0;
+        const convertRows = await sql`
+          SELECT convert_currency(${bill.total}, ${currency}, ${baseCurrency}, ${bill.bill_date}) AS result
+        `;
+        amountInBase = convertRows[0]?.result ?? 0;
       }
 
       totalAP += amountInBase;
@@ -287,28 +267,25 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate retained earnings (net income for all time)
-    const { data: incomeEntries } = await supabase
-      .from('journal_lines')
-      .select(`
-        account_id,
-        debit,
-        credit,
-        accounts!inner (code),
-        journal_entries!inner (entry_date, status)
-      `)
-      .eq('journal_entries.status', 'posted')
-      .lte('journal_entries.entry_date', asOfDate)
-      .gte('accounts.code', '4000');
+    const incomeEntries = await sql`
+      SELECT jl.account_id, jl.debit, jl.credit, a.code
+      FROM journal_lines jl
+      INNER JOIN journal_entries je ON je.id = jl.journal_entry_id
+      INNER JOIN accounts a ON a.id = jl.account_id
+      WHERE je.status = 'posted'
+        AND je.entry_date <= ${asOfDate}
+        AND a.code >= '4000'
+    `;
 
     let retainedEarnings = 0;
-    incomeEntries?.forEach((entry: any) => {
-      const code = entry.accounts.code;
+    for (const entry of incomeEntries) {
+      const code = entry.code;
       if (code >= '4000' && code < '5000') {
         retainedEarnings += (entry.credit || 0) - (entry.debit || 0);
       } else {
         retainedEarnings -= (entry.debit || 0) - (entry.credit || 0);
       }
-    });
+    }
 
     if (retainedEarnings !== 0) {
       equity.push({

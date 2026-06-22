@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase/client';
 import {
   LockClosedIcon,
   LockOpenIcon,
@@ -32,13 +31,10 @@ export default function FiscalPeriodsPage() {
   const loadPeriods = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('fiscal_periods')
-        .select('*')
-        .order('start_date', { ascending: false });
-
-      if (error) throw error;
-      setPeriods(data || []);
+      const res = await fetch('/api/fiscal-periods');
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to load periods');
+      setPeriods(result.data || result || []);
     } catch (error) {
       console.error('Error loading periods:', error);
     } finally {

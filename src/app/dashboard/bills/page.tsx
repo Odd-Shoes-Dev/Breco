@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import { ScaledNumber } from '@/components/ui/scaled-number';
 import {
@@ -43,31 +42,17 @@ export default function BillsPage() {
   const loadBills = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('bills')
-        .select(`
-          *,
-          vendors (name)
-        `, { count: 'exact' })
-        .order('bill_date', { ascending: false });
+      const params = new URLSearchParams();
+      if (searchQuery) params.append('search', searchQuery);
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+      params.append('page', String(currentPage));
+      params.append('pageSize', String(pageSize));
 
-      if (searchQuery) {
-        query = query.or(`bill_number.ilike.%${searchQuery}%,reference.ilike.%${searchQuery}%`);
-      }
+      const res = await fetch(`/api/bills?${params.toString()}`);
+      const result = await res.json();
 
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
-
-      const from = (currentPage - 1) * pageSize;
-      const to = from + pageSize - 1;
-      query = query.range(from, to);
-
-      const { data, count, error } = await query;
-      if (error) throw error;
-
-      setBills(data || []);
-      setTotalCount(count || 0);
+      setBills(result.data || []);
+      setTotalCount(result.count || 0);
     } catch (error) {
       console.error('Failed to load bills:', error);
     } finally {

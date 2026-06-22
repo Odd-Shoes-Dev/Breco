@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import toast from 'react-hot-toast';
 import {
   ExclamationTriangleIcon,
@@ -40,27 +40,9 @@ export default function ReorderAlertsPage() {
   const loadLowStockProducts = async () => {
     try {
       setLoading(true);
-      
-      // Get all products with reorder points
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          *,
-          vendors (name, company_name),
-          product_categories (name)
-        `)
-        .not('reorder_point', 'is', null)
-        .eq('track_inventory', true)
-        .order('name');
-
-      if (error) throw error;
-
-      // Filter products below reorder point
-      const lowStock = (data || []).filter(
-        (p: any) => p.quantity_in_stock <= p.reorder_point
-      );
-
-      setProducts(lowStock);
+      const res = await fetch('/api/inventory?stock_filter=low');
+      const result = await res.json();
+      setProducts(result.data || result || []);
     } catch (error) {
       console.error('Failed to load low stock products:', error);
       toast.error('Failed to load alerts');

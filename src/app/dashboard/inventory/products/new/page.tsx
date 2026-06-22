@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import toast from 'react-hot-toast';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 
@@ -37,10 +37,8 @@ export default function NewProductPage() {
   }, []);
 
   const loadCategories = async () => {
-    const { data } = await supabase
-      .from('product_categories')
-      .select('*')
-      .order('name');
+    const res = await fetch('/api/product-categories');
+    const data = await res.json();
     setCategories(data || []);
   };
 
@@ -49,21 +47,23 @@ export default function NewProductPage() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .insert({
+      const res = await fetch('/api/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           ...formData,
           unit_price: parseFloat(formData.unit_price) || 0,
           cost: parseFloat(formData.cost) || 0,
           quantity_in_stock: parseFloat(formData.quantity_in_stock) || 0,
           reorder_point: formData.reorder_point ? parseFloat(formData.reorder_point) : null,
           weight: formData.weight ? parseFloat(formData.weight) : null,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to create product');
+      }
+      const data = await res.json();
       toast.success('Product created successfully');
       router.push(`/dashboard/inventory/products/${data.id}`);
     } catch (error: any) {

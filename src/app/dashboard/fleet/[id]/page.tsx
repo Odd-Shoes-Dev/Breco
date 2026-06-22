@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import {
   ArrowLeftIcon,
@@ -73,22 +72,12 @@ export default function VehicleDetailPage() {
 
   const fetchVehicle = async () => {
     try {
-      const [vehicleRes, imagesRes] = await Promise.all([
-        supabase
-          .from('vehicles')
-          .select('*')
-          .eq('id', params.id)
-          .single(),
-        supabase
-          .from('vehicle_images')
-          .select('*')
-          .eq('vehicle_id', params.id)
-          .order('display_order')
-      ]);
-
-      if (vehicleRes.error) throw vehicleRes.error;
-      setVehicle(vehicleRes.data);
-      setImages(imagesRes.data || []);
+      const res = await fetch(`/api/fleet/${params.id}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load vehicle');
+      const vehicleData = data.data || data;
+      setVehicle(vehicleData);
+      setImages(vehicleData.images || []);
     } catch (error) {
       console.error('Failed to fetch vehicle:', error);
       toast.error('Failed to load vehicle');
@@ -107,12 +96,9 @@ export default function VehicleDetailPage() {
 
     setDeleting(true);
     try {
-      const { error } = await supabase
-        .from('vehicles')
-        .delete()
-        .eq('id', vehicle.id);
-
-      if (error) throw error;
+      const res = await fetch(`/api/fleet/${vehicle.id}`, { method: 'DELETE' });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to delete vehicle');
 
       toast.success('Vehicle deleted');
       router.push('/dashboard/fleet');

@@ -1,38 +1,28 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/employees - List all employees with optional filters
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-    
+
     const status = searchParams.get('status');
     const department = searchParams.get('department');
     const isActive = searchParams.get('is_active');
 
-    let query = supabase
-      .from('employees')
-      .select('*')
-      .order('first_name', { ascending: true });
+    const rows = await sql`SELECT * FROM employees ORDER BY first_name ASC`;
+    let data = rows as any[];
 
-    // Apply filters
     if (status && status !== 'all') {
-      query = query.eq('employment_status', status);
+      data = data.filter((e: any) => e.employment_status === status);
     }
-
     if (department && department !== 'all') {
-      query = query.eq('department', department);
+      data = data.filter((e: any) => e.department === department);
     }
-
     if (isActive !== null && isActive !== undefined) {
-      query = query.eq('is_active', isActive === 'true');
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      const active = isActive === 'true';
+      data = data.filter((e: any) => e.is_active === active);
     }
 
     return NextResponse.json({ data }, { status: 200 });
@@ -44,10 +34,8 @@ export async function GET(request: NextRequest) {
 // POST /api/employees - Create a new employee
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
-    // Validate required fields
     if (!body.employee_number || !body.first_name || !body.last_name || !body.hire_date || !body.job_title || !body.basic_salary) {
       return NextResponse.json(
         { error: 'Missing required fields: employee_number, first_name, last_name, hire_date, job_title, basic_salary' },
@@ -55,65 +43,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Check for duplicate employee number
-    const { data: existing } = await supabase
-      .from('employees')
-      .select('id')
-      .eq('employee_number', body.employee_number)
-      .single();
-
-    if (existing) {
-      return NextResponse.json(
-        { error: 'Employee number already exists' },
-        { status: 409 }
-      );
+    const existingRows = await sql`SELECT id FROM employees WHERE employee_number = ${body.employee_number} LIMIT 1`;
+    if ((existingRows as any[]).length > 0) {
+      return NextResponse.json({ error: 'Employee number already exists' }, { status: 409 });
     }
 
-    // Create the employee
-    const { data, error } = await supabase
-      .from('employees')
-      .insert({
-        employee_number: body.employee_number,
-        first_name: body.first_name,
-        last_name: body.last_name,
-        other_names: body.other_names || null,
-        email: body.email || null,
-        phone: body.phone || null,
-        national_id: body.national_id || null,
-        nssf_number: body.nssf_number || null,
-        tin: body.tin || null,
-        date_of_birth: body.date_of_birth || null,
-        gender: body.gender || null,
-        nationality: body.nationality || 'Ugandan',
-        address: body.address || null,
-        emergency_contact_name: body.emergency_contact_name || null,
-        emergency_contact_phone: body.emergency_contact_phone || null,
-        job_title: body.job_title,
-        department: body.department || null,
-        employment_type: body.employment_type || 'full_time',
-        employment_status: 'active', // New employees are always active
-        hire_date: body.hire_date,
-        basic_salary: body.basic_salary,
-        salary_currency: body.salary_currency || 'UGX',
-        pay_frequency: body.pay_frequency || 'monthly',
-        bank_name: body.bank_name || null,
-        bank_branch: body.bank_branch || null,
-        bank_account_number: body.bank_account_number || null,
-        bank_account_name: body.bank_account_name || null,
-        is_active: true,
-        notes: body.notes || null,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const insertedRows = await sql`
+      INSERT INTO employees (
+        employee_number, first_name, last_name, other_names, email, phone,
+        national_id, nssf_number, tin, date_of_birth, gender, nationality,
+        address, emergency_contact_name, emergency_contact_phone,
+        job_title, department, employment_type, employment_status, hire_date,
+        basic_salary, salary_currency, pay_frequency,
+        bank_name, bank_branch, bank_account_number, bank_account_name,
+        is_active, notes
+      ) VALUES (
+        ${body.employee_number}, ${body.first_name}, ${body.last_name},
+        ${body.other_names ?? null}, ${body.email ?? null}, ${body.phone ?? null},
+        ${body.national_id ?? null}, ${body.nssf_number ?? null}, ${body.tin ?? null},
+        ${body.date_of_birth ?? null}, ${body.gender ?? null}, ${body.nationality || 'Ugandan'},
+        ${body.address ?? null}, ${body.emergency_contact_name ?? null}, ${body.emergency_contact_phone ?? null},
+        ${body.job_title}, ${body.department ?? null}, ${body.employment_type || 'full_time'},
+        ${'active'}, ${body.hire_date},
+        ${body.basic_salary}, ${body.salary_currency || 'UGX'}, ${body.pay_frequency || 'monthly'},
+        ${body.bank_name ?? null}, ${body.bank_branch ?? null},
+        ${body.bank_account_number ?? null}, ${body.bank_account_name ?? null},
+        ${true}, ${body.notes ?? null}
+      )
+      RETURNING *
+    `;
+    const data = (insertedRows as any[])[0];
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error: any) {

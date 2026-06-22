@@ -73,85 +73,47 @@ export async function fetchExchangeRates(baseCurrency: SupportedCurrency = 'USD'
 /**
  * Update exchange rates in database
  */
-export async function updateExchangeRates(supabase: any): Promise<boolean> {
+export async function updateExchangeRates(): Promise<boolean> {
+  const { sql } = await import('@/lib/db');
   try {
-    // Fetch rates for USD base (most common)
     const rates = await fetchExchangeRates('USD');
-    
-    if (!rates) {
-      return false;
-    }
+    if (!rates) return false;
 
     const today = new Date().toISOString().split('T')[0];
-    
-    // Prepare exchange rate records
-    const exchangeRates = [];
-    
     const nonUsdCurrencies: string[] = [];
+
+    const pairs: { from: string; to: string; rate: number }[] = [];
 
     for (const currency of Object.keys(SUPPORTED_CURRENCIES)) {
       if (currency === 'USD') continue;
-
       if (rates[currency]) {
-        // USD to other currency
-        exchangeRates.push({
-          from_currency: 'USD',
-          to_currency: currency,
-          rate: rates[currency],
-          effective_date: today,
-          source: 'exchangerate-api.com',
-        });
-
-        // Other currency to USD
-        exchangeRates.push({
-          from_currency: currency,
-          to_currency: 'USD',
-          rate: 1 / rates[currency],
-          effective_date: today,
-          source: 'exchangerate-api.com',
-        });
-
+        pairs.push({ from: 'USD', to: currency, rate: rates[currency] });
+        pairs.push({ from: currency, to: 'USD', rate: 1 / rates[currency] });
         nonUsdCurrencies.push(currency);
       }
     }
 
-    // Cross-pairs computed via USD triangulation (e.g. EUR→UGX = USD→UGX / USD→EUR)
     for (let i = 0; i < nonUsdCurrencies.length; i++) {
       for (let j = i + 1; j < nonUsdCurrencies.length; j++) {
         const from = nonUsdCurrencies[i];
         const to = nonUsdCurrencies[j];
-        const fromRate = rates[from]; // USD → from
-        const toRate = rates[to];     // USD → to
+        const fromRate = rates[from];
+        const toRate = rates[to];
         if (fromRate && toRate) {
-          const crossRate = toRate / fromRate; // from → to
-          exchangeRates.push({
-            from_currency: from,
-            to_currency: to,
-            rate: crossRate,
-            effective_date: today,
-            source: 'exchangerate-api.com',
-          });
-          exchangeRates.push({
-            from_currency: to,
-            to_currency: from,
-            rate: 1 / crossRate,
-            effective_date: today,
-            source: 'exchangerate-api.com',
-          });
+          const crossRate = toRate / fromRate;
+          pairs.push({ from, to, rate: crossRate });
+          pairs.push({ from: to, to: from, rate: 1 / crossRate });
         }
       }
     }
 
-    // Insert/update exchange rates
-    const { error } = await supabase
-      .from('exchange_rates')
-      .upsert(exchangeRates, {
-        onConflict: 'from_currency,to_currency,effective_date',
-      });
-
-    if (error) {
-      console.error('Failed to save exchange rates:', error);
-      return false;
+    for (const pair of pairs) {
+      await sql`
+        INSERT INTO exchange_rates (from_currency, to_currency, rate, effective_date, source)
+        VALUES (${pair.from}, ${pair.to}, ${pair.rate}, ${today}, 'exchangerate-api.com')
+        ON CONFLICT (from_currency, to_currency, effective_date)
+        DO UPDATE SET rate = EXCLUDED.rate, source = EXCLUDED.source
+      `;
     }
 
     return true;
@@ -165,28 +127,17 @@ export async function updateExchangeRates(supabase: any): Promise<boolean> {
  * Get exchange rate from database
  */
 export async function getExchangeRate(
-  supabase: any,
   fromCurrency: SupportedCurrency,
   toCurrency: SupportedCurrency,
   date?: string
 ): Promise<number | null> {
-  if (fromCurrency === toCurrency) {
-    return 1;
-  }
-
+  if (fromCurrency === toCurrency) return 1;
+  const { sql } = await import('@/lib/db');
   try {
-    const { data, error } = await supabase.rpc('get_exchange_rate', {
-      p_from_currency: fromCurrency,
-      p_to_currency: toCurrency,
-      p_date: date || new Date().toISOString().split('T')[0],
-    });
-
-    if (error) {
-      console.error('Error fetching exchange rate:', error);
-      return null;
-    }
-
-    return data;
+    const rows = await sql`
+      SELECT get_exchange_rate(${fromCurrency}, ${toCurrency}, ${date || new Date().toISOString().split('T')[0]}) AS rate
+    `;
+    return rows[0]?.rate ?? null;
   } catch (error) {
     console.error('Error in getExchangeRate:', error);
     return null;
@@ -197,30 +148,18 @@ export async function getExchangeRate(
  * Convert amount between currencies using database rates
  */
 export async function convertCurrency(
-  supabase: any,
   amount: number,
   fromCurrency: SupportedCurrency,
   toCurrency: SupportedCurrency,
   date?: string
 ): Promise<number | null> {
-  if (fromCurrency === toCurrency) {
-    return amount;
-  }
-
+  if (fromCurrency === toCurrency) return amount;
+  const { sql } = await import('@/lib/db');
   try {
-    const { data, error } = await supabase.rpc('convert_currency', {
-      p_amount: amount,
-      p_from_currency: fromCurrency,
-      p_to_currency: toCurrency,
-      p_date: date || new Date().toISOString().split('T')[0],
-    });
-
-    if (error) {
-      console.error('Error converting currency:', error);
-      return null;
-    }
-
-    return data;
+    const rows = await sql`
+      SELECT convert_currency(${amount}, ${fromCurrency}, ${toCurrency}, ${date || new Date().toISOString().split('T')[0]}) AS result
+    `;
+    return rows[0]?.result ?? null;
   } catch (error) {
     console.error('Error in convertCurrency:', error);
     return null;

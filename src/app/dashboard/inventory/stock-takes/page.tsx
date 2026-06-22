@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import toast from 'react-hot-toast';
 import {
   PlusIcon,
@@ -37,27 +37,12 @@ export default function StockTakesPage() {
   const loadStockTakes = async () => {
     try {
       setLoading(true);
-
-      let query = supabase
-        .from('stock_takes')
-        .select(`
-          *,
-          locations (name, code)
-        `)
-        .order('scheduled_date', { ascending: false });
-
-      if (search) {
-        query = query.ilike('stock_take_number', `%${search}%`);
-      }
-
-      if (statusFilter) {
-        query = query.eq('status', statusFilter);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setStockTakes(data || []);
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      if (statusFilter) params.set('status', statusFilter);
+      const res = await fetch(`/api/stock-takes?${params}`);
+      const data = await res.json();
+      setStockTakes(data.data || data || []);
     } catch (error) {
       console.error('Failed to load stock takes:', error);
       toast.error('Failed to load stock takes');

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import {
   PlusIcon,
@@ -52,34 +52,13 @@ export default function PurchaseOrdersPage() {
   const loadOrders = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('purchase_orders')
-        .select(`
-          *,
-          vendors (
-            name,
-            company_name
-          )
-        `, { count: 'exact' })
-        .order('order_date', { ascending: false });
-
-      if (searchQuery) {
-        query = query.or(`po_number.ilike.%${searchQuery}%`);
-      }
-
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
-
-      const from = (currentPage - 1) * pageSize;
-      const to = from + pageSize - 1;
-      query = query.range(from, to);
-
-      const { data, count, error } = await query;
-      if (error) throw error;
-
-      setOrders(data || []);
-      setTotalCount(count || 0);
+      const params = new URLSearchParams({ page: String(currentPage), limit: String(pageSize) });
+      if (searchQuery) params.set('search', searchQuery);
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      const res = await fetch(`/api/purchase-orders?${params}`);
+      const result = await res.json();
+      setOrders(result.data || result || []);
+      setTotalCount(result.total || result.count || 0);
     } catch (error) {
       console.error('Failed to load purchase orders:', error);
     } finally {
@@ -89,20 +68,17 @@ export default function PurchaseOrdersPage() {
 
   const loadStats = async () => {
     try {
-      const { data, error } = await supabase
-        .from('purchase_orders')
-        .select('status, total, currency');
-
-      if (error) throw error;
-
-      const stats = {
-        draft: data?.filter(o => o.status === 'draft').length || 0,
-        sent: data?.filter(o => o.status === 'sent').length || 0,
-        partial: data?.filter(o => o.status === 'partial').length || 0,
-        received: data?.filter(o => o.status === 'received').length || 0,
-        totalValue: data?.reduce((sum, o) => sum + Number(o.total || 0), 0) || 0,
+      const res = await fetch('/api/purchase-orders?limit=1000');
+      const result = await res.json();
+      const data = result.data || result || [];
+      const computedStats = {
+        draft: data.filter((o: any) => o.status === 'draft').length,
+        sent: data.filter((o: any) => o.status === 'sent').length,
+        partial: data.filter((o: any) => o.status === 'partial').length,
+        received: data.filter((o: any) => o.status === 'received').length,
+        totalValue: data.reduce((sum: number, o: any) => sum + Number(o.total || 0), 0),
       };
-      setStats(stats);
+      setStats(computedStats);
     } catch (error) {
       console.error('Failed to load stats:', error);
     }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyWebhookSignature } from '@/lib/stripe';
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import Stripe from 'stripe';
 
 export async function POST(request: NextRequest) {
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     }
 
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
-    
+
     let event: Stripe.Event;
     try {
       event = await verifyWebhookSignature(body, signature, webhookSecret);
@@ -22,8 +22,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
     }
 
-    const supabase = await createClient();
-
     // Handle the event
     switch (event.type) {
       case 'payment_intent.succeeded': {
@@ -31,82 +29,57 @@ export async function POST(request: NextRequest) {
         const invoiceId = paymentIntent.metadata.invoice_id;
 
         if (invoiceId) {
-          // Fetch the invoice
-          const { data: invoice } = await supabase
-            .from('invoices')
-            .select('*')
-            .eq('id', invoiceId)
-            .single();
+          const invoiceRows = await sql`SELECT * FROM invoices WHERE id = ${invoiceId}`;
+          const invoice = invoiceRows[0];
 
           if (invoice) {
-            const paymentAmount = paymentIntent.amount / 100; // Convert from cents
+            const paymentAmount = paymentIntent.amount / 100;
             const newAmountPaid = (invoice.amount_paid || 0) + paymentAmount;
             const newStatus = newAmountPaid >= invoice.total ? 'paid' : 'partial';
 
-            // Update invoice
-            await supabase
-              .from('invoices')
-              .update({
-                amount_paid: newAmountPaid,
-                status: newStatus,
-                paid_date: newStatus === 'paid' ? new Date().toISOString() : null,
-              })
-              .eq('id', invoiceId);
+            await sql`
+              UPDATE invoices
+              SET amount_paid = ${newAmountPaid}, status = ${newStatus},
+                  paid_date = ${newStatus === 'paid' ? new Date().toISOString() : null}
+              WHERE id = ${invoiceId}
+            `;
 
-            // Create payment record
-            const { data: payment } = await supabase.from('payments_received').insert([
-              {
-                customer_id: invoice.customer_id,
-                payment_date: new Date().toISOString().split('T')[0],
-                amount: paymentAmount,
-                payment_method: 'stripe',
-                reference_number: paymentIntent.id,
-                notes: `Stripe payment: ${paymentIntent.id}`,
-              },
-            ]).select().single();
+            const paymentRows = await sql`
+              INSERT INTO payments_received (customer_id, payment_date, amount, payment_method, reference_number, notes)
+              VALUES (
+                ${invoice.customer_id}, ${new Date().toISOString().split('T')[0]},
+                ${paymentAmount}, 'stripe', ${paymentIntent.id},
+                ${'Stripe payment: ' + paymentIntent.id}
+              )
+              RETURNING *
+            `;
+            const payment = paymentRows[0];
 
-            // Create payment application
-            await supabase.from('payment_applications').insert([
-              {
-                payment_id: payment.id,
-                invoice_id: invoiceId,
-                amount_applied: paymentAmount,
-              },
-            ]);
+            if (payment) {
+              await sql`
+                INSERT INTO payment_applications (payment_id, invoice_id, amount_applied)
+                VALUES (${payment.id}, ${invoiceId}, ${paymentAmount})
+              `;
 
-            // Create journal entry for the payment
-            const { data: journalEntry } = await supabase
-              .from('journal_entries')
-              .insert([
-                {
-                  entry_date: new Date().toISOString().split('T')[0],
-                  description: `Payment received for Invoice ${invoice.invoice_number}`,
-                  source_module: 'stripe_payment',
-                  source_document_id: invoiceId,
-                  status: 'posted',
-                },
-              ])
-              .select()
-              .single();
+              const journalEntryRows = await sql`
+                INSERT INTO journal_entries (entry_date, description, source_module, source_document_id, status)
+                VALUES (
+                  ${new Date().toISOString().split('T')[0]},
+                  ${'Payment received for Invoice ' + invoice.invoice_number},
+                  'stripe_payment', ${invoiceId}, 'posted'
+                )
+                RETURNING *
+              `;
+              const journalEntry = journalEntryRows[0];
 
-            if (journalEntry) {
-              // Debit Cash/Bank, Credit Accounts Receivable
-              await supabase.from('journal_lines').insert([
-                {
-                  journal_entry_id: journalEntry.id,
-                  account_id: '1010', // Cash account
-                  debit: paymentAmount,
-                  credit: 0,
-                  description: 'Payment received',
-                },
-                {
-                  journal_entry_id: journalEntry.id,
-                  account_id: '1200', // Accounts Receivable
-                  debit: 0,
-                  credit: paymentAmount,
-                  description: 'Payment received',
-                },
-              ]);
+              if (journalEntry) {
+                await sql`
+                  INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit, description)
+                  VALUES
+                    (${journalEntry.id}, '1010', ${paymentAmount}, 0, 'Payment received'),
+                    (${journalEntry.id}, '1200', 0, ${paymentAmount}, 'Payment received')
+                `;
+              }
             }
           }
         }
@@ -118,11 +91,7 @@ export async function POST(request: NextRequest) {
         const invoiceId = paymentIntent.metadata.invoice_id;
 
         if (invoiceId) {
-          // Log the failed payment attempt
           console.log(`Payment failed for invoice ${invoiceId}: ${paymentIntent.last_payment_error?.message}`);
-          
-          // You could update the invoice with a failed payment note
-          // or send a notification to the business owner
         }
         break;
       }
@@ -132,47 +101,38 @@ export async function POST(request: NextRequest) {
         const invoiceId = session.metadata?.invoice_id;
 
         if (invoiceId && session.payment_status === 'paid') {
-          // Similar logic to payment_intent.succeeded
-          const { data: invoice } = await supabase
-            .from('invoices')
-            .select('*')
-            .eq('id', invoiceId)
-            .single();
+          const invoiceRows = await sql`SELECT * FROM invoices WHERE id = ${invoiceId}`;
+          const invoice = invoiceRows[0];
 
           if (invoice) {
             const paymentAmount = (session.amount_total || 0) / 100;
             const newAmountPaid = (invoice.amount_paid || 0) + paymentAmount;
             const newStatus = newAmountPaid >= invoice.total ? 'paid' : 'partial';
 
-            await supabase
-              .from('invoices')
-              .update({
-                amount_paid: newAmountPaid,
-                status: newStatus,
-                paid_date: newStatus === 'paid' ? new Date().toISOString() : null,
-              })
-              .eq('id', invoiceId);
+            await sql`
+              UPDATE invoices
+              SET amount_paid = ${newAmountPaid}, status = ${newStatus},
+                  paid_date = ${newStatus === 'paid' ? new Date().toISOString() : null}
+              WHERE id = ${invoiceId}
+            `;
 
-            // Create payment record
-            const { data: payment } = await supabase.from('payments_received').insert([
-              {
-                customer_id: invoice.customer_id,
-                payment_date: new Date().toISOString().split('T')[0],
-                amount: paymentAmount,
-                payment_method: 'stripe',
-                reference_number: session.payment_intent as string,
-                notes: `Stripe checkout: ${session.id}`,
-              },
-            ]).select().single();
+            const paymentRows = await sql`
+              INSERT INTO payments_received (customer_id, payment_date, amount, payment_method, reference_number, notes)
+              VALUES (
+                ${invoice.customer_id}, ${new Date().toISOString().split('T')[0]},
+                ${paymentAmount}, 'stripe', ${session.payment_intent as string},
+                ${'Stripe checkout: ' + session.id}
+              )
+              RETURNING *
+            `;
+            const payment = paymentRows[0];
 
-            // Create payment application
-            await supabase.from('payment_applications').insert([
-              {
-                payment_id: payment.id,
-                invoice_id: invoiceId,
-                amount_applied: paymentAmount,
-              },
-            ]);
+            if (payment) {
+              await sql`
+                INSERT INTO payment_applications (payment_id, invoice_id, amount_applied)
+                VALUES (${payment.id}, ${invoiceId}, ${paymentAmount})
+              `;
+            }
           }
         }
         break;
@@ -182,37 +142,29 @@ export async function POST(request: NextRequest) {
         const charge = event.data.object as Stripe.Charge;
         const paymentIntentId = charge.payment_intent as string;
 
-        // Find invoice with this payment intent
-        const { data: invoice } = await supabase
-          .from('invoices')
-          .select('*')
-          .eq('stripe_payment_intent_id', paymentIntentId)
-          .single();
+        const invoiceRows = await sql`
+          SELECT * FROM invoices WHERE stripe_payment_intent_id = ${paymentIntentId}
+        `;
+        const invoice = invoiceRows[0];
 
         if (invoice) {
           const refundAmount = (charge.amount_refunded || 0) / 100;
           const newAmountPaid = Math.max(0, (invoice.amount_paid || 0) - refundAmount);
           const newStatus = newAmountPaid === 0 ? 'sent' : newAmountPaid < invoice.total ? 'partial' : 'paid';
 
-          await supabase
-            .from('invoices')
-            .update({
-              amount_paid: newAmountPaid,
-              status: newStatus,
-            })
-            .eq('id', invoice.id);
+          await sql`
+            UPDATE invoices SET amount_paid = ${newAmountPaid}, status = ${newStatus}
+            WHERE id = ${invoice.id}
+          `;
 
-          // Create refund record
-          const { data: refundPayment } = await supabase.from('payments_received').insert([
-            {
-              customer_id: invoice.customer_id,
-              amount: -refundAmount, // Negative for refund
-              payment_date: new Date().toISOString().split('T')[0],
-              payment_method: 'stripe_refund',
-              reference: charge.id,
-              notes: `Refund: ${charge.id}`,
-            },
-          ]);
+          await sql`
+            INSERT INTO payments_received (customer_id, amount, payment_date, payment_method, reference_number, notes)
+            VALUES (
+              ${invoice.customer_id}, ${-refundAmount},
+              ${new Date().toISOString().split('T')[0]},
+              'stripe_refund', ${charge.id}, ${'Refund: ' + charge.id}
+            )
+          `;
         }
         break;
       }

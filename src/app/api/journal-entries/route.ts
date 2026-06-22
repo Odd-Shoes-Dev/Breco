@@ -1,54 +1,193 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
 
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const postedOnly = searchParams.get('postedOnly') === 'true';
 
-    let query = supabase
-      .from('journal_entries')
-      .select(`
-        *,
-        lines:journal_lines(
-          id,
-          account_id,
-          debit,
-          credit,
-          description,
-          account:accounts(code, name)
-        )
-      `)
-      .order('entry_date', { ascending: false })
-      .order('entry_number', { ascending: false });
+    let conditions = 'WHERE 1=1';
+    const params: any[] = [];
 
-    if (startDate) {
-      query = query.gte('entry_date', startDate);
-    }
+    // Build conditions dynamically — we use raw interpolation carefully
+    // since sql tagged template doesn't support dynamic WHERE easily,
+    // we'll build separate queries based on filter combinations
+    let rows: any[];
 
-    if (endDate) {
-      query = query.lte('entry_date', endDate);
-    }
-
-    if (postedOnly) {
-      query = query.eq('status', 'posted');
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Error fetching journal entries:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (startDate && endDate && postedOnly) {
+      rows = await sql`
+        SELECT je.*,
+          json_agg(
+            json_build_object(
+              'id', jl.id,
+              'account_id', jl.account_id,
+              'debit', jl.debit,
+              'credit', jl.credit,
+              'description', jl.description,
+              'account', json_build_object('code', a.code, 'name', a.name)
+            )
+          ) FILTER (WHERE jl.id IS NOT NULL) AS lines
+        FROM journal_entries je
+        LEFT JOIN journal_lines jl ON jl.journal_entry_id = je.id
+        LEFT JOIN accounts a ON a.id = jl.account_id
+        WHERE je.entry_date >= ${startDate}
+          AND je.entry_date <= ${endDate}
+          AND je.status = 'posted'
+        GROUP BY je.id
+        ORDER BY je.entry_date DESC, je.entry_number DESC
+      `;
+    } else if (startDate && endDate) {
+      rows = await sql`
+        SELECT je.*,
+          json_agg(
+            json_build_object(
+              'id', jl.id,
+              'account_id', jl.account_id,
+              'debit', jl.debit,
+              'credit', jl.credit,
+              'description', jl.description,
+              'account', json_build_object('code', a.code, 'name', a.name)
+            )
+          ) FILTER (WHERE jl.id IS NOT NULL) AS lines
+        FROM journal_entries je
+        LEFT JOIN journal_lines jl ON jl.journal_entry_id = je.id
+        LEFT JOIN accounts a ON a.id = jl.account_id
+        WHERE je.entry_date >= ${startDate}
+          AND je.entry_date <= ${endDate}
+        GROUP BY je.id
+        ORDER BY je.entry_date DESC, je.entry_number DESC
+      `;
+    } else if (startDate && postedOnly) {
+      rows = await sql`
+        SELECT je.*,
+          json_agg(
+            json_build_object(
+              'id', jl.id,
+              'account_id', jl.account_id,
+              'debit', jl.debit,
+              'credit', jl.credit,
+              'description', jl.description,
+              'account', json_build_object('code', a.code, 'name', a.name)
+            )
+          ) FILTER (WHERE jl.id IS NOT NULL) AS lines
+        FROM journal_entries je
+        LEFT JOIN journal_lines jl ON jl.journal_entry_id = je.id
+        LEFT JOIN accounts a ON a.id = jl.account_id
+        WHERE je.entry_date >= ${startDate}
+          AND je.status = 'posted'
+        GROUP BY je.id
+        ORDER BY je.entry_date DESC, je.entry_number DESC
+      `;
+    } else if (endDate && postedOnly) {
+      rows = await sql`
+        SELECT je.*,
+          json_agg(
+            json_build_object(
+              'id', jl.id,
+              'account_id', jl.account_id,
+              'debit', jl.debit,
+              'credit', jl.credit,
+              'description', jl.description,
+              'account', json_build_object('code', a.code, 'name', a.name)
+            )
+          ) FILTER (WHERE jl.id IS NOT NULL) AS lines
+        FROM journal_entries je
+        LEFT JOIN journal_lines jl ON jl.journal_entry_id = je.id
+        LEFT JOIN accounts a ON a.id = jl.account_id
+        WHERE je.entry_date <= ${endDate}
+          AND je.status = 'posted'
+        GROUP BY je.id
+        ORDER BY je.entry_date DESC, je.entry_number DESC
+      `;
+    } else if (startDate) {
+      rows = await sql`
+        SELECT je.*,
+          json_agg(
+            json_build_object(
+              'id', jl.id,
+              'account_id', jl.account_id,
+              'debit', jl.debit,
+              'credit', jl.credit,
+              'description', jl.description,
+              'account', json_build_object('code', a.code, 'name', a.name)
+            )
+          ) FILTER (WHERE jl.id IS NOT NULL) AS lines
+        FROM journal_entries je
+        LEFT JOIN journal_lines jl ON jl.journal_entry_id = je.id
+        LEFT JOIN accounts a ON a.id = jl.account_id
+        WHERE je.entry_date >= ${startDate}
+        GROUP BY je.id
+        ORDER BY je.entry_date DESC, je.entry_number DESC
+      `;
+    } else if (endDate) {
+      rows = await sql`
+        SELECT je.*,
+          json_agg(
+            json_build_object(
+              'id', jl.id,
+              'account_id', jl.account_id,
+              'debit', jl.debit,
+              'credit', jl.credit,
+              'description', jl.description,
+              'account', json_build_object('code', a.code, 'name', a.name)
+            )
+          ) FILTER (WHERE jl.id IS NOT NULL) AS lines
+        FROM journal_entries je
+        LEFT JOIN journal_lines jl ON jl.journal_entry_id = je.id
+        LEFT JOIN accounts a ON a.id = jl.account_id
+        WHERE je.entry_date <= ${endDate}
+        GROUP BY je.id
+        ORDER BY je.entry_date DESC, je.entry_number DESC
+      `;
+    } else if (postedOnly) {
+      rows = await sql`
+        SELECT je.*,
+          json_agg(
+            json_build_object(
+              'id', jl.id,
+              'account_id', jl.account_id,
+              'debit', jl.debit,
+              'credit', jl.credit,
+              'description', jl.description,
+              'account', json_build_object('code', a.code, 'name', a.name)
+            )
+          ) FILTER (WHERE jl.id IS NOT NULL) AS lines
+        FROM journal_entries je
+        LEFT JOIN journal_lines jl ON jl.journal_entry_id = je.id
+        LEFT JOIN accounts a ON a.id = jl.account_id
+        WHERE je.status = 'posted'
+        GROUP BY je.id
+        ORDER BY je.entry_date DESC, je.entry_number DESC
+      `;
+    } else {
+      rows = await sql`
+        SELECT je.*,
+          json_agg(
+            json_build_object(
+              'id', jl.id,
+              'account_id', jl.account_id,
+              'debit', jl.debit,
+              'credit', jl.credit,
+              'description', jl.description,
+              'account', json_build_object('code', a.code, 'name', a.name)
+            )
+          ) FILTER (WHERE jl.id IS NOT NULL) AS lines
+        FROM journal_entries je
+        LEFT JOIN journal_lines jl ON jl.journal_entry_id = je.id
+        LEFT JOIN accounts a ON a.id = jl.account_id
+        GROUP BY je.id
+        ORDER BY je.entry_date DESC, je.entry_number DESC
+      `;
     }
 
     // Transform data to flatten account info
-    const transformedData = data?.map((entry) => ({
+    const transformedData = rows.map((entry: any) => ({
       ...entry,
-      lines: entry.lines?.map((line: any) => ({
+      lines: (entry.lines || []).map((line: any) => ({
         id: line.id,
         account_code: line.account?.code || '',
         account_name: line.account?.name || '',
@@ -67,12 +206,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    
-    // Get user session
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
+    const user = await getSession();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -101,15 +236,16 @@ export async function POST(request: NextRequest) {
 
     // Generate entry number
     const year = new Date(entry_date).getFullYear();
-    const { data: lastEntry } = await supabase
-      .from('journal_entries')
-      .select('entry_number')
-      .like('entry_number', `JE-${year}-%`)
-      .order('entry_number', { ascending: false })
-      .limit(1)
-      .single();
+    const prefix = `JE-${year}-%`;
+    const lastEntries = await sql`
+      SELECT entry_number FROM journal_entries
+      WHERE entry_number LIKE ${prefix}
+      ORDER BY entry_number DESC
+      LIMIT 1
+    `;
 
     let nextNumber = 1;
+    const lastEntry = lastEntries[0];
     if (lastEntry?.entry_number) {
       const match = lastEntry.entry_number.match(/JE-\d{4}-(\d+)/);
       if (match) {
@@ -119,54 +255,41 @@ export async function POST(request: NextRequest) {
     const entryNumber = `JE-${year}-${nextNumber.toString().padStart(4, '0')}`;
 
     // Create journal entry
-    const { data: entry, error: entryError } = await supabase
-      .from('journal_entries')
-      .insert([
-        {
-          entry_number: entryNumber,
-          entry_date,
-          description,
-          memo: reference,
-          source_module: source || 'manual',
-          source_document_id: source_id,
-          status: is_posted ? 'posted' : 'draft',
-        },
-      ])
-      .select()
-      .single();
+    const entryRows = await sql`
+      INSERT INTO journal_entries (
+        entry_number, entry_date, description, memo,
+        source_module, source_document_id, status
+      ) VALUES (
+        ${entryNumber}, ${entry_date}, ${description}, ${reference || null},
+        ${source || 'manual'}, ${source_id || null}, ${is_posted ? 'posted' : 'draft'}
+      )
+      RETURNING *
+    `;
+    const entry = entryRows[0];
 
-    if (entryError) {
-      console.error('Error creating journal entry:', entryError);
-      return NextResponse.json({ error: entryError.message }, { status: 500 });
+    if (!entry) {
+      return NextResponse.json({ error: 'Failed to create journal entry' }, { status: 500 });
     }
 
     // Create journal entry lines
-    const lineInserts = lines.map((line: any, index: number) => ({
-      journal_entry_id: entry.id,
-      line_number: index + 1,
-      account_id: line.account_id,
-      debit: line.debit_amount || 0,
-      credit: line.credit_amount || 0,
-      description: line.description || '',
-    }));
-
-    const { error: linesError } = await supabase
-      .from('journal_lines')
-      .insert(lineInserts);
-
-    if (linesError) {
-      // Rollback - delete the entry
-      await supabase.from('journal_entries').delete().eq('id', entry.id);
-      console.error('Error creating journal entry lines:', linesError);
-      return NextResponse.json({ error: linesError.message }, { status: 500 });
-    }
-
-    // If posted, update account balances
-    if (is_posted) {
-      for (const line of lines) {
-        // Update account balance in chart_of_accounts
-        // This would typically be done via a database trigger
+    try {
+      for (let index = 0; index < lines.length; index++) {
+        const line = lines[index];
+        await sql`
+          INSERT INTO journal_lines (
+            journal_entry_id, line_number, account_id, debit, credit, description
+          ) VALUES (
+            ${entry.id}, ${index + 1}, ${line.account_id},
+            ${line.debit_amount || 0}, ${line.credit_amount || 0},
+            ${line.description || ''}
+          )
+        `;
       }
+    } catch (linesError) {
+      // Rollback - delete the entry
+      await sql`DELETE FROM journal_entries WHERE id = ${entry.id}`;
+      console.error('Error creating journal entry lines:', linesError);
+      return NextResponse.json({ error: 'Failed to create journal entry lines' }, { status: 500 });
     }
 
     return NextResponse.json(entry, { status: 201 });

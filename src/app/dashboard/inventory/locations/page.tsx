@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import toast from 'react-hot-toast';
 import {
   PlusIcon,
@@ -32,12 +32,8 @@ export default function LocationsPage() {
 
   const loadLocations = async () => {
     try {
-      const { data, error } = await supabase
-        .from('locations')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
+      const res = await fetch('/api/locations');
+      const data = await res.json();
       setLocations(data || []);
     } catch (error) {
       console.error('Failed to load locations:', error);
@@ -49,13 +45,12 @@ export default function LocationsPage() {
 
   const toggleActive = async (id: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase
-        .from('locations')
-        .update({ is_active: !currentStatus })
-        .eq('id', id);
-
-      if (error) throw error;
-
+      const res = await fetch(`/api/locations/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !currentStatus }),
+      });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
       toast.success(`Location ${!currentStatus ? 'activated' : 'deactivated'}`);
       loadLocations();
     } catch (error: any) {

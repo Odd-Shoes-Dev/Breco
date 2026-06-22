@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { convertCurrency, SupportedCurrency } from '@/lib/currency';
+import { sql } from '@/lib/db';
 
 interface AssetDepreciation {
   assetId: string;
@@ -67,22 +66,22 @@ const calculateDepreciation = (
 ) => {
   const purchase = new Date(purchaseDate);
   const now = new Date();
-  const monthsElapsed = (now.getFullYear() - purchase.getFullYear()) * 12 + 
+  const monthsElapsed = (now.getFullYear() - purchase.getFullYear()) * 12 +
                        (now.getMonth() - purchase.getMonth());
-  
+
   const depreciableAmount = purchasePrice - residualValue;
   const monthlyDepreciation = usefulLifeMonths > 0 ? depreciableAmount / usefulLifeMonths : 0;
   const annualDepreciation = monthlyDepreciation * 12;
-  
+
   const calculatedAccumulated = Math.min(
     monthlyDepreciation * monthsElapsed,
     depreciableAmount
   );
-  
+
   const accumulated = accumulatedDep || calculatedAccumulated;
   const bookValue = purchasePrice - accumulated;
   const remainingMonths = Math.max(0, usefulLifeMonths - monthsElapsed);
-  
+
   return {
     annualDepreciation,
     monthlyDepreciation,
@@ -118,8 +117,7 @@ const generateDepreciationSchedule = (
     });
 
     beginningValue = endingValue;
-    
-    // Stop if fully depreciated
+
     if (endingValue <= residualValue) break;
   }
 
@@ -128,7 +126,6 @@ const generateDepreciationSchedule = (
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const searchParams = request.nextUrl.searchParams;
     const startDate = searchParams.get('startDate') || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
     const endDate = searchParams.get('endDate') || new Date().toISOString().split('T')[0];
@@ -137,42 +134,32 @@ export async function GET(request: NextRequest) {
     const sortBy = searchParams.get('sortBy') || 'assetNumber';
 
     // Fetch fixed assets with categories
-    let query = supabase
-      .from('fixed_assets')
-      .select(`
-        id,
-        asset_number,
-        name,
-        purchase_date,
-        purchase_price,
-        depreciation_method,
-        useful_life_months,
-        residual_value,
-        accumulated_depreciation,
-        book_value,
-        status,
-        location,
-        currency,
-        asset_categories (
-          name
-        )
-      `)
-      .order('asset_number');
-
-    // Apply filters
+    let assets;
     if (status !== 'all') {
-      query = query.eq('status', status);
-    }
-
-    const { data: assets, error: assetsError } = await query;
-
-    if (assetsError) {
-      console.error('Error fetching assets:', assetsError);
-      return NextResponse.json({ error: assetsError.message }, { status: 500 });
+      assets = await sql`
+        SELECT fa.id, fa.asset_number, fa.name, fa.purchase_date, fa.purchase_price,
+               fa.depreciation_method, fa.useful_life_months, fa.residual_value,
+               fa.accumulated_depreciation, fa.book_value, fa.status, fa.location, fa.currency,
+               ac.name AS category_name
+        FROM fixed_assets fa
+        LEFT JOIN asset_categories ac ON fa.asset_category_id = ac.id
+        WHERE fa.status = ${status}
+        ORDER BY fa.asset_number
+      `;
+    } else {
+      assets = await sql`
+        SELECT fa.id, fa.asset_number, fa.name, fa.purchase_date, fa.purchase_price,
+               fa.depreciation_method, fa.useful_life_months, fa.residual_value,
+               fa.accumulated_depreciation, fa.book_value, fa.status, fa.location, fa.currency,
+               ac.name AS category_name
+        FROM fixed_assets fa
+        LEFT JOIN asset_categories ac ON fa.asset_category_id = ac.id
+        ORDER BY fa.asset_number
+      `;
     }
 
     // Transform and calculate depreciation for each asset
-    const assetDepreciationsPromises = (assets || []).map(async (asset: any) => {
+    let assetDepreciations: AssetDepreciation[] = assets.map((asset: any) => {
       const depCalc = calculateDepreciation(
         asset.purchase_date,
         parseFloat(asset.purchase_price) || 0,
@@ -193,7 +180,7 @@ export async function GET(request: NextRequest) {
         assetId: asset.id,
         assetNumber: asset.asset_number || '',
         assetName: asset.name || '',
-        category: asset.asset_categories?.name || 'Uncategorized',
+        category: asset.category_name || 'Uncategorized',
         purchaseDate: asset.purchase_date,
         purchasePrice: parseFloat(asset.purchase_price) || 0,
         depreciationMethod: asset.depreciation_method || 'straight_line',
@@ -206,11 +193,10 @@ export async function GET(request: NextRequest) {
         remainingLifeMonths: depCalc.remainingMonths,
         status: asset.status || 'active',
         location: asset.location || '',
-        depreciationSchedule: schedule
+        depreciationSchedule: schedule,
+        _currency: asset.currency || 'USD',
       };
     });
-
-    let assetDepreciations: AssetDepreciation[] = await Promise.all(assetDepreciationsPromises);
 
     // Filter by category
     if (category !== 'all') {
@@ -242,49 +228,20 @@ export async function GET(request: NextRequest) {
     let annualDepreciation = 0;
     let monthlyDepreciation = 0;
 
-    for (const asset of assetDepreciations) {
-      const assetData = assets?.find((a: any) => a.id === asset.assetId);
-      const assetCurrency = (assetData?.currency || 'USD') as SupportedCurrency;
+    for (const asset of assetDepreciations as any[]) {
+      const assetCurrency = asset._currency || 'USD';
 
-      // Convert purchase price to USD
-      const costUSD = await convertCurrency(
-        supabase,
-        asset.purchasePrice,
-        assetCurrency,
-        'USD' as SupportedCurrency
-      ) || asset.purchasePrice;
+      const convertIfNeeded = async (amount: number) => {
+        if (assetCurrency === 'USD') return amount;
+        const res = await sql`SELECT convert_currency(${amount}, ${assetCurrency}, 'USD', ${endDate}) AS val`;
+        return res[0]?.val ?? amount;
+      };
 
-      // Convert accumulated depreciation to USD
-      const accumulatedUSD = await convertCurrency(
-        supabase,
-        asset.accumulatedDepreciation,
-        assetCurrency,
-        'USD' as SupportedCurrency
-      ) || asset.accumulatedDepreciation;
-
-      // Convert book value to USD
-      const bookValueUSD = await convertCurrency(
-        supabase,
-        asset.currentBookValue,
-        assetCurrency,
-        'USD' as SupportedCurrency
-      ) || asset.currentBookValue;
-
-      // Convert annual depreciation to USD
-      const annualDepUSD = await convertCurrency(
-        supabase,
-        asset.annualDepreciation,
-        assetCurrency,
-        'USD' as SupportedCurrency
-      ) || asset.annualDepreciation;
-
-      // Convert monthly depreciation to USD
-      const monthlyDepUSD = await convertCurrency(
-        supabase,
-        asset.monthlyDepreciation,
-        assetCurrency,
-        'USD' as SupportedCurrency
-      ) || asset.monthlyDepreciation;
+      const costUSD = await convertIfNeeded(asset.purchasePrice);
+      const accumulatedUSD = await convertIfNeeded(asset.accumulatedDepreciation);
+      const bookValueUSD = await convertIfNeeded(asset.currentBookValue);
+      const annualDepUSD = await convertIfNeeded(asset.annualDepreciation);
+      const monthlyDepUSD = await convertIfNeeded(asset.monthlyDepreciation);
 
       totalCost += costUSD;
       totalAccumulatedDepreciation += accumulatedUSD;
@@ -292,46 +249,55 @@ export async function GET(request: NextRequest) {
       annualDepreciation += annualDepUSD;
       monthlyDepreciation += monthlyDepUSD;
     }
+
     const activeAssets = assetDepreciations.filter(a => a.status === 'active').length;
     const fullyDepreciated = assetDepreciations.filter(a => a.status === 'fully_depreciated').length;
 
     // Category breakdown with currency conversion
     const byCategory: Record<string, any> = {};
-    for (const asset of assetDepreciations) {
-      const assetData = assets?.find((a: any) => a.id === asset.assetId);
-      const assetCurrency = (assetData?.currency || 'USD') as SupportedCurrency;
-      
+    for (const asset of assetDepreciations as any[]) {
+      const assetCurrency = asset._currency || 'USD';
       const cat = asset.category || 'Uncategorized';
       if (!byCategory[cat]) {
         byCategory[cat] = { count: 0, cost: 0, accumulated: 0, bookValue: 0 };
       }
-      
-      const costUSD = await convertCurrency(supabase, asset.purchasePrice, assetCurrency, 'USD' as SupportedCurrency) || asset.purchasePrice;
-      const accUSD = await convertCurrency(supabase, asset.accumulatedDepreciation, assetCurrency, 'USD' as SupportedCurrency) || asset.accumulatedDepreciation;
-      const bookUSD = await convertCurrency(supabase, asset.currentBookValue, assetCurrency, 'USD' as SupportedCurrency) || asset.currentBookValue;
-      
+
+      const convertIfNeeded = async (amount: number) => {
+        if (assetCurrency === 'USD') return amount;
+        const res = await sql`SELECT convert_currency(${amount}, ${assetCurrency}, 'USD', ${endDate}) AS val`;
+        return res[0]?.val ?? amount;
+      };
+
       byCategory[cat].count += 1;
-      byCategory[cat].cost += costUSD;
-      byCategory[cat].accumulated += accUSD;
-      byCategory[cat].bookValue += bookUSD;
+      byCategory[cat].cost += await convertIfNeeded(asset.purchasePrice);
+      byCategory[cat].accumulated += await convertIfNeeded(asset.accumulatedDepreciation);
+      byCategory[cat].bookValue += await convertIfNeeded(asset.currentBookValue);
     }
 
-    // Method breakdown with currency conversion
+    // Method breakdown
     const byMethod: Record<string, any> = {};
-    for (const asset of assetDepreciations) {
-      const assetData = assets?.find((a: any) => a.id === asset.assetId);
-      const assetCurrency = (assetData?.currency || 'USD') as SupportedCurrency;
-      
+    for (const asset of assetDepreciations as any[]) {
+      const assetCurrency = asset._currency || 'USD';
       const method = asset.depreciationMethod || 'straight_line';
       if (!byMethod[method]) {
         byMethod[method] = { count: 0, cost: 0 };
       }
-      
-      const costUSD = await convertCurrency(supabase, asset.purchasePrice, assetCurrency, 'USD' as SupportedCurrency) || asset.purchasePrice;
-      
+
+      let costUSD = asset.purchasePrice;
+      if (assetCurrency !== 'USD') {
+        const res = await sql`SELECT convert_currency(${asset.purchasePrice}, ${assetCurrency}, 'USD', ${endDate}) AS val`;
+        costUSD = res[0]?.val ?? asset.purchasePrice;
+      }
+
       byMethod[method].count += 1;
       byMethod[method].cost += costUSD;
     }
+
+    // Strip internal _currency field before returning
+    const cleanAssets = assetDepreciations.map(({ ...a }: any) => {
+      delete a._currency;
+      return a;
+    });
 
     const response: DepreciationScheduleData = {
       reportPeriod: {
@@ -348,7 +314,7 @@ export async function GET(request: NextRequest) {
         activeAssets,
         fullyDepreciated
       },
-      assets: assetDepreciations,
+      assets: cleanAssets,
       byCategory,
       byMethod
     };

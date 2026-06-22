@@ -1,14 +1,58 @@
-import { createClient } from '@/lib/supabase/server';
-import { createJournalEntry } from '@/lib/accounting/journal-entry-helpers';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+
+async function createJournalEntryRaw(params: {
+  entry_date: string;
+  description: string;
+  source_module: string;
+  lines: Array<{ account_id: string; debit: number; credit: number; description: string }>;
+  created_by: string;
+  status?: string;
+  source_document_id?: string;
+}) {
+  try {
+    const totalDebits = params.lines.reduce((sum, l) => sum + l.debit, 0);
+    const totalCredits = params.lines.reduce((sum, l) => sum + l.credit, 0);
+    if (Math.abs(totalDebits - totalCredits) > 0.01) {
+      throw new Error(`Journal entry not balanced. Debits: ${totalDebits}, Credits: ${totalCredits}`);
+    }
+
+    const entryNumRows = await sql`SELECT generate_journal_entry_number() AS num`;
+    const entryNumber = entryNumRows[0]?.num;
+
+    const jeRows = await sql`
+      INSERT INTO journal_entries (entry_number, entry_date, description, source_module, source_document_id, status, created_by)
+      VALUES (
+        ${entryNumber}, ${params.entry_date}, ${params.description},
+        ${params.source_module}, ${params.source_document_id || null},
+        ${params.status || 'posted'}, ${params.created_by}
+      )
+      RETURNING *
+    `;
+    const journalEntry = jeRows[0];
+
+    for (let i = 0; i < params.lines.length; i++) {
+      const line = params.lines[i];
+      await sql`
+        INSERT INTO journal_lines (journal_entry_id, line_number, account_id, debit, credit, description)
+        VALUES (${journalEntry.id}, ${i + 1}, ${line.account_id}, ${line.debit}, ${line.credit}, ${line.description})
+      `;
+    }
+
+    return { success: true, journalEntry };
+  } catch (error) {
+    console.error('Error creating journal entry:', error);
+    return { success: false, error };
+  }
+}
 
 // POST /api/revenue/recognize - Recognize deferred revenue for completed services
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -24,21 +68,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Get invoice details
-    const { data: invoice, error: invoiceError } = await supabase
-      .from('invoices')
-      .select(`
-        *,
-        customer:customers(id, name),
-        booking:bookings(id, booking_number, status)
-      `)
-      .eq('id', invoice_id)
-      .single();
+    const invoiceRows = await sql`
+      SELECT i.*,
+        row_to_json(c.*) AS customer,
+        row_to_json(b.*) AS booking
+      FROM invoices i
+      LEFT JOIN customers c ON c.id = i.customer_id
+      LEFT JOIN bookings b ON b.id = i.booking_id
+      WHERE i.id = ${invoice_id}
+    `;
+    const invoice = invoiceRows[0];
 
-    if (invoiceError || !invoice) {
+    if (!invoice) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
-    // Validation checks
     if (!invoice.is_advance_payment) {
       return NextResponse.json(
         { error: 'This invoice is not marked as advance payment/deferred revenue' },
@@ -53,7 +97,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calculate amount to recognize
     const remainingAmount = invoice.total - (invoice.revenue_recognized_amount || 0);
     const recognitionAmount = amount ? Math.min(amount, remainingAmount) : remainingAmount;
 
@@ -65,12 +108,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Get accounts
-    const { data: accounts } = await supabase
-      .from('accounts')
-      .select('id, code')
-      .in('code', ['2100', '4100']); // Unearned Revenue, Tour Revenue
+    const accounts = await sql`
+      SELECT id, code FROM accounts WHERE code = ANY(ARRAY['2100', '4100'])
+    `;
 
-    const accountMap = new Map(accounts?.map(a => [a.code, a.id]));
+    const accountMap = new Map(accounts.map((a: any) => [a.code, a.id]));
     const unearnedRevenueId = accountMap.get('2100');
     const tourRevenueId = accountMap.get('4100');
 
@@ -82,10 +124,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create journal entry for revenue recognition
-    // DR: Unearned Revenue (2100)
-    // CR: Tour Revenue (4100)
-    const journalResult = await createJournalEntry({
-      supabase,
+    const journalResult = await createJournalEntryRaw({
       entry_date: recognition_date || new Date().toISOString().split('T')[0],
       description: `Revenue recognition for Invoice ${invoice.invoice_number}`,
       source_module: 'revenue_recognition',
@@ -117,17 +156,14 @@ export async function POST(request: NextRequest) {
     const newRecognizedAmount = (invoice.revenue_recognized_amount || 0) + recognitionAmount;
     const isFullyRecognized = newRecognizedAmount >= invoice.total;
 
-    const { error: updateError } = await supabase
-      .from('invoices')
-      .update({
-        revenue_recognized_amount: newRecognizedAmount,
-        revenue_recognition_date: isFullyRecognized ? (recognition_date || new Date().toISOString().split('T')[0]) : invoice.revenue_recognition_date,
-      })
-      .eq('id', invoice_id);
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
-    }
+    await sql`
+      UPDATE invoices
+      SET revenue_recognized_amount = ${newRecognizedAmount},
+          revenue_recognition_date = ${isFullyRecognized
+            ? (recognition_date || new Date().toISOString().split('T')[0])
+            : invoice.revenue_recognition_date}
+      WHERE id = ${invoice_id}
+    `;
 
     return NextResponse.json({
       message: 'Revenue recognized successfully',
@@ -144,12 +180,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// POST /api/revenue/recognize-batch - Automatically recognize revenue for completed tours
+// GET /api/revenue/recognize - List invoices eligible for revenue recognition
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -159,35 +193,29 @@ export async function GET(request: NextRequest) {
     const autoRecognize = searchParams.get('auto_recognize') === 'true';
 
     // Find invoices with unrecognized revenue where service has been completed
-    const { data: invoices, error } = await supabase
-      .from('invoices')
-      .select(`
-        *,
-        customer:customers(name),
-        booking:bookings(booking_number, status, travel_end_date)
-      `)
-      .eq('is_advance_payment', true)
-      .lte('service_end_date', asOf)
-      .or(`revenue_recognition_date.is.null,revenue_recognized_amount.lt.total`)
-      .order('service_end_date');
+    const invoices = await sql`
+      SELECT i.*,
+        row_to_json(c.*) AS customer,
+        row_to_json(b.*) AS booking
+      FROM invoices i
+      LEFT JOIN customers c ON c.id = i.customer_id
+      LEFT JOIN bookings b ON b.id = i.booking_id
+      WHERE i.is_advance_payment = true
+        AND i.service_end_date <= ${asOf}
+        AND (i.revenue_recognition_date IS NULL OR i.revenue_recognized_amount < i.total)
+      ORDER BY i.service_end_date
+    `;
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    const eligible = invoices?.filter(inv => 
+    const eligible = invoices.filter((inv: any) =>
       (inv.revenue_recognized_amount || 0) < inv.total
-    ) || [];
+    );
 
     if (autoRecognize) {
-      // Automatically recognize revenue for all eligible invoices
       const results = [];
-      
+
       for (const invoice of eligible) {
         const recognitionAmount = invoice.total - (invoice.revenue_recognized_amount || 0);
-        
-        // This would call the POST endpoint for each invoice
-        // For now, just return the list
+
         results.push({
           invoice_id: invoice.id,
           invoice_number: invoice.invoice_number,
@@ -198,23 +226,23 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({
         message: `Found ${eligible.length} invoices ready for revenue recognition`,
-        total_amount: eligible.reduce((sum, inv) => sum + (inv.total - (inv.revenue_recognized_amount || 0)), 0),
+        total_amount: eligible.reduce((sum: number, inv: any) => sum + (inv.total - (inv.revenue_recognized_amount || 0)), 0),
         invoices: results,
       });
     }
 
     return NextResponse.json({
       count: eligible.length,
-      total_unrecognized: eligible.reduce((sum, inv) => sum + (inv.total - (inv.revenue_recognized_amount || 0)), 0),
-      invoices: eligible.map(inv => ({
+      total_unrecognized: eligible.reduce((sum: number, inv: any) => sum + (inv.total - (inv.revenue_recognized_amount || 0)), 0),
+      invoices: eligible.map((inv: any) => ({
         invoice_id: inv.id,
         invoice_number: inv.invoice_number,
-        customer_name: (inv.customer as any)?.name,
+        customer_name: inv.customer?.name,
         total: inv.total,
         recognized: inv.revenue_recognized_amount || 0,
         unrecognized: inv.total - (inv.revenue_recognized_amount || 0),
         service_end_date: inv.service_end_date,
-        booking_number: (inv.booking as any)?.booking_number,
+        booking_number: inv.booking?.booking_number,
       })),
     });
 

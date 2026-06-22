@@ -1,19 +1,16 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { getCompanySettings } from '@/lib/company-settings';
 
 export async function GET() {
   try {
-    const supabase = await createClient();
     const settings = await getCompanySettings();
     const baseCurrency = settings.base_currency;
 
     // Fetch all invoices with their currencies
-    const { data: invoices, error } = await supabase
-      .from('invoices')
-      .select('total, amount_paid, due_date, status, currency, invoice_date');
-
-    if (error) throw error;
+    const invoices = await sql`
+      SELECT total, amount_paid, due_date, status, currency, invoice_date FROM invoices
+    `;
 
     if (!invoices || invoices.length === 0) {
       return NextResponse.json({
@@ -44,22 +41,17 @@ export async function GET() {
       let remainingInBase = remaining;
 
       if (invoice.currency !== baseCurrency) {
-        const { data: convertedTotal } = await supabase.rpc('convert_currency', {
-          p_amount: invoice.total,
-          p_from_currency: invoice.currency,
-          p_to_currency: baseCurrency,
-          p_date: invoice.invoice_date,
-        });
-
-        const { data: convertedRemaining } = await supabase.rpc('convert_currency', {
-          p_amount: remaining,
-          p_from_currency: invoice.currency,
-          p_to_currency: baseCurrency,
-          p_date: invoice.invoice_date,
-        });
-
-        amountInBase = convertedTotal ?? 0;
-        remainingInBase = convertedRemaining ?? 0;
+        try {
+          const [convertedTotalRows, convertedRemainingRows] = await Promise.all([
+            sql`SELECT convert_currency(${invoice.total}, ${invoice.currency}, ${baseCurrency}, ${invoice.invoice_date}) AS result`,
+            sql`SELECT convert_currency(${remaining}, ${invoice.currency}, ${baseCurrency}, ${invoice.invoice_date}) AS result`,
+          ]);
+          amountInBase = convertedTotalRows[0]?.result ?? 0;
+          remainingInBase = convertedRemainingRows[0]?.result ?? 0;
+        } catch {
+          amountInBase = invoice.total;
+          remainingInBase = remaining;
+        }
       }
 
       if (invoice.status !== 'paid' && invoice.status !== 'void' && invoice.status !== 'cancelled') {

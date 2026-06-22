@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
+
 import toast from 'react-hot-toast';
 import {
   ArrowLeftIcon,
@@ -68,37 +68,11 @@ function StockTakeDetailPageClient({ stockTakeId }: { stockTakeId: string }) {
   const loadStockTake = async () => {
     try {
       setLoading(true);
-
-      // Load stock take header
-      const { data: stockTakeData, error: stockTakeError } = await supabase
-        .from('stock_takes')
-        .select(
-          `
-          *,
-          inventory_locations (id, name, type),
-          user_profiles!stock_takes_counted_by_fkey (full_name)
-        `
-        )
-        .eq('id', stockTakeId)
-        .single();
-
-      if (stockTakeError) throw stockTakeError;
-      setStockTake(stockTakeData);
-
-      // Load lines
-      const { data: linesData, error: linesError } = await supabase
-        .from('stock_take_lines')
-        .select(
-          `
-          *,
-          products (id, name, sku, unit)
-        `
-        )
-        .eq('stock_take_id', stockTakeId)
-        .order('created_at');
-
-      if (linesError) throw linesError;
-      setLines(linesData || []);
+      const res = await fetch(`/api/stock-takes/${stockTakeId}`);
+      if (!res.ok) throw new Error('Failed to load stock take');
+      const result = await res.json();
+      setStockTake(result.stockTake || result);
+      setLines(result.lines || []);
     } catch (error) {
       console.error('Failed to load stock take:', error);
       toast.error('Failed to load stock take');
@@ -112,49 +86,11 @@ function StockTakeDetailPageClient({ stockTakeId }: { stockTakeId: string }) {
 
     try {
       setUpdating(true);
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      // Update stock take status
-      const { error: updateError } = await supabase
-        .from('stock_takes')
-        .update({
-          status: 'completed',
-          approved_by: user.id,
-          approved_at: new Date().toISOString(),
-        })
-        .eq('id', stockTakeId);
-
-      if (updateError) throw updateError;
-
-      // Apply inventory adjustments
-      for (const line of lines) {
-        if (line.variance !== 0) {
-          const { error: adjustError } = await supabase
-            .from('inventory_adjustments')
-            .insert({
-              product_id: line.product_id,
-              adjustment_date: new Date().toISOString(),
-              quantity_change: line.variance,
-              reason: 'stock_take',
-              reference_type: 'stock_take',
-              reference_id: stockTakeId,
-              notes: `Stock take ${stockTake?.reference_number}: Expected ${line.expected_quantity}, Counted ${line.counted_quantity}`,
-            });
-
-          if (adjustError) throw adjustError;
-
-          // Update product stock
-          const { error: productError } = await supabase.rpc('update_product_stock', {
-            p_product_id: line.product_id,
-            p_quantity_change: line.variance,
-          });
-
-          if (productError) throw productError;
-        }
+      const res = await fetch(`/api/stock-takes/${stockTakeId}/approve`, { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to approve stock take');
       }
-
       toast.success('Stock take approved and inventory updated');
       loadStockTake();
     } catch (error: any) {
@@ -170,14 +106,12 @@ function StockTakeDetailPageClient({ stockTakeId }: { stockTakeId: string }) {
 
     try {
       setUpdating(true);
-
-      const { error } = await supabase
-        .from('stock_takes')
-        .update({ status: 'cancelled' })
-        .eq('id', stockTakeId);
-
-      if (error) throw error;
-
+      const res = await fetch(`/api/stock-takes/${stockTakeId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'cancelled' }),
+      });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
       toast.success('Stock take rejected');
       loadStockTake();
     } catch (error: any) {

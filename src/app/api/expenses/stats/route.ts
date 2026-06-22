@@ -1,46 +1,35 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { getCompanySettings } from '@/lib/company-settings';
 
 export async function GET() {
   try {
-    const supabase = await createClient();
     const settings = await getCompanySettings();
     const baseCurrency = settings.base_currency;
 
-    // Get current month date range
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
     const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
-    // Get all expenses for calculations
-    const { data: allExpenses, error } = await supabase
-      .from('expenses')
-      .select('amount, currency, expense_date, status');
-
-    if (error) throw error;
+    const rows = await sql`SELECT amount, currency, expense_date, status FROM expenses`;
 
     let thisMonthTotal = 0;
     let pendingCount = 0;
     let approvedCount = 0;
     let paidCount = 0;
 
-    for (const expense of allExpenses || []) {
+    for (const expense of rows as any[]) {
       const amount = parseFloat(expense.amount) || 0;
-
       let amountInBase = amount;
-      if (expense.currency && expense.currency !== baseCurrency) {
-        const { data: converted, error: conversionError } = await supabase.rpc('convert_currency', {
-          p_amount: amount,
-          p_from_currency: expense.currency,
-          p_to_currency: baseCurrency,
-          p_date: expense.expense_date,
-        });
 
-        if (conversionError) {
-          console.error('Currency conversion error:', conversionError);
-        } else {
-          amountInBase = converted ?? 0;
+      if (expense.currency && expense.currency !== baseCurrency) {
+        try {
+          const convRows = await sql`
+            SELECT convert_currency(${amount}, ${expense.currency}, ${baseCurrency}, ${expense.expense_date}) AS result
+          `;
+          amountInBase = Number(convRows[0]?.result ?? amount);
+        } catch {
+          // fallback to unconverted
         }
       }
 

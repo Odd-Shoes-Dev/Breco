@@ -1,18 +1,15 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const supabase = await createClient();
+    const allItems = await sql`
+      SELECT quantity_on_hand, cost_price, currency, reorder_point
+      FROM products
+      WHERE track_inventory = true
+    `;
 
-    const { data: allItems, error } = await supabase
-      .from('products')
-      .select('quantity_on_hand, cost_price, currency, reorder_point')
-      .eq('track_inventory', true);
-
-    if (error) throw error;
-
-    if (!allItems) {
+    if (!allItems || allItems.length === 0) {
       return NextResponse.json({
         totalItems: 0,
         totalValue: 0,
@@ -35,18 +32,19 @@ export async function GET() {
 
         // Convert to USD if not already
         if (item.currency && item.currency !== 'USD') {
-          const { data: converted, error: conversionError } = await supabase.rpc('convert_currency', {
-            p_amount: itemValue,
-            p_from_currency: item.currency,
-            p_to_currency: 'USD',
-            p_date: new Date().toISOString().split('T')[0],
-          });
-
-          if (conversionError) {
+          try {
+            const convertedRows = await sql`
+              SELECT convert_currency(
+                ${itemValue},
+                ${item.currency},
+                'USD',
+                ${new Date().toISOString().split('T')[0]}
+              ) AS result
+            `;
+            valueInUSD = convertedRows[0]?.result ?? itemValue;
+          } catch (conversionError) {
             console.error('Currency conversion error:', conversionError);
-            valueInUSD = itemValue; // Fallback
-          } else {
-            valueInUSD = converted || itemValue;
+            // Fallback to unconverted value
           }
         }
 
@@ -55,10 +53,10 @@ export async function GET() {
     }
 
     const lowStock = allItems.filter(
-      item => (item.quantity_on_hand || 0) <= (item.reorder_point || 0) && (item.quantity_on_hand || 0) > 0
+      (item: any) => (item.quantity_on_hand || 0) <= (item.reorder_point || 0) && (item.quantity_on_hand || 0) > 0
     ).length;
-    
-    const outOfStock = allItems.filter(item => (item.quantity_on_hand || 0) === 0).length;
+
+    const outOfStock = allItems.filter((item: any) => (item.quantity_on_hand || 0) === 0).length;
 
     return NextResponse.json({
       totalItems,
