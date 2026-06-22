@@ -38,7 +38,7 @@ export async function POST(request: NextRequest, context: any) {
         e.*,
         json_build_object('id', up.id, 'full_name', up.full_name, 'email', up.email) AS approved_by_user
       FROM expenses e
-      LEFT JOIN user_profiles up ON up.id = e.approved_by
+      LEFT JOIN users up ON up.id = e.approved_by
       WHERE e.id = ${params.id}
     `;
     const updatedExpense = (dataRows as any[])[0];

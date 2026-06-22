@@ -17,24 +17,24 @@ export async function GET(request: NextRequest) {
     const conditions: string[] = ['1=1'];
     if (status) conditions.push(`aa.status = '${status.replace(/'/g, "''")}'`);
     if (assetId) conditions.push(`aa.asset_id = '${assetId.replace(/'/g, "''")}'`);
-    if (employeeId) conditions.push(`aa.employee_id = '${employeeId.replace(/'/g, "''")}'`);
+    if (employeeId) conditions.push(`aa.assigned_to_employee_id = '${employeeId.replace(/'/g, "''")}'`);
     const where = conditions.join(' AND ');
 
     const rows = await sql`
       SELECT
         aa.*,
-        json_build_object('id', a.id, 'name', a.name, 'asset_tag', a.asset_tag,
+        json_build_object('id', a.id, 'name', a.name, 'asset_number', a.asset_number,
           'asset_categories', json_build_object('name', ac.name)
         ) AS assets,
         json_build_object('id', e.id, 'first_name', e.first_name, 'last_name', e.last_name,
           'employee_number', e.employee_number, 'department', e.department
         ) AS employees
       FROM asset_assignments aa
-      LEFT JOIN assets a ON a.id = aa.asset_id
+      LEFT JOIN fixed_assets a ON a.id = aa.asset_id
       LEFT JOIN asset_categories ac ON ac.id = a.category_id
-      LEFT JOIN employees e ON e.id = aa.employee_id
+      LEFT JOIN employees e ON e.id = aa.assigned_to_employee_id
       WHERE ${sql.unsafe(where)}
-      ORDER BY aa.assignment_date DESC
+      ORDER BY aa.assigned_date DESC
     `;
 
     return NextResponse.json(rows);
@@ -54,15 +54,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       asset_id,
-      employee_id,
-      assignment_date,
-      expected_return_date,
-      condition_at_assignment,
+      assigned_to_employee_id,
+      assigned_date,
+      condition_on_assignment,
       notes,
     } = body;
 
     // Validate required fields
-    if (!asset_id || !employee_id || !assignment_date) {
+    if (!asset_id || !assigned_to_employee_id || !assigned_date) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -84,22 +83,22 @@ export async function POST(request: NextRequest) {
     // Create assignment
     const rows = await sql`
       INSERT INTO asset_assignments (
-        asset_id, employee_id, assignment_date, expected_return_date,
-        condition_at_assignment, status, notes
+        asset_id, assigned_to_employee_id, assigned_date,
+        condition_on_assignment, status, notes, created_by
       ) VALUES (
         ${asset_id},
-        ${employee_id},
-        ${assignment_date},
-        ${expected_return_date || null},
-        ${condition_at_assignment || 'good'},
+        ${assigned_to_employee_id},
+        ${assigned_date},
+        ${condition_on_assignment || 'good'},
         'assigned',
-        ${notes || null}
+        ${notes || null},
+        ${user.id}
       )
       RETURNING *
     `;
 
     // Update asset status to assigned
-    await sql`UPDATE assets SET status = 'assigned' WHERE id = ${asset_id}`;
+    await sql`UPDATE fixed_assets SET status = 'active' WHERE id = ${asset_id}`;
 
     return NextResponse.json(rows[0], { status: 201 });
   } catch (error: any) {

@@ -15,7 +15,7 @@ export async function POST(
     const { id } = await params;
     const assignmentId = id;
     const body = await request.json();
-    const { return_date, condition_at_return, return_notes } = body;
+    const { return_date, condition_on_return, notes: return_notes } = body;
 
     // Validate required fields
     if (!return_date) {
@@ -48,14 +48,14 @@ export async function POST(
       UPDATE asset_assignments
       SET
         return_date = ${return_date},
-        condition_at_return = ${condition_at_return || null},
-        return_notes = ${return_notes || null},
+        condition_on_return = ${condition_on_return || null},
+        notes = ${return_notes || null},
         status = 'returned'
       WHERE id = ${assignmentId}
     `;
 
     // Update asset status back to active
-    await sql`UPDATE assets SET status = 'active' WHERE id = ${assignment.asset_id}`;
+    await sql`UPDATE fixed_assets SET status = 'active' WHERE id = ${assignment.asset_id}`;
 
     return NextResponse.json({
       message: 'Asset returned successfully',

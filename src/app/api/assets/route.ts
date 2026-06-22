@@ -29,43 +29,36 @@ export async function POST(request: NextRequest) {
       description,
       category_id,
       asset_number,
-      serial_number,
       purchase_date,
       purchase_price,
-      residual_value,
+      salvage_value,
       useful_life_months,
-      depreciation_start_date,
       depreciation_method,
-      location,
       notes,
-      vendor_id,
     } = body;
 
     const generatedNumber = asset_number || `ASSET-${Date.now().toString().slice(-6)}`;
     const purchasePrice = Number(purchase_price) || 0;
-    const salvageValue = Number(residual_value) || 0;
+    const salvageValue = Number(salvage_value) || 0;
 
     const rows = await sql`
       INSERT INTO fixed_assets (
-        name, description, category_id, asset_number, serial_number,
-        purchase_date, purchase_price, residual_value, depreciation_start_date,
+        name, description, category_id, asset_number,
+        purchase_date, purchase_price, salvage_value,
         useful_life_months, depreciation_method, accumulated_depreciation,
-        location, vendor_id, notes, status
+        current_book_value, notes, status
       ) VALUES (
         ${name},
         ${description},
         ${category_id || null},
         ${generatedNumber},
-        ${serial_number},
         ${purchase_date},
         ${purchasePrice},
         ${salvageValue},
-        ${depreciation_start_date || purchase_date},
         ${useful_life_months},
         ${depreciation_method},
         0,
-        ${location},
-        ${vendor_id || null},
+        ${purchasePrice - salvageValue},
         ${notes},
         'active'
       )

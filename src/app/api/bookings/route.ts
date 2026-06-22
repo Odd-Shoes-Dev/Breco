@@ -92,14 +92,14 @@ export async function POST(request: NextRequest) {
       INSERT INTO bookings (
         customer_id, booking_type, travel_start_date, travel_end_date,
         tour_package_id, hotel_id, assigned_vehicle_id, number_of_people,
-        status, currency, exchange_rate, total, amount_paid, balance_due,
+        status, currency, exchange_rate, total, amount_paid,
         special_requests, notes, booking_number, created_by
       ) VALUES (
         ${body.customer_id}, ${body.booking_type}, ${body.travel_start_date}, ${body.travel_end_date},
         ${body.tour_package_id ?? null}, ${body.hotel_id ?? null}, ${body.assigned_vehicle_id ?? null},
         ${body.number_of_people || 1},
         ${body.status || 'draft'}, ${body.currency || 'USD'}, ${body.exchange_rate || 1.0},
-        ${body.total || 0}, ${body.amount_paid || 0}, ${body.balance_due || 0},
+        ${body.total || 0}, ${body.amount_paid || 0},
         ${body.special_requests ?? null}, ${body.notes ?? null},
         ${bookingNumber}, ${user.id}
       )

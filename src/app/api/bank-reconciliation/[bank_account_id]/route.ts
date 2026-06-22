@@ -19,8 +19,8 @@ export async function GET(request: NextRequest, context: any) {
           json_build_object('id', cru.id, 'full_name', cru.full_name, 'email', cru.email) AS created_by_user
         FROM bank_reconciliations br
         LEFT JOIN bank_accounts ba ON ba.id = br.bank_account_id
-        LEFT JOIN user_profiles cu ON cu.id = br.completed_by
-        LEFT JOIN user_profiles cru ON cru.id = br.created_by
+        LEFT JOIN users cu ON cu.id = br.completed_by
+        LEFT JOIN users cru ON cru.id = br.created_by
         WHERE br.bank_account_id = ${params.bank_account_id} AND br.status = ${status}
         ORDER BY br.reconciliation_date DESC
       `;
@@ -33,8 +33,8 @@ export async function GET(request: NextRequest, context: any) {
           json_build_object('id', cru.id, 'full_name', cru.full_name, 'email', cru.email) AS created_by_user
         FROM bank_reconciliations br
         LEFT JOIN bank_accounts ba ON ba.id = br.bank_account_id
-        LEFT JOIN user_profiles cu ON cu.id = br.completed_by
-        LEFT JOIN user_profiles cru ON cru.id = br.created_by
+        LEFT JOIN users cu ON cu.id = br.completed_by
+        LEFT JOIN users cru ON cru.id = br.created_by
         WHERE br.bank_account_id = ${params.bank_account_id}
         ORDER BY br.reconciliation_date DESC
       `;
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest, context: any) {
     const reconRows = await sql`
       INSERT INTO bank_reconciliations (
         bank_account_id, reconciliation_date, statement_starting_balance,
-        statement_ending_balance, statement_date, book_balance, notes, created_by
+        statement_ending_balance, statement_date, book_balance, created_by
       ) VALUES (
         ${params.bank_account_id},
         ${body.reconciliation_date || new Date().toISOString().split('T')[0]},
@@ -111,7 +111,6 @@ export async function POST(request: NextRequest, context: any) {
         ${body.statement_ending_balance},
         ${body.statement_date},
         ${bankAccount.current_balance},
-        ${body.notes || null},
         ${user.id}
       )
       RETURNING *

@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       SELECT
         am.*,
         json_build_object(
-          'id', a.id, 'name', a.name, 'asset_tag', a.asset_tag,
+          'id', a.id, 'name', a.name, 'asset_number', a.asset_number,
           'asset_categories', json_build_object('name', ac.name)
         ) AS assets,
         json_build_object(
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
           'employee_number', e.employee_number
         ) AS employees
       FROM asset_maintenance am
-      LEFT JOIN assets a ON a.id = am.asset_id
+      LEFT JOIN fixed_assets a ON a.id = am.asset_id
       LEFT JOIN asset_categories ac ON ac.id = a.category_id
       LEFT JOIN employees e ON e.id = am.performed_by_employee_id
       WHERE ${sql.unsafe(where)}

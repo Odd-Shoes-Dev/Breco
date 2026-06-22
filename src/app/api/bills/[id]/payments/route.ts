@@ -22,10 +22,10 @@ export async function GET(
           'payment_method', bp.payment_method,
           'reference_number', bp.reference_number,
           'notes', bp.notes,
-          'bank_account', json_build_object('id', ba.id, 'name', ba.name, 'currency', ba.currency)
+          'bank_account', json_build_object('id', ba.id, 'account_name', ba.account_name, 'currency', ba.currency)
         ) AS bill_payment
       FROM bill_payment_applications bpa
-      LEFT JOIN bill_payments bp ON bp.id = bpa.bill_payment_id
+      LEFT JOIN bill_payments bp ON bp.id = bpa.payment_id
       LEFT JOIN bank_accounts ba ON ba.id = bp.bank_account_id
       WHERE bpa.bill_id = ${id}
       ORDER BY bpa.created_at DESC
@@ -106,18 +106,17 @@ export async function POST(
     const paymentRows = await sql`
       INSERT INTO bill_payments (
         vendor_id, payment_number, payment_date, amount, payment_method,
-        pay_from_account_id, reference_number, notes, currency, exchange_rate, created_by
+        bank_account_id, reference_number, notes, currency, created_by
       ) VALUES (
         ${bill.vendor_id},
         ${body.reference || ref},
         ${body.payment_date},
         ${body.amount},
         ${body.payment_method || 'bank_transfer'},
-        ${bankAccount?.gl_account_id || null},
+        ${body.bank_account_id},
         ${body.reference || ref},
         ${body.notes || null},
         ${body.currency || bill.currency || 'USD'},
-        ${body.exchange_rate || 1},
         ${user.id}
       )
       RETURNING *
@@ -128,7 +127,7 @@ export async function POST(
     // Create bill payment application (junction table)
     try {
       await sql`
-        INSERT INTO bill_payment_applications (bill_payment_id, bill_id, amount_applied)
+        INSERT INTO bill_payment_applications (payment_id, bill_id, amount_applied)
         VALUES (${payment.id}, ${billId}, ${body.amount})
       `;
     } catch (applicationError: any) {

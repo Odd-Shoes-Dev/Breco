@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
         json_build_object('id', up.id, 'full_name', up.full_name, 'email', up.email) AS posted_by_user
       FROM depreciation_postings dp
       LEFT JOIN journal_entries je ON je.id = dp.journal_entry_id
-      LEFT JOIN user_profiles up ON up.id = dp.posted_by
+      LEFT JOIN users up ON up.id = dp.posted_by
       ORDER BY dp.posting_date DESC
       LIMIT ${limit} OFFSET ${offset}
     `;

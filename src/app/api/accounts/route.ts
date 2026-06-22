@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
     const rows = await sql`
       INSERT INTO accounts (
         code, name, description, account_type, account_subtype,
-        parent_id, currency, is_active, normal_balance
+        parent_id, is_active, normal_balance
       ) VALUES (
         ${body.code},
         ${body.name},
@@ -90,7 +90,6 @@ export async function POST(request: NextRequest) {
         ${body.account_type},
         ${body.account_subtype || null},
         ${body.parent_id || null},
-        ${body.currency || 'USD'},
         ${body.is_active !== false},
         ${body.normal_balance || 'debit'}
       )

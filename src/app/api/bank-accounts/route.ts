@@ -9,11 +9,11 @@ export async function GET(request: NextRequest) {
 
     let rows;
     if (active === 'true') {
-      rows = await sql`SELECT * FROM bank_accounts WHERE is_active = true ORDER BY name`;
+      rows = await sql`SELECT * FROM bank_accounts WHERE is_active = true ORDER BY account_name`;
     } else if (active === 'false') {
-      rows = await sql`SELECT * FROM bank_accounts WHERE is_active = false ORDER BY name`;
+      rows = await sql`SELECT * FROM bank_accounts WHERE is_active = false ORDER BY account_name`;
     } else {
-      rows = await sql`SELECT * FROM bank_accounts ORDER BY name`;
+      rows = await sql`SELECT * FROM bank_accounts ORDER BY account_name`;
     }
 
     return NextResponse.json({ data: rows });
@@ -28,30 +28,25 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // Validate required fields
-    if (!body.name || !body.bank_name) {
+    if (!body.account_name || !body.bank_name) {
       return NextResponse.json(
         { error: 'Account name and bank name are required' },
         { status: 400 }
       );
     }
 
-    // If this is marked as primary, unset other primary accounts
-    if (body.is_primary) {
-      await sql`UPDATE bank_accounts SET is_primary = false WHERE is_primary = true`;
-    }
-
     const rows = await sql`
       INSERT INTO bank_accounts (
-        name, bank_name, account_number_encrypted, routing_number,
-        account_type, currency, is_primary, is_active
+        account_name, bank_name, account_number, bank_branch,
+        swift_code, currency, gl_account_id, is_active
       ) VALUES (
-        ${body.name},
+        ${body.account_name},
         ${body.bank_name},
-        ${null},
-        ${body.routing_number || null},
-        ${body.account_type || 'checking'},
+        ${body.account_number || null},
+        ${body.bank_branch || null},
+        ${body.swift_code || null},
         ${body.currency || 'USD'},
-        ${body.is_primary || false},
+        ${body.gl_account_id || null},
         ${body.is_active !== false}
       )
       RETURNING *

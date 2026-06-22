@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
         json_build_object('id', ba.id, 'name', ba.name) AS bank_accounts
       FROM expenses e
       LEFT JOIN vendors v ON v.id = e.vendor_id
-      LEFT JOIN accounts a ON a.id = e.expense_account_id
+      LEFT JOIN accounts a ON a.id = e.account_id
       LEFT JOIN bank_accounts ba ON ba.id = e.bank_account_id
       ORDER BY e.expense_date DESC
     `;
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
 
     if (status && status !== 'all') data = data.filter((e: any) => e.status === status);
     if (vendorId) data = data.filter((e: any) => e.vendor_id === vendorId);
-    if (accountId) data = data.filter((e: any) => e.expense_account_id === accountId);
+    if (accountId) data = data.filter((e: any) => e.account_id === accountId);
     if (startDate) data = data.filter((e: any) => e.expense_date >= startDate);
     if (endDate) data = data.filter((e: any) => e.expense_date <= endDate);
 
@@ -61,9 +61,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    if (!body.expense_date || !body.amount || !body.expense_account_id) {
+    if (!body.expense_date || !body.amount || !body.account_id) {
       return NextResponse.json(
-        { error: 'Missing required fields: expense_date, amount, expense_account_id' },
+        { error: 'Missing required fields: expense_date, amount, account_id' },
         { status: 400 }
       );
     }
@@ -83,21 +83,17 @@ export async function POST(request: NextRequest) {
 
     const insertedRows = await sql`
       INSERT INTO expenses (
-        expense_number, reference, expense_date, vendor_id, expense_account_id,
-        payment_account_id, amount, tax_amount, total, currency, description,
-        category, department, payment_method, bank_account_id, receipt_url,
-        is_billable, customer_id, status, created_by
+        expense_number, expense_date, vendor_id, account_id,
+        bank_account_id, amount, tax_amount, currency, description,
+        payment_method, receipt_url, status, created_by
       ) VALUES (
-        ${body.reference || ref}, ${body.reference || ref},
-        ${body.expense_date}, ${body.vendor_id ?? null}, ${body.expense_account_id},
-        ${body.bank_account_id || body.expense_account_id},
+        ${ref},
+        ${body.expense_date}, ${body.vendor_id ?? null}, ${body.account_id},
+        ${body.bank_account_id ?? null},
         ${body.amount}, ${body.tax_amount || 0},
-        ${(body.amount || 0) + (body.tax_amount || 0)},
         ${body.currency || 'USD'}, ${body.description ?? null},
-        ${body.category ?? null}, ${body.department ?? null},
-        ${body.payment_method || 'cash'}, ${body.bank_account_id ?? null},
-        ${body.receipt_url ?? null}, ${body.is_billable || false},
-        ${body.customer_id ?? null}, ${body.status || 'pending'}, ${user.id}
+        ${body.payment_method || 'cash'},
+        ${body.receipt_url ?? null}, ${body.status || 'pending'}, ${user.id}
       )
       RETURNING *
     `;
@@ -105,7 +101,7 @@ export async function POST(request: NextRequest) {
 
     // Create journal entry if expense is paid
     if (body.status === 'paid') {
-      const acctRows = await sql`SELECT code FROM accounts WHERE id = ${body.expense_account_id} LIMIT 1`;
+      const acctRows = await sql`SELECT code FROM accounts WHERE id = ${body.account_id} LIMIT 1`;
       const expenseAccount = (acctRows as any[])[0];
 
       if (expenseAccount) {
@@ -114,7 +110,7 @@ export async function POST(request: NextRequest) {
             id: expense.id,
             expense_number: expense.expense_number,
             expense_date: expense.expense_date,
-            amount: expense.total,
+            amount: expense.amount,
             account_code: expenseAccount.code,
             description: expense.description || 'Expense',
             bank_account_id: body.bank_account_id,

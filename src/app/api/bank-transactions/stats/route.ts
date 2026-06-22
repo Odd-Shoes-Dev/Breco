@@ -10,19 +10,20 @@ export async function GET(request: NextRequest) {
 
     const conditions: string[] = ['1=1'];
     if (accountId && accountId !== 'all') {
-      conditions.push(`bank_account_id = '${accountId.replace(/'/g, "''")}'`);
+      conditions.push(`bt.bank_account_id = '${accountId.replace(/'/g, "''")}'`);
     }
     if (type && type !== 'all') {
-      conditions.push(`transaction_type = '${type.replace(/'/g, "''")}'`);
+      conditions.push(`bt.transaction_type = '${type.replace(/'/g, "''")}'`);
     }
     if (reconciled && reconciled !== 'all') {
-      conditions.push(`is_reconciled = ${reconciled === 'reconciled' ? 'true' : 'false'}`);
+      conditions.push(`bt.is_reconciled = ${reconciled === 'reconciled' ? 'true' : 'false'}`);
     }
     const where = conditions.join(' AND ');
 
     const transactions = await sql`
-      SELECT amount, currency, transaction_date, transaction_type, is_reconciled
-      FROM bank_transactions
+      SELECT bt.amount, ba.currency, bt.transaction_date, bt.transaction_type, bt.is_reconciled
+      FROM bank_transactions bt
+      LEFT JOIN bank_accounts ba ON ba.id = bt.bank_account_id
       WHERE ${sql.unsafe(where)}
     `;
 

@@ -18,7 +18,7 @@ export async function GET(
       FROM bank_transfers bt
       LEFT JOIN bank_accounts fa ON fa.id = bt.from_account_id
       LEFT JOIN bank_accounts ta ON ta.id = bt.to_account_id
-      LEFT JOIN user_profiles up ON up.id = bt.approved_by
+      LEFT JOIN users up ON up.id = bt.approved_by
       WHERE bt.id = ${id}
     `;
 

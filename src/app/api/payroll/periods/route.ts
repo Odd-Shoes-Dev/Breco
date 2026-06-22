@@ -22,7 +22,7 @@ export async function GET(request: Request) {
         SELECT pp.*,
           json_build_object('id', u.id, 'full_name', u.full_name, 'email', u.email) AS processed_by_user
         FROM payroll_periods pp
-        LEFT JOIN user_profiles u ON u.id = pp.processed_by
+        LEFT JOIN users u ON u.id = pp.processed_by
         WHERE pp.status = ${status}
           AND pp.period_start >= ${`${yearInt}-01-01`}
           AND pp.period_start <= ${`${yearInt}-12-31`}
@@ -33,7 +33,7 @@ export async function GET(request: Request) {
         SELECT pp.*,
           json_build_object('id', u.id, 'full_name', u.full_name, 'email', u.email) AS processed_by_user
         FROM payroll_periods pp
-        LEFT JOIN user_profiles u ON u.id = pp.processed_by
+        LEFT JOIN users u ON u.id = pp.processed_by
         WHERE pp.status = ${status}
         ORDER BY pp.period_start DESC
       `;
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
         SELECT pp.*,
           json_build_object('id', u.id, 'full_name', u.full_name, 'email', u.email) AS processed_by_user
         FROM payroll_periods pp
-        LEFT JOIN user_profiles u ON u.id = pp.processed_by
+        LEFT JOIN users u ON u.id = pp.processed_by
         WHERE pp.period_start >= ${`${yearInt}-01-01`}
           AND pp.period_start <= ${`${yearInt}-12-31`}
         ORDER BY pp.period_start DESC
@@ -53,7 +53,7 @@ export async function GET(request: Request) {
         SELECT pp.*,
           json_build_object('id', u.id, 'full_name', u.full_name, 'email', u.email) AS processed_by_user
         FROM payroll_periods pp
-        LEFT JOIN user_profiles u ON u.id = pp.processed_by
+        LEFT JOIN users u ON u.id = pp.processed_by
         ORDER BY pp.period_start DESC
       `;
     }

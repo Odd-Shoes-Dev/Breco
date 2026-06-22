@@ -13,8 +13,8 @@ export async function GET(request: NextRequest, context: any) {
         json_build_object('id', cru.id, 'full_name', cru.full_name, 'email', cru.email) AS created_by_user
       FROM bank_reconciliations br
       LEFT JOIN bank_accounts ba ON ba.id = br.bank_account_id
-      LEFT JOIN user_profiles cu ON cu.id = br.completed_by
-      LEFT JOIN user_profiles cru ON cru.id = br.created_by
+      LEFT JOIN users cu ON cu.id = br.completed_by
+      LEFT JOIN users cru ON cru.id = br.created_by
       WHERE br.id = ${params.id}
     `;
 
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest, context: any) {
     const matchedTransactions = await sql`
       SELECT bri.*, row_to_json(bt.*) AS transaction
       FROM bank_reconciliation_items bri
-      LEFT JOIN bank_transactions bt ON bt.id = bri.transaction_id
+      LEFT JOIN bank_transactions bt ON bt.id = bri.bank_transaction_id
       WHERE bri.reconciliation_id = ${params.id}
     `;
 
@@ -76,7 +76,7 @@ export async function PATCH(request: NextRequest, context: any) {
     // Build dynamic SET clause from body fields
     const allowed = [
       'statement_date', 'statement_ending_balance', 'statement_starting_balance',
-      'notes', 'book_balance', 'reconciliation_date',
+      'book_balance', 'reconciliation_date',
     ];
     const updates: string[] = [];
     const vals: any[] = [];

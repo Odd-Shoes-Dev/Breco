@@ -13,15 +13,11 @@ export async function GET(
     const data = await sql`
       SELECT
         bc.*,
-        json_build_object('id', v.id, 'name', v.name) AS vendor,
-        json_build_object('id', e.id, 'first_name', e.first_name, 'last_name', e.last_name) AS employee,
-        json_build_object('id', ex.id, 'expense_number', ex.expense_number) AS expense
+        json_build_object('id', v.id, 'name', v.name) AS vendor
       FROM booking_costs bc
       LEFT JOIN vendors v ON v.id = bc.vendor_id
-      LEFT JOIN employees e ON e.id = bc.employee_id
-      LEFT JOIN expenses ex ON ex.id = bc.expense_id
       WHERE bc.booking_id = ${bookingId}
-      ORDER BY bc.cost_date DESC
+      ORDER BY bc.created_at DESC
     `;
     const costs = data as any[];
 
@@ -55,9 +51,9 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!body.cost_type || !body.description || !body.amount || !body.cost_date) {
+    if (!body.cost_type || !body.description || !body.amount) {
       return NextResponse.json(
-        { error: 'Missing required fields: cost_type, description, amount, cost_date' },
+        { error: 'Missing required fields: cost_type, description, amount' },
         { status: 400 }
       );
     }
@@ -71,13 +67,12 @@ export async function POST(
 
     const insertedRows = await sql`
       INSERT INTO booking_costs (
-        booking_id, cost_type, description, amount, currency, exchange_rate,
-        vendor_id, employee_id, expense_id, cost_date, notes, created_by
+        booking_id, cost_type, description, amount, currency,
+        vendor_id, created_by
       ) VALUES (
         ${bookingId}, ${body.cost_type}, ${body.description}, ${body.amount},
-        ${body.currency || 'USD'}, ${body.exchange_rate || 1.0},
-        ${body.vendor_id ?? null}, ${body.employee_id ?? null}, ${body.expense_id ?? null},
-        ${body.cost_date}, ${body.notes ?? null}, ${user.id}
+        ${body.currency || 'USD'},
+        ${body.vendor_id ?? null}, ${user.id}
       )
       RETURNING id
     `;
@@ -86,11 +81,9 @@ export async function POST(
     const dataRows = await sql`
       SELECT
         bc.*,
-        json_build_object('id', v.id, 'name', v.name) AS vendor,
-        json_build_object('id', e.id, 'first_name', e.first_name, 'last_name', e.last_name) AS employee
+        json_build_object('id', v.id, 'name', v.name) AS vendor
       FROM booking_costs bc
       LEFT JOIN vendors v ON v.id = bc.vendor_id
-      LEFT JOIN employees e ON e.id = bc.employee_id
       WHERE bc.id = ${newId}
     `;
     const data = (dataRows as any[])[0];

@@ -36,10 +36,10 @@ export async function POST(request: NextRequest) {
 
     // Get account details
     const fromAccounts = await sql`
-      SELECT name, gl_account_id, currency FROM bank_accounts WHERE id = ${body.from_account_id}
+      SELECT account_name, gl_account_id, currency FROM bank_accounts WHERE id = ${body.from_account_id}
     `;
     const toAccounts = await sql`
-      SELECT name, gl_account_id, currency FROM bank_accounts WHERE id = ${body.to_account_id}
+      SELECT account_name, gl_account_id, currency FROM bank_accounts WHERE id = ${body.to_account_id}
     `;
 
     if (fromAccounts.length === 0 || toAccounts.length === 0) {
@@ -60,12 +60,12 @@ export async function POST(request: NextRequest) {
     // Create two bank transactions
     const tx1 = await sql`
       INSERT INTO bank_transactions (bank_account_id, transaction_date, amount, description, reference_number, transaction_type, is_reconciled)
-      VALUES (${body.from_account_id}, ${body.transfer_date}, ${-Math.abs(body.amount)}, ${`Transfer to ${toAccount.name}`}, ${reference_number}, 'transfer_out', false)
+      VALUES (${body.from_account_id}, ${body.transfer_date}, ${-Math.abs(body.amount)}, ${`Transfer to ${toAccount.account_name}`}, ${reference_number}, 'transfer_out', false)
       RETURNING *
     `;
     const tx2 = await sql`
       INSERT INTO bank_transactions (bank_account_id, transaction_date, amount, description, reference_number, transaction_type, is_reconciled)
-      VALUES (${body.to_account_id}, ${body.transfer_date}, ${Math.abs(body.amount)}, ${`Transfer from ${fromAccount.name}`}, ${reference_number}, 'transfer_in', false)
+      VALUES (${body.to_account_id}, ${body.transfer_date}, ${Math.abs(body.amount)}, ${`Transfer from ${fromAccount.account_name}`}, ${reference_number}, 'transfer_in', false)
       RETURNING *
     `;
 
@@ -94,13 +94,12 @@ export async function POST(request: NextRequest) {
     try {
       const jeRows = await sql`
         INSERT INTO journal_entries (
-          entry_number, entry_date, description, reference,
-          status, source_module, source_document_id, created_by, posted_by, posted_at
+          entry_number, entry_date, description,
+          status, reference_type, reference_id, created_by, posted_by, posted_at
         ) VALUES (
           ${entryNumber},
           ${body.transfer_date},
-          ${`Bank transfer: ${fromAccount.name} → ${toAccount.name}`},
-          ${reference_number},
+          ${`Bank transfer: ${fromAccount.account_name} → ${toAccount.account_name}`},
           'posted',
           'bank',
           ${data[0]?.id},
@@ -123,12 +122,12 @@ export async function POST(request: NextRequest) {
     // Create journal lines
     try {
       await sql`
-        INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit, description, created_by)
-        VALUES (${journalEntry.id}, ${toAccount.gl_account_id}, ${transferAmount}, 0, ${`Transfer from ${fromAccount.name}`}, ${user.id})
+        INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit, description)
+        VALUES (${journalEntry.id}, ${toAccount.gl_account_id}, ${transferAmount}, 0, ${`Transfer from ${fromAccount.account_name}`})
       `;
       await sql`
-        INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit, description, created_by)
-        VALUES (${journalEntry.id}, ${fromAccount.gl_account_id}, 0, ${transferAmount}, ${`Transfer to ${toAccount.name}`}, ${user.id})
+        INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit, description)
+        VALUES (${journalEntry.id}, ${fromAccount.gl_account_id}, 0, ${transferAmount}, ${`Transfer to ${toAccount.account_name}`})
       `;
     } catch (jlError) {
       console.error('Failed to create journal lines:', jlError);

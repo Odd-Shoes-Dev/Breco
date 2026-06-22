@@ -33,8 +33,7 @@ export async function POST(
       UPDATE bank_transfers
       SET
         status = 'approved',
-        approved_by = ${user.id},
-        approved_at = NOW()
+        approved_by = ${user.id}
       WHERE id = ${id}
       RETURNING *
     `;

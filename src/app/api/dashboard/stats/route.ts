@@ -20,7 +20,7 @@ export async function GET() {
     const [invoiceRows, billRows, expenseRows, bankTxRows] = await Promise.all([
       sql`SELECT total, amount_paid, status, currency, invoice_date FROM invoices`,
       sql`SELECT total, amount_paid, status, currency, bill_date FROM bills`,
-      sql`SELECT total, currency, expense_date FROM expenses`,
+      sql`SELECT amount, currency, expense_date FROM expenses`,
       sql`
         SELECT bt.amount, bt.transaction_type, bt.transaction_date, ba.currency AS bank_currency
         FROM bank_transactions bt
@@ -55,7 +55,7 @@ export async function GET() {
     }
 
     for (const expense of expenseRows as any[]) {
-      const amountInBase = await convertCurrencyDB(Number(expense.total), expense.currency, baseCurrency, expense.expense_date);
+      const amountInBase = await convertCurrencyDB(Number(expense.amount), expense.currency, baseCurrency, expense.expense_date);
       totalExpenses += amountInBase;
     }
 
@@ -71,16 +71,9 @@ export async function GET() {
     }
 
     let inventoryValue = 0;
-    const inventoryRows = await sql`
-      SELECT quantity_on_hand, cost_price, currency FROM products WHERE track_inventory = true
-    `;
-    const today = new Date().toISOString().split('T')[0];
-    for (const item of inventoryRows as any[]) {
-      const itemValue = (Number(item.quantity_on_hand) || 0) * (Number(item.cost_price) || 0);
-      if (itemValue > 0) {
-        inventoryValue += await convertCurrencyDB(itemValue, item.currency || baseCurrency, baseCurrency, today);
-      }
-    }
+    // products table does not have quantity_on_hand or currency columns;
+    // inventory value should be derived from stock_movements or the inventory account balance
+    // For now, set to 0 until proper inventory tracking is implemented
 
     return NextResponse.json({
       totalRevenue,

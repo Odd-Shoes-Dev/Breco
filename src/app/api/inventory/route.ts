@@ -139,19 +139,18 @@ export async function POST(request: NextRequest) {
 
     const rows = await sql`
       INSERT INTO products (
-        sku, name, description, category_id, product_type, unit_of_measure,
-        cost_price, unit_price, currency, quantity_on_hand, quantity_reserved,
-        reorder_point, reorder_quantity, inventory_account_id, cogs_account_id,
-        revenue_account_id, is_active, track_inventory, is_taxable, tax_rate
+        sku, name, description, category_id, unit_of_measure,
+        purchase_price, selling_price,
+        reorder_point, inventory_account_id, expense_account_id,
+        income_account_id, is_active, track_inventory, is_taxable
       ) VALUES (
         ${body.sku}, ${body.name}, ${body.description || null}, ${body.category_id || null},
-        'inventory', ${body.unit_of_measure || 'each'},
-        ${body.unit_cost || 0}, ${body.unit_price || 0}, ${body.currency || 'USD'},
-        ${body.quantity_on_hand || 0}, 0,
-        ${body.reorder_point || 0}, ${body.reorder_quantity || 0},
+        ${body.unit_of_measure || 'each'},
+        ${body.unit_cost || 0}, ${body.unit_price || 0},
+        ${body.reorder_point || 0},
         ${inventoryAccountId}, ${cogsAccountId}, NULL,
         ${body.is_active !== false}, ${body.track_inventory !== false},
-        ${body.is_taxable !== false}, ${body.tax_rate || null}
+        ${body.is_taxable !== false}
       )
       RETURNING *
     `;

@@ -18,10 +18,10 @@ export async function GET(request: NextRequest) {
       data = await sql`
         SELECT st.*,
           row_to_json(il.*) AS inventory_locations,
-          row_to_json(up.*) AS user_profiles
+          row_to_json(up.*) AS users
         FROM stock_takes st
         LEFT JOIN inventory_locations il ON il.id = st.location_id
-        LEFT JOIN user_profiles up ON up.id = st.counted_by
+        LEFT JOIN users up ON up.id = st.counted_by
         WHERE st.status = ${status} AND st.id = ${stockTakeId}
         ORDER BY st.stock_take_date DESC
       `;
@@ -29,10 +29,10 @@ export async function GET(request: NextRequest) {
       data = await sql`
         SELECT st.*,
           row_to_json(il.*) AS inventory_locations,
-          row_to_json(up.*) AS user_profiles
+          row_to_json(up.*) AS users
         FROM stock_takes st
         LEFT JOIN inventory_locations il ON il.id = st.location_id
-        LEFT JOIN user_profiles up ON up.id = st.counted_by
+        LEFT JOIN users up ON up.id = st.counted_by
         WHERE st.status = ${status}
         ORDER BY st.stock_take_date DESC
       `;
@@ -40,10 +40,10 @@ export async function GET(request: NextRequest) {
       data = await sql`
         SELECT st.*,
           row_to_json(il.*) AS inventory_locations,
-          row_to_json(up.*) AS user_profiles
+          row_to_json(up.*) AS users
         FROM stock_takes st
         LEFT JOIN inventory_locations il ON il.id = st.location_id
-        LEFT JOIN user_profiles up ON up.id = st.counted_by
+        LEFT JOIN users up ON up.id = st.counted_by
         WHERE st.id = ${stockTakeId}
         ORDER BY st.stock_take_date DESC
       `;
@@ -51,10 +51,10 @@ export async function GET(request: NextRequest) {
       data = await sql`
         SELECT st.*,
           row_to_json(il.*) AS inventory_locations,
-          row_to_json(up.*) AS user_profiles
+          row_to_json(up.*) AS users
         FROM stock_takes st
         LEFT JOIN inventory_locations il ON il.id = st.location_id
-        LEFT JOIN user_profiles up ON up.id = st.counted_by
+        LEFT JOIN users up ON up.id = st.counted_by
         ORDER BY st.stock_take_date DESC
       `;
     }

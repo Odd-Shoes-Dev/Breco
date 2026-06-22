@@ -23,7 +23,7 @@ export async function GET(
       LEFT JOIN invoices i ON i.id = c.invoice_id
       LEFT JOIN employees e ON e.id = c.employee_id
       LEFT JOIN vendors v ON v.id = c.vendor_id
-      LEFT JOIN user_profiles up ON up.id = c.approved_by
+      LEFT JOIN users up ON up.id = c.approved_by
       WHERE c.id = ${id}
     `;
     const data = (rows as any[])[0];

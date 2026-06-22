@@ -54,12 +54,11 @@ export async function POST(request: NextRequest) {
     const periodLabel = body.period === 'daily' ? 'Daily' : body.period === 'weekly' ? 'Weekly' : 'Monthly';
 
     const jeRows = await sql`
-      INSERT INTO journal_entries (entry_number, entry_date, description, memo, created_by, status)
+      INSERT INTO journal_entries (entry_number, entry_date, description, created_by, status)
       VALUES (
         ${ref},
         ${body.sale_date},
         ${`${periodLabel} Cafe Sales - ${new Date(body.sale_date).toLocaleDateString()}`},
-        ${body.notes || null},
         ${user.id},
         ${'posted'}
       )

@@ -257,10 +257,10 @@ export async function POST(request: NextRequest) {
     // Create journal entry
     const entryRows = await sql`
       INSERT INTO journal_entries (
-        entry_number, entry_date, description, memo,
-        source_module, source_document_id, status
+        entry_number, entry_date, description,
+        reference_type, reference_id, status
       ) VALUES (
-        ${entryNumber}, ${entry_date}, ${description}, ${reference || null},
+        ${entryNumber}, ${entry_date}, ${description},
         ${source || 'manual'}, ${source_id || null}, ${is_posted ? 'posted' : 'draft'}
       )
       RETURNING *

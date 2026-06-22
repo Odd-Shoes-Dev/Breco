@@ -32,28 +32,30 @@ export async function POST(request: NextRequest) {
 
     for (const asset of assets) {
       // Skip if already fully depreciated
-      if (Number(asset.accumulated_depreciation) >= (Number(asset.purchase_cost) - (Number(asset.residual_value) || 0))) {
+      if (Number(asset.accumulated_depreciation) >= (Number(asset.purchase_price) - (Number(asset.salvage_value) || 0))) {
         continue;
       }
 
       // Check if depreciation already posted for this period
+      const periodStart = new Date(year, month - 1, 1).toISOString().split('T')[0];
+      const periodEnd = new Date(year, month, 0).toISOString().split('T')[0];
       const existingRows = await sql`
-        SELECT id FROM depreciation_schedules
-        WHERE asset_id = ${asset.id} AND year = ${year} AND month = ${month}
+        SELECT id FROM depreciation_entries
+        WHERE asset_id = ${asset.id} AND period_start = ${periodStart} AND period_end = ${periodEnd}
         LIMIT 1
       `;
       if ((existingRows as any[]).length > 0) continue;
 
       // Calculate depreciation based on method
       let monthlyDepreciation = 0;
-      const depreciableAmount = Number(asset.purchase_cost) - (Number(asset.residual_value) || 0);
+      const depreciableAmount = Number(asset.purchase_price) - (Number(asset.salvage_value) || 0);
 
       if (asset.depreciation_method === 'straight_line') {
-        const monthsInUsefulLife = (Number(asset.useful_life_years) || 1) * 12;
+        const monthsInUsefulLife = Number(asset.useful_life_months) || 1;
         monthlyDepreciation = depreciableAmount / monthsInUsefulLife;
-      } else if (asset.depreciation_method === 'declining_balance') {
-        const rate = 2 / (Number(asset.useful_life_years) || 1);
-        const bookValue = Number(asset.purchase_cost) - Number(asset.accumulated_depreciation);
+      } else if (asset.depreciation_method === 'reducing_balance') {
+        const rate = 2 / ((Number(asset.useful_life_months) || 1) / 12);
+        const bookValue = Number(asset.purchase_price) - Number(asset.accumulated_depreciation);
         monthlyDepreciation = (bookValue * rate) / 12;
       } else if (asset.depreciation_method === 'units_of_production') {
         continue;
@@ -64,39 +66,43 @@ export async function POST(request: NextRequest) {
 
       if (monthlyDepreciation <= 0) continue;
 
-      // Create depreciation schedule entry
-      const scheduleRows = await sql`
-        INSERT INTO depreciation_schedules (
-          asset_id, company_id, year, month, depreciation_amount,
-          accumulated_depreciation, book_value, is_posted
+      const newAccumulated = Number(asset.accumulated_depreciation) + monthlyDepreciation;
+      const newBookValue = Number(asset.purchase_price) - newAccumulated;
+
+      // Create depreciation entry
+      const entryRows = await sql`
+        INSERT INTO depreciation_entries (
+          asset_id, entry_date, period_start, period_end, depreciation_amount,
+          accumulated_depreciation, book_value
         ) VALUES (
-          ${asset.id}, ${asset.company_id}, ${year}, ${month},
+          ${asset.id}, ${period_end_date}, ${periodStart}, ${periodEnd},
           ${monthlyDepreciation},
-          ${Number(asset.accumulated_depreciation) + monthlyDepreciation},
-          ${Number(asset.purchase_cost) - (Number(asset.accumulated_depreciation) + monthlyDepreciation)},
-          ${true}
+          ${newAccumulated},
+          ${newBookValue}
         )
         RETURNING *
       `;
-      const schedule = (scheduleRows as any[])[0];
+      const entry = (entryRows as any[])[0];
 
-      // Update asset accumulated depreciation
+      // Update asset accumulated depreciation and book value
       await sql`
         UPDATE fixed_assets
-        SET accumulated_depreciation = ${Number(asset.accumulated_depreciation) + monthlyDepreciation}
+        SET accumulated_depreciation = ${newAccumulated},
+            current_book_value = ${newBookValue}
         WHERE id = ${asset.id}
       `;
 
-      depreciationEntries.push(schedule);
+      depreciationEntries.push(entry);
 
       // Create journal entry
       const jeRows = await sql`
         INSERT INTO journal_entries (
-          company_id, entry_date, description, reference_type, reference_id
+          entry_number, entry_date, description, reference_type, reference_id
         ) VALUES (
-          ${asset.company_id}, ${period_end_date},
-          ${`Depreciation for ${asset.asset_name} - ${month}/${year}`},
-          ${'depreciation'}, ${schedule.id}
+          ${`DEP-${year}-${month.toString().padStart(2, '0')}-${asset.id.slice(0, 8)}`},
+          ${period_end_date},
+          ${`Depreciation for ${asset.name} - ${month}/${year}`},
+          ${'depreciation'}, ${entry.id}
         )
         RETURNING *
       `;
@@ -105,12 +111,12 @@ export async function POST(request: NextRequest) {
       // Get accounts
       const depExpAcctRows = await sql`
         SELECT id FROM accounts
-        WHERE company_id = ${asset.company_id} AND account_type = 'Expense' AND account_name ILIKE '%depreciation%'
+        WHERE account_type = 'expense' AND name ILIKE '%depreciation%'
         LIMIT 1
       `;
       const accumDepAcctRows = await sql`
         SELECT id FROM accounts
-        WHERE company_id = ${asset.company_id} AND account_type = 'Contra Asset' AND account_name ILIKE '%accumulated%depreciation%'
+        WHERE account_subtype = 'fixed_asset' AND name ILIKE '%accumulated%depreciation%'
         LIMIT 1
       `;
       const depreciationExpenseAccount = (depExpAcctRows as any[])[0];
@@ -124,7 +130,7 @@ export async function POST(request: NextRequest) {
           account_id: depreciationExpenseAccount.id,
           debit: monthlyDepreciation,
           credit: 0,
-          description: `Depreciation - ${asset.asset_name}`,
+          description: `Depreciation - ${asset.name}`,
         });
       }
 
@@ -134,14 +140,14 @@ export async function POST(request: NextRequest) {
           account_id: accumulatedDepreciationAccount.id,
           debit: 0,
           credit: monthlyDepreciation,
-          description: `Accumulated Depreciation - ${asset.asset_name}`,
+          description: `Accumulated Depreciation - ${asset.name}`,
         });
       }
 
       if (lines.length > 0) {
         for (const line of lines) {
           await sql`
-            INSERT INTO journal_entry_lines (journal_entry_id, account_id, debit, credit, description)
+            INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit, description)
             VALUES (${line.journal_entry_id}, ${line.account_id}, ${line.debit}, ${line.credit}, ${line.description})
           `;
         }

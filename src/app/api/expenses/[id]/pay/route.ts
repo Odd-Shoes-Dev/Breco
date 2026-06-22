@@ -42,8 +42,7 @@ export async function POST(request: NextRequest, context: any) {
         paid_by = ${user.id},
         paid_at = ${new Date().toISOString()},
         bank_account_id = CASE WHEN ${body.bank_account_id !== undefined} THEN ${body.bank_account_id ?? null} ELSE bank_account_id END,
-        payment_method = COALESCE(${body.payment_method ?? null}, payment_method),
-        reference = COALESCE(${body.reference_number ?? null}, reference)
+        payment_method = COALESCE(${body.payment_method ?? null}, payment_method)
       WHERE id = ${params.id}
     `;
 
@@ -53,8 +52,8 @@ export async function POST(request: NextRequest, context: any) {
         json_build_object('id', up.id, 'full_name', up.full_name, 'email', up.email) AS paid_by_user,
         json_build_object('id', a.id, 'name', a.name, 'code', a.code) AS expense_account
       FROM expenses e
-      LEFT JOIN user_profiles up ON up.id = e.paid_by
-      LEFT JOIN accounts a ON a.id = e.expense_account_id
+      LEFT JOIN users up ON up.id = e.paid_by
+      LEFT JOIN accounts a ON a.id = e.account_id
       WHERE e.id = ${params.id}
     `;
     const updatedExpense = (dataRows as any[])[0];
@@ -66,7 +65,7 @@ export async function POST(request: NextRequest, context: any) {
           id: updatedExpense.id,
           expense_number: updatedExpense.expense_number,
           expense_date: updatedExpense.expense_date,
-          amount: updatedExpense.total,
+          amount: updatedExpense.amount,
           account_code: updatedExpense.expense_account.code,
           description: updatedExpense.description || 'Expense',
           bank_account_id: updatedExpense.bank_account_id,

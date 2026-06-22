@@ -57,12 +57,9 @@ export async function PATCH(request: NextRequest, context: any) {
     await sql`
       UPDATE customers SET
         name = COALESCE(${body.name ?? null}, name),
-        company_name = CASE WHEN ${body.company_name !== undefined} THEN ${body.company_name ?? null} ELSE company_name END,
         email = CASE WHEN ${body.email !== undefined} THEN ${body.email ?? null} ELSE email END,
         phone = CASE WHEN ${body.phone !== undefined} THEN ${body.phone ?? null} ELSE phone END,
-        tax_id = CASE WHEN ${body.tax_id !== undefined} THEN ${body.tax_id ?? null} ELSE tax_id END,
-        address_line1 = CASE WHEN ${body.address_line1 !== undefined} THEN ${body.address_line1 ?? null} ELSE address_line1 END,
-        address_line2 = CASE WHEN ${body.address_line2 !== undefined} THEN ${body.address_line2 ?? null} ELSE address_line2 END,
+        address = CASE WHEN ${body.address !== undefined || body.address_line1 !== undefined} THEN ${body.address ?? body.address_line1 ?? null} ELSE address END,
         city = CASE WHEN ${body.city !== undefined} THEN ${body.city ?? null} ELSE city END,
         state = CASE WHEN ${body.state !== undefined} THEN ${body.state ?? null} ELSE state END,
         zip_code = CASE WHEN ${body.postal_code !== undefined} THEN ${body.postal_code ?? null} ELSE zip_code END,

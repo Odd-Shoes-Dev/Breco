@@ -77,13 +77,13 @@ export async function POST(request: NextRequest) {
 
     const insertedRows = await sql`
       INSERT INTO customers (
-        customer_number, name, company_name, email, phone, tax_id,
-        address_line1, address_line2, city, state, zip_code, country,
+        customer_number, name, email, phone,
+        address, city, state, zip_code, country,
         payment_terms, credit_limit, notes, is_active
       ) VALUES (
-        ${numberData}, ${body.name}, ${body.company_name ?? null}, ${body.email ?? null},
-        ${body.phone ?? null}, ${body.tax_id ?? null},
-        ${body.address_line1 ?? null}, ${body.address_line2 ?? null},
+        ${numberData}, ${body.name}, ${body.email ?? null},
+        ${body.phone ?? null},
+        ${body.address ?? body.address_line1 ?? null},
         ${body.city ?? null}, ${body.state ?? null}, ${body.postal_code ?? null},
         ${body.country || 'USA'},
         ${body.payment_terms || 30}, ${body.credit_limit || 0},

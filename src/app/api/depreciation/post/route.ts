@@ -30,8 +30,8 @@ export async function GET(request: NextRequest) {
     }
 
     const assetRows = await sql`
-      SELECT * FROM assets
-      WHERE status = 'active' AND depreciation_start_date <= ${periodEnd}
+      SELECT * FROM fixed_assets
+      WHERE status = 'active' AND purchase_date <= ${periodEnd}
     `;
     const assets = assetRows as any[];
 
@@ -70,12 +70,12 @@ export async function GET(request: NextRequest) {
         assetDetails.push({
           asset_id: asset.id,
           asset_name: asset.name,
-          asset_code: asset.asset_code,
+          asset_number: asset.asset_number,
           depreciation_method: asset.depreciation_method,
           depreciation_amount: actualDepreciation,
           accumulated_before: accumulatedBefore,
           accumulated_after: accumulatedAfter,
-          book_value_before: asset.book_value || (Number(asset.purchase_price) - accumulatedBefore),
+          book_value_before: asset.current_book_value || (Number(asset.purchase_price) - accumulatedBefore),
           book_value_after: Number(asset.purchase_price) - accumulatedAfter,
           purchase_price: asset.purchase_price,
           salvage_value: asset.salvage_value,
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
     }
 
     const assetRows = await sql`
-      SELECT * FROM assets WHERE status = 'active' AND depreciation_start_date <= ${periodEnd}
+      SELECT * FROM fixed_assets WHERE status = 'active' AND purchase_date <= ${periodEnd}
     `;
     const assets = assetRows as any[];
 
@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
           depreciation_amount: actualDepreciation,
           accumulated_before: accumulatedBefore,
           accumulated_after: accumulatedAfter,
-          book_value_before: asset.book_value || (Number(asset.purchase_price) - accumulatedBefore),
+          book_value_before: asset.current_book_value || (Number(asset.purchase_price) - accumulatedBefore),
           book_value_after: Number(asset.purchase_price) - accumulatedAfter,
         });
 
@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
     // Create journal entry
     const jeRows = await sql`
       INSERT INTO journal_entries (
-        entry_number, entry_date, description, source_module, status,
+        entry_number, entry_date, description, reference_type, status,
         created_by, posted_by, posted_at
       ) VALUES (
         ${entryNumber}, ${postingDate},
@@ -227,10 +227,10 @@ export async function POST(request: NextRequest) {
 
     // Create journal lines
     await sql`
-      INSERT INTO journal_lines (journal_entry_id, line_number, account_id, description, debit, credit, base_debit, base_credit)
+      INSERT INTO journal_lines (journal_entry_id, line_number, account_id, description, debit, credit)
       VALUES
-        (${journalEntry.id}, ${1}, ${depExpenseAcct.id}, ${'Depreciation Expense'}, ${totalDepreciation}, ${0}, ${totalDepreciation}, ${0}),
-        (${journalEntry.id}, ${2}, ${accumDepAcct.id}, ${'Accumulated Depreciation'}, ${0}, ${totalDepreciation}, ${0}, ${totalDepreciation})
+        (${journalEntry.id}, ${1}, ${depExpenseAcct.id}, ${'Depreciation Expense'}, ${totalDepreciation}, ${0}),
+        (${journalEntry.id}, ${2}, ${accumDepAcct.id}, ${'Accumulated Depreciation'}, ${0}, ${totalDepreciation})
     `;
 
     // Create depreciation posting record

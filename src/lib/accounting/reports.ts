@@ -227,7 +227,7 @@ export async function generateARAgingReport(asOfDate: string): Promise<ARAgingRe
     FROM invoices i
     LEFT JOIN customers c ON c.id = i.customer_id
     WHERE i.status IN ('sent', 'partial', 'overdue')
-      AND i.balance_due > 0
+      AND (i.total - i.amount_paid) > 0
   `;
 
   const asOf = new Date(asOfDate);
@@ -246,7 +246,7 @@ export async function generateARAgingReport(asOfDate: string): Promise<ARAgingRe
     const daysPastDue = Math.floor(
       (asOf.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)
     );
-    const balance = invoice.balance_due;
+    const balance = Number(invoice.total) - (Number(invoice.amount_paid) || 0);
 
     if (!customerAging.has(invoice.customer_id)) {
       customerAging.set(invoice.customer_id, {
@@ -305,7 +305,7 @@ export async function generateAPAgingReport(asOfDate: string): Promise<APAgingRe
     FROM bills b
     LEFT JOIN vendors v ON v.id = b.vendor_id
     WHERE b.status IN ('approved', 'partial', 'overdue')
-      AND b.balance_due > 0
+      AND (b.total - b.amount_paid) > 0
   `;
 
   const asOf = new Date(asOfDate);
@@ -324,7 +324,7 @@ export async function generateAPAgingReport(asOfDate: string): Promise<APAgingRe
     const daysPastDue = Math.floor(
       (asOf.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)
     );
-    const balance = bill.balance_due;
+    const balance = Number(bill.total) - (Number(bill.amount_paid) || 0);
 
     if (!vendorAging.has(bill.vendor_id)) {
       vendorAging.set(bill.vendor_id, {

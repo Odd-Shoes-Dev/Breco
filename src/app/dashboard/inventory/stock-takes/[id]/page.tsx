@@ -29,7 +29,7 @@ interface StockTake {
     name: string;
     type: string;
   };
-  user_profiles: {
+  users: {
     full_name: string;
   };
 }
@@ -272,7 +272,7 @@ function StockTakeDetailPageClient({ stockTakeId }: { stockTakeId: string }) {
             </div>
             <div>
               <label className="text-sm text-gray-600">Counted By</label>
-              <p className="font-medium">{stockTake.user_profiles.full_name}</p>
+              <p className="font-medium">{stockTake.users.full_name}</p>
             </div>
             <div>
               <label className="text-sm text-gray-600">Created Date</label>

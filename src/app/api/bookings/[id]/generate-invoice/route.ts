@@ -20,7 +20,7 @@ export async function POST(
     const bookingRows = await sql`
       SELECT
         b.*,
-        json_build_object('id', c.id, 'name', c.name, 'email', c.email, 'phone', c.phone, 'address_line1', c.address_line1, 'city', c.city, 'country', c.country) AS customer,
+        json_build_object('id', c.id, 'name', c.name, 'email', c.email, 'phone', c.phone, 'address', c.address, 'city', c.city, 'country', c.country) AS customer,
         json_build_object('id', tp.id, 'name', tp.name, 'package_code', tp.package_code) AS tour_package,
         json_build_object('id', h.id, 'name', h.name, 'star_rating', h.star_rating) AS hotel,
         json_build_object('id', v.id, 'vehicle_type', v.vehicle_type, 'registration_number', v.registration_number) AS vehicle
@@ -77,17 +77,13 @@ export async function POST(
         description = `Booking: ${booking.booking_number}`;
     }
 
-    let isAdvancePayment = false;
-
     if (invoiceType === 'deposit') {
       const depositPercent = body.deposit_percent || 30;
       amount = Number(booking.total) * (depositPercent / 100);
       description = `Deposit (${depositPercent}%) - ${description}`;
-      isAdvancePayment = true;
     } else if (invoiceType === 'balance') {
       amount = Number(booking.total) - (Number(booking.amount_paid) || 0);
       description = `Balance Payment - ${description}`;
-      isAdvancePayment = true;
     }
 
     // Generate invoice number
@@ -117,15 +113,14 @@ export async function POST(
       INSERT INTO invoices (
         invoice_number, customer_id, booking_id, invoice_date, due_date,
         currency, exchange_rate, subtotal, tax_rate, tax_amount, total,
-        amount_paid, status, is_advance_payment, service_start_date, service_end_date,
+        amount_paid, status,
         notes, created_by
       ) VALUES (
         ${invoiceNumber}, ${booking.customer_id}, ${bookingId},
         ${body.invoice_date || today}, ${body.due_date || due30},
         ${booking.currency || 'USD'}, ${booking.exchange_rate || 1.0},
         ${subtotal}, ${taxRate}, ${taxAmount}, ${amount},
-        ${0}, ${'draft'}, ${isAdvancePayment},
-        ${booking.travel_start_date}, ${booking.travel_end_date},
+        ${0}, ${'draft'},
         ${body.notes || `Generated from booking ${booking.booking_number}`},
         ${user.id}
       )
@@ -136,8 +131,8 @@ export async function POST(
     // Create invoice line
     try {
       await sql`
-        INSERT INTO invoice_lines (invoice_id, description, quantity, unit_price, line_total, revenue_account_id)
-        VALUES (${invoice.id}, ${description}, ${1}, ${subtotal}, ${subtotal}, ${revenueAccount?.id ?? null})
+        INSERT INTO invoice_lines (invoice_id, description, quantity, unit_price, line_total)
+        VALUES (${invoice.id}, ${description}, ${1}, ${subtotal}, ${subtotal})
       `;
     } catch (lineErr: any) {
       // Rollback - delete invoice

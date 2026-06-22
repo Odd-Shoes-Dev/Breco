@@ -47,9 +47,9 @@ export async function GET(
       entry_number: entry.entry_number,
       entry_date: entry.entry_date,
       description: entry.description,
-      reference: entry.memo || '',
-      source: entry.source_module,
-      source_id: entry.source_document_id,
+      reference: entry.description || '',
+      source: entry.reference_type,
+      source_id: entry.reference_id,
       status: entry.status,
       is_posted: entry.status === 'posted',
       lines: (entry.lines || []).map((line: any) => ({
@@ -149,11 +149,8 @@ export async function PATCH(
     if (updateData.description !== undefined) {
       await sql`UPDATE journal_entries SET description = ${updateData.description} WHERE id = ${id}`;
     }
-    if (updateData.reference !== undefined) {
-      await sql`UPDATE journal_entries SET memo = ${updateData.reference} WHERE id = ${id}`;
-    }
     if (updateData.source !== undefined) {
-      await sql`UPDATE journal_entries SET source_module = ${updateData.source} WHERE id = ${id}`;
+      await sql`UPDATE journal_entries SET reference_type = ${updateData.source} WHERE id = ${id}`;
     }
     if (updateData.is_posted !== undefined) {
       const newStatus = updateData.is_posted ? 'posted' : 'draft';

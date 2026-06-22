@@ -17,9 +17,9 @@ export async function POST(
     const body = await request.json();
 
     // Validate required fields
-    if (!body.disposal_date || !body.disposal_method) {
+    if (!body.disposal_date) {
       return NextResponse.json(
-        { error: 'Missing required fields: disposal_date, disposal_method' },
+        { error: 'Missing required fields: disposal_date' },
         { status: 400 }
       );
     }
@@ -27,7 +27,7 @@ export async function POST(
     // Get asset details
     const assetRows = await sql`
       SELECT fa.*, a.* FROM fixed_assets fa
-      LEFT JOIN accounts a ON a.id = fa.account_id
+      LEFT JOIN accounts a ON a.id = fa.asset_account_id
       WHERE fa.id = ${id}
     `;
 
@@ -41,8 +41,8 @@ export async function POST(
       return NextResponse.json({ error: 'Asset already disposed' }, { status: 400 });
     }
 
-    // Calculate current book value (cost - accumulated depreciation)
-    const bookValue = asset.cost - (asset.accumulated_depreciation || 0);
+    // Calculate current book value (purchase_price - accumulated depreciation)
+    const bookValue = asset.purchase_price - (asset.accumulated_depreciation || 0);
     const disposalAmount = body.disposal_amount || 0;
     const gainLoss = disposalAmount - bookValue;
 
@@ -64,7 +64,7 @@ export async function POST(
     }
 
     // Create journal entry for disposal
-    const description = `Asset disposal - ${asset.name} (${body.disposal_method})`;
+    const description = `Asset disposal - ${asset.name}`;
     const jeRows = await sql`
       INSERT INTO journal_entries (entry_date, description, reference_type, reference_id, created_by)
       VALUES (${body.disposal_date}, ${description}, 'asset_disposal', ${id}, ${user.id})
@@ -119,16 +119,16 @@ export async function POST(
     // 4. CR Asset (at cost)
     lines.push({
       journal_entry_id: journalEntry.id,
-      account_id: asset.account_id,
+      account_id: asset.asset_account_id,
       debit: 0,
-      credit: asset.cost,
+      credit: asset.purchase_price,
       description: 'Remove asset from books',
     });
 
     try {
       for (const line of lines) {
         await sql`
-          INSERT INTO journal_entry_lines (journal_entry_id, account_id, debit, credit, description)
+          INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit, description)
           VALUES (${line.journal_entry_id}, ${line.account_id}, ${line.debit}, ${line.credit}, ${line.description})
         `;
       }
@@ -144,10 +144,9 @@ export async function POST(
       SET
         status = 'disposed',
         disposal_date = ${body.disposal_date},
-        disposal_method = ${body.disposal_method},
         disposal_amount = ${disposalAmount},
-        disposal_journal_entry_id = ${journalEntry.id},
-        disposal_notes = ${body.disposal_notes}
+        current_book_value = 0,
+        notes = ${body.disposal_notes || null}
       WHERE id = ${id}
       RETURNING *
     `;
@@ -155,7 +154,7 @@ export async function POST(
     return NextResponse.json({
       asset: updatedRows[0],
       disposal_summary: {
-        original_cost: asset.cost,
+        original_cost: asset.purchase_price,
         accumulated_depreciation: asset.accumulated_depreciation,
         book_value: bookValue,
         disposal_amount: disposalAmount,

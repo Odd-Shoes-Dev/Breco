@@ -18,7 +18,7 @@ export async function GET(request: NextRequest, context: any) {
       SELECT i.*,
         json_build_object(
           'id', c.id, 'name', c.name, 'email', c.email, 'phone', c.phone,
-          'address_line1', c.address_line1, 'address_line2', c.address_line2,
+          'address', c.address,
           'city', c.city, 'state', c.state, 'zip_code', c.zip_code
         ) AS customers,
         COALESCE(
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest, context: any) {
       LEFT JOIN invoice_lines il ON il.invoice_id = i.id
       LEFT JOIN products p ON p.id = il.product_id
       WHERE i.id = ${resolvedParams.id}
-      GROUP BY i.id, c.id, c.name, c.email, c.phone, c.address_line1, c.address_line2, c.city, c.state, c.zip_code
+      GROUP BY i.id, c.id, c.name, c.email, c.phone, c.address, c.city, c.state, c.zip_code
     `;
 
     if (invoiceRows.length === 0) {

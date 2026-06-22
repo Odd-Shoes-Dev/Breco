@@ -16,11 +16,11 @@ interface CreateJournalEntryParams {
   entry_date: string;
   description: string;
   reference?: string; // This will be incorporated into description/memo
-  source_module: string;
+  reference_type: string;
   lines: JournalLineInput[];
   created_by: string;
   status?: 'draft' | 'posted';
-  source_document_id?: string;
+  reference_id?: string;
 }
 
 /**
@@ -30,11 +30,11 @@ export async function createJournalEntry({
   entry_date,
   description,
   reference,
-  source_module,
+  reference_type,
   lines,
   created_by,
   status = 'posted',
-  source_document_id,
+  reference_id,
 }: CreateJournalEntryParams) {
   try {
     // Validate that debits equal credits
@@ -58,11 +58,11 @@ export async function createJournalEntry({
     // Create journal entry
     const entryRows = await sql`
       INSERT INTO journal_entries (
-        entry_number, entry_date, description, source_module,
-        source_document_id, status, created_by
+        entry_number, entry_date, description, reference_type,
+        reference_id, status, created_by
       ) VALUES (
-        ${entryNumber}, ${entry_date}, ${fullDescription}, ${source_module},
-        ${source_document_id ?? null}, ${status}, ${created_by}
+        ${entryNumber}, ${entry_date}, ${fullDescription}, ${reference_type},
+        ${reference_id ?? null}, ${status}, ${created_by}
       )
       RETURNING *
     `;
@@ -134,8 +134,8 @@ export async function createInvoiceJournalEntry(
   return createJournalEntry({
     entry_date: invoice.invoice_date,
     description: `Invoice ${invoice.invoice_number}`,
-    source_module: 'invoice',
-    source_document_id: invoice.id,
+    reference_type: 'invoice',
+    reference_id: invoice.id,
     lines: [
       {
         account_id: arAccountId,
@@ -206,8 +206,8 @@ export async function createBillJournalEntry(
   return createJournalEntry({
     entry_date: bill.bill_date,
     description: `Bill ${bill.bill_number}`,
-    source_module: 'bill',
-    source_document_id: bill.id,
+    reference_type: 'bill',
+    reference_id: bill.id,
     lines,
     created_by,
     status: 'posted',
@@ -246,8 +246,8 @@ export async function createReceiptJournalEntry(
   return createJournalEntry({
     entry_date: receipt.receipt_date,
     description: `Receipt ${receipt.receipt_number}`,
-    source_module: 'receipt',
-    source_document_id: receipt.id,
+    reference_type: 'receipt',
+    reference_id: receipt.id,
     lines: [
       {
         account_id: cashAccountId,
@@ -311,8 +311,8 @@ export async function createExpenseJournalEntry(
   return createJournalEntry({
     entry_date: expense.expense_date,
     description: `Expense: ${expense.description}`,
-    source_module: 'expense',
-    source_document_id: expense.id,
+    reference_type: 'expense',
+    reference_id: expense.id,
     lines: [
       {
         account_id: expenseAccountId,

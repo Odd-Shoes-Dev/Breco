@@ -24,7 +24,7 @@ export async function GET(request: NextRequest, context: any) {
       LEFT JOIN bank_accounts ba ON ba.id = e.bank_account_id
       LEFT JOIN customers c ON c.id = e.customer_id
       LEFT JOIN journal_entries je ON je.id = e.journal_entry_id
-      LEFT JOIN user_profiles up ON up.id = e.created_by
+      LEFT JOIN users up ON up.id = e.created_by
       WHERE e.id = ${params.id}
     `;
     const data = (rows as any[])[0];

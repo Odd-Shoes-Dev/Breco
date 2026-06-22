@@ -12,10 +12,9 @@ export async function GET(request: NextRequest, context: any) {
       SELECT
         b.*,
         json_build_object(
-          'id', v.id, 'name', v.name, 'company_name', v.company_name,
-          'email', v.email, 'phone', v.phone, 'address_line1', v.address_line1,
-          'address_line2', v.address_line2, 'city', v.city, 'state', v.state,
-          'zip_code', v.zip_code, 'country', v.country
+          'id', v.id, 'name', v.name,
+          'email', v.email, 'phone', v.phone, 'address', v.address,
+          'city', v.city, 'country', v.country
         ) AS vendors
       FROM bills b
       LEFT JOIN vendors v ON v.id = b.vendor_id
@@ -93,7 +92,7 @@ export async function PATCH(request: NextRequest, context: any) {
 
     // Build update fields
     const updateFields: Record<string, any> = { subtotal, tax_amount: taxAmount, total };
-    const allowedFields = ['vendor_id', 'bill_date', 'due_date', 'vendor_invoice_number', 'notes', 'status'];
+    const allowedFields = ['vendor_id', 'bill_date', 'due_date', 'notes', 'status'];
     allowedFields.forEach((field) => {
       if (body[field] !== undefined) {
         updateFields[field] = body[field];
@@ -109,7 +108,6 @@ export async function PATCH(request: NextRequest, context: any) {
         vendor_id = COALESCE(${updateFields.vendor_id ?? null}, vendor_id),
         bill_date = COALESCE(${updateFields.bill_date ?? null}, bill_date),
         due_date = COALESCE(${updateFields.due_date ?? null}, due_date),
-        vendor_invoice_number = COALESCE(${updateFields.vendor_invoice_number ?? null}, vendor_invoice_number),
         notes = COALESCE(${updateFields.notes ?? null}, notes),
         status = COALESCE(${updateFields.status ?? null}, status)
       WHERE id = ${params.id}
@@ -153,7 +151,7 @@ export async function PATCH(request: NextRequest, context: any) {
       const billLines = await sql`
         SELECT bl.*, a.code AS account_code
         FROM bill_lines bl
-        LEFT JOIN accounts a ON a.id = bl.expense_account_id
+        LEFT JOIN accounts a ON a.id = bl.account_id
         WHERE bl.bill_id = ${params.id}
       `;
 
@@ -204,17 +202,15 @@ export async function PATCH(request: NextRequest, context: any) {
         })
         .map((line: any, index: number) => {
           const unitCost = line.unit_cost || line.unit_price || 0;
-          const expenseAccountId = line.expense_account_id || (line.account_code ? accountMap[line.account_code] : null);
+          const accountId = line.account_id || line.expense_account_id || (line.account_code ? accountMap[line.account_code] : null);
           return {
             bill_id: bill.id,
             line_number: index + 1,
-            expense_account_id: expenseAccountId,
+            account_id: accountId,
             product_id: line.product_id || null,
-            project_id: line.project_id || null,
-            department: line.department || null,
             description: line.description || '',
             quantity: line.quantity,
-            unit_cost: unitCost,
+            unit_price: unitCost,
             tax_rate: line.tax_rate || 0,
             tax_amount: line.quantity * unitCost * (line.tax_rate || 0),
             line_total: line.quantity * unitCost,
@@ -225,12 +221,12 @@ export async function PATCH(request: NextRequest, context: any) {
         for (const line of billLines) {
           await sql`
             INSERT INTO bill_lines (
-              bill_id, line_number, expense_account_id, product_id, project_id,
-              department, description, quantity, unit_cost, tax_rate, tax_amount, line_total
+              bill_id, line_number, account_id, product_id,
+              description, quantity, unit_price, tax_rate, tax_amount, line_total
             ) VALUES (
-              ${line.bill_id}, ${line.line_number}, ${line.expense_account_id},
-              ${line.product_id}, ${line.project_id}, ${line.department},
-              ${line.description}, ${line.quantity}, ${line.unit_cost},
+              ${line.bill_id}, ${line.line_number}, ${line.account_id},
+              ${line.product_id},
+              ${line.description}, ${line.quantity}, ${line.unit_price},
               ${line.tax_rate}, ${line.tax_amount}, ${line.line_total}
             )
           `;

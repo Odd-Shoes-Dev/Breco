@@ -67,7 +67,7 @@ export async function POST(request: NextRequest, context: any) {
         json_build_object('id', cu.id, 'full_name', cu.full_name, 'email', cu.email) AS completed_by_user
       FROM bank_reconciliations br
       LEFT JOIN bank_accounts ba ON ba.id = br.bank_account_id
-      LEFT JOIN user_profiles cu ON cu.id = br.completed_by
+      LEFT JOIN users cu ON cu.id = br.completed_by
       WHERE br.id = ${params.id}
     `;
 

@@ -14,8 +14,8 @@ interface Category {
   id: string;
   name: string;
   description: string | null;
-  depreciation_rate: number | null;
-  useful_life_years: number | null;
+  default_depreciation_method: string | null;
+  default_useful_life_months: number | null;
   created_at: string;
 }
 
@@ -27,8 +27,8 @@ export default function AssetCategoriesPage() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    depreciation_rate: '',
-    useful_life_years: '',
+    default_depreciation_method: 'straight_line',
+    default_useful_life_months: '',
   });
 
   useEffect(() => {
@@ -37,13 +37,10 @@ export default function AssetCategoriesPage() {
 
   const loadCategories = async () => {
     try {
-      const { data, error } = await supabase
-        .from('asset_categories')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
-      setCategories(data || []);
+      const res = await fetch('/api/asset-categories');
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to load categories');
+      setCategories(result.data || []);
     } catch (error) {
       console.error('Failed to load categories:', error);
       toast.error('Failed to load categories');
@@ -59,30 +56,37 @@ export default function AssetCategoriesPage() {
       const categoryData = {
         name: formData.name,
         description: formData.description || null,
-        depreciation_rate: formData.depreciation_rate ? parseFloat(formData.depreciation_rate) : null,
-        useful_life_years: formData.useful_life_years ? parseInt(formData.useful_life_years) : null,
+        default_depreciation_method: formData.default_depreciation_method,
+        default_useful_life_months: formData.default_useful_life_months ? parseInt(formData.default_useful_life_months) : null,
       };
 
       if (editingCategory) {
-        const { error } = await supabase
-          .from('asset_categories')
-          .update(categoryData)
-          .eq('id', editingCategory.id);
-
-        if (error) throw error;
+        const res = await fetch('/api/asset-categories', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editingCategory.id, ...categoryData }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Failed to update category');
+        }
         toast.success('Category updated successfully');
       } else {
-        const { error } = await supabase
-          .from('asset_categories')
-          .insert(categoryData);
-
-        if (error) throw error;
+        const res = await fetch('/api/asset-categories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(categoryData),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Failed to create category');
+        }
         toast.success('Category created successfully');
       }
 
       setShowModal(false);
       setEditingCategory(null);
-      setFormData({ name: '', description: '', depreciation_rate: '', useful_life_years: '' });
+      setFormData({ name: '', description: '', default_depreciation_method: 'straight_line', default_useful_life_months: '' });
       loadCategories();
     } catch (error: any) {
       console.error('Error saving category:', error);
@@ -95,8 +99,8 @@ export default function AssetCategoriesPage() {
     setFormData({
       name: category.name,
       description: category.description || '',
-      depreciation_rate: category.depreciation_rate?.toString() || '',
-      useful_life_years: category.useful_life_years?.toString() || '',
+      default_depreciation_method: category.default_depreciation_method || 'straight_line',
+      default_useful_life_months: category.default_useful_life_months?.toString() || '',
     });
     setShowModal(true);
   };
@@ -107,12 +111,13 @@ export default function AssetCategoriesPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from('asset_categories')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch(`/api/asset-categories?id=${id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to delete category');
+      }
 
       toast.success('Category deleted successfully');
       loadCategories();
@@ -124,8 +129,14 @@ export default function AssetCategoriesPage() {
 
   const openNewModal = () => {
     setEditingCategory(null);
-    setFormData({ name: '', description: '', depreciation_rate: '', useful_life_years: '' });
+    setFormData({ name: '', description: '', default_depreciation_method: 'straight_line', default_useful_life_months: '' });
     setShowModal(true);
+  };
+
+  const formatUsefulLife = (months: number | null) => {
+    if (!months) return '-';
+    if (months >= 12 && months % 12 === 0) return `${months / 12} years`;
+    return `${months} months`;
   };
 
   return (
@@ -163,7 +174,7 @@ export default function AssetCategoriesPage() {
                   <tr>
                     <th>Name</th>
                     <th>Description</th>
-                    <th>Depreciation Rate</th>
+                    <th>Depreciation Method</th>
                     <th>Useful Life</th>
                     <th>Created</th>
                     <th className="text-right">Actions</th>
@@ -174,8 +185,8 @@ export default function AssetCategoriesPage() {
                     <tr key={category.id}>
                       <td className="font-medium">{category.name}</td>
                       <td className="text-gray-600">{category.description || '-'}</td>
-                      <td>{category.depreciation_rate ? `${category.depreciation_rate}%` : '-'}</td>
-                      <td>{category.useful_life_years ? `${category.useful_life_years} years` : '-'}</td>
+                      <td className="capitalize">{category.default_depreciation_method?.replace('_', ' ') || '-'}</td>
+                      <td>{formatUsefulLife(category.default_useful_life_months)}</td>
                       <td>{new Date(category.created_at).toLocaleDateString()}</td>
                       <td>
                         <div className="flex justify-end gap-2">
@@ -246,28 +257,27 @@ export default function AssetCategoriesPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Depreciation Rate (%)</label>
-                  <input
-                    type="number"
-                    value={formData.depreciation_rate}
-                    onChange={(e) => setFormData({ ...formData, depreciation_rate: e.target.value })}
+                  <label className="label">Depreciation Method</label>
+                  <select
+                    value={formData.default_depreciation_method}
+                    onChange={(e) => setFormData({ ...formData, default_depreciation_method: e.target.value })}
                     className="input"
-                    step="0.01"
-                    min="0"
-                    max="100"
-                    placeholder="20"
-                  />
+                  >
+                    <option value="straight_line">Straight Line</option>
+                    <option value="reducing_balance">Reducing Balance</option>
+                    <option value="units_of_production">Units of Production</option>
+                  </select>
                 </div>
 
                 <div>
-                  <label className="label">Useful Life (years)</label>
+                  <label className="label">Useful Life (months)</label>
                   <input
                     type="number"
-                    value={formData.useful_life_years}
-                    onChange={(e) => setFormData({ ...formData, useful_life_years: e.target.value })}
+                    value={formData.default_useful_life_months}
+                    onChange={(e) => setFormData({ ...formData, default_useful_life_months: e.target.value })}
                     className="input"
                     min="1"
-                    placeholder="5"
+                    placeholder="60"
                   />
                 </div>
               </div>

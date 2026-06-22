@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
           json_build_object('id', u.id, 'full_name', u.full_name) AS approved_by_user
         FROM petty_cash_disbursements pcd
         LEFT JOIN bank_accounts ba ON ba.id = pcd.cash_account_id
-        LEFT JOIN user_profiles u ON u.id = pcd.approved_by
+        LEFT JOIN users u ON u.id = pcd.approved_by
         WHERE pcd.cash_account_id = ${cash_account_id} AND pcd.status = ${status}
         ORDER BY pcd.disbursement_date DESC
         LIMIT ${limit} OFFSET ${offset}
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
           json_build_object('id', u.id, 'full_name', u.full_name) AS approved_by_user
         FROM petty_cash_disbursements pcd
         LEFT JOIN bank_accounts ba ON ba.id = pcd.cash_account_id
-        LEFT JOIN user_profiles u ON u.id = pcd.approved_by
+        LEFT JOIN users u ON u.id = pcd.approved_by
         WHERE pcd.cash_account_id = ${cash_account_id}
         ORDER BY pcd.disbursement_date DESC
         LIMIT ${limit} OFFSET ${offset}
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
           json_build_object('id', u.id, 'full_name', u.full_name) AS approved_by_user
         FROM petty_cash_disbursements pcd
         LEFT JOIN bank_accounts ba ON ba.id = pcd.cash_account_id
-        LEFT JOIN user_profiles u ON u.id = pcd.approved_by
+        LEFT JOIN users u ON u.id = pcd.approved_by
         WHERE pcd.status = ${status}
         ORDER BY pcd.disbursement_date DESC
         LIMIT ${limit} OFFSET ${offset}
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
           json_build_object('id', u.id, 'full_name', u.full_name) AS approved_by_user
         FROM petty_cash_disbursements pcd
         LEFT JOIN bank_accounts ba ON ba.id = pcd.cash_account_id
-        LEFT JOIN user_profiles u ON u.id = pcd.approved_by
+        LEFT JOIN users u ON u.id = pcd.approved_by
         ORDER BY pcd.disbursement_date DESC
         LIMIT ${limit} OFFSET ${offset}
       `;

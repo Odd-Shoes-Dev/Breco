@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, description, depreciation_method, useful_life_years } = body;
+    const { name, description, default_depreciation_method, useful_life_years, default_useful_life_months } = body;
 
     // Validate required fields
     if (!name) {
@@ -36,13 +36,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Support both useful_life_years (converted to months) and default_useful_life_months directly
+    const lifeMonths = default_useful_life_months || (useful_life_years ? useful_life_years * 12 : null);
+
     const rows = await sql`
-      INSERT INTO asset_categories (name, description, depreciation_method, useful_life_years)
+      INSERT INTO asset_categories (name, description, default_depreciation_method, default_useful_life_months)
       VALUES (
         ${name},
         ${description || null},
-        ${depreciation_method || null},
-        ${useful_life_years || null}
+        ${default_depreciation_method || null},
+        ${lifeMonths}
       )
       RETURNING *
     `;

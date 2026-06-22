@@ -14,7 +14,7 @@ export async function GET(
       SELECT
         b.*,
         json_build_object('id', c.id, 'name', c.name, 'email', c.email, 'phone', c.phone, 'country', c.country) AS customer,
-        json_build_object('id', tp.id, 'name', tp.name, 'package_code', tp.package_code, 'duration_days', tp.duration_days, 'price_per_person', tp.price_per_person, 'currency', tp.currency) AS tour_package,
+        json_build_object('id', tp.id, 'name', tp.name, 'package_code', tp.package_code, 'duration_days', tp.duration_days, 'price_per_person', tp.price_per_person) AS tour_package,
         json_build_object('id', h.id, 'name', h.name, 'star_rating', h.star_rating, 'address', h.address, 'phone', h.phone) AS hotel,
         json_build_object('id', v.id, 'registration_number', v.registration_number, 'vehicle_type', v.vehicle_type, 'seating_capacity', v.seating_capacity, 'daily_rate_usd', v.daily_rate_usd) AS vehicle,
         COALESCE((SELECT json_agg(g.*) FROM booking_guests g WHERE g.booking_id = b.id), '[]') AS guests,
@@ -91,7 +91,6 @@ export async function PATCH(
         exchange_rate = COALESCE(${body.exchange_rate ?? null}, exchange_rate),
         total = COALESCE(${body.total ?? null}, total),
         amount_paid = COALESCE(${body.amount_paid ?? null}, amount_paid),
-        balance_due = COALESCE(${body.balance_due ?? null}, balance_due),
         special_requests = CASE WHEN ${body.special_requests !== undefined} THEN ${body.special_requests ?? null} ELSE special_requests END,
         notes = CASE WHEN ${body.notes !== undefined} THEN ${body.notes ?? null} ELSE notes END
       WHERE id = ${id}

@@ -69,12 +69,11 @@ export async function POST(request: NextRequest, context: any) {
     if (action === 'match') {
       try {
         const rows = await sql`
-          INSERT INTO bank_reconciliation_items (reconciliation_id, transaction_id, cleared_date, matched_by)
+          INSERT INTO bank_reconciliation_items (reconciliation_id, bank_transaction_id, cleared_at)
           VALUES (
             ${params.id},
             ${body.transaction_id},
-            ${body.cleared_date || new Date().toISOString().split('T')[0]},
-            ${user.id}
+            ${body.cleared_date || new Date().toISOString()}
           )
           RETURNING *
         `;
@@ -91,7 +90,7 @@ export async function POST(request: NextRequest, context: any) {
     } else if (action === 'unmatch') {
       await sql`
         DELETE FROM bank_reconciliation_items
-        WHERE reconciliation_id = ${params.id} AND transaction_id = ${body.transaction_id}
+        WHERE reconciliation_id = ${params.id} AND bank_transaction_id = ${body.transaction_id}
       `;
       return NextResponse.json({ message: 'Transaction unmatched successfully' });
     } else {

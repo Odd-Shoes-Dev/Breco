@@ -34,14 +34,11 @@ export async function PUT(
       name,
       description,
       asset_number,
-      serial_number,
       purchase_date,
       purchase_price,
-      residual_value,
+      salvage_value,
       useful_life_months,
       depreciation_method,
-      depreciation_start_date,
-      location,
       notes,
     } = body;
 
@@ -51,14 +48,11 @@ export async function PUT(
         name = ${name},
         description = ${description || null},
         asset_number = ${asset_number},
-        serial_number = ${serial_number || null},
         purchase_date = ${purchase_date},
         purchase_price = ${Number(purchase_price)},
-        residual_value = ${Number(residual_value)},
+        salvage_value = ${Number(salvage_value)},
         useful_life_months = ${Number(useful_life_months)},
         depreciation_method = ${depreciation_method},
-        depreciation_start_date = ${depreciation_start_date},
-        location = ${location || null},
         notes = ${notes || null},
         updated_at = NOW()
       WHERE id = ${id}

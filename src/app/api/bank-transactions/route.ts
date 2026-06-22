@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
 
     // Get the bank account to retrieve its GL account
     const bankAccounts = await sql`
-      SELECT gl_account_id, name, currency FROM bank_accounts WHERE id = ${body.bank_account_id}
+      SELECT gl_account_id, account_name, currency FROM bank_accounts WHERE id = ${body.bank_account_id}
     `;
 
     if (bankAccounts.length === 0) {
@@ -98,13 +98,12 @@ export async function POST(request: NextRequest) {
     try {
       const jeRows = await sql`
         INSERT INTO journal_entries (
-          entry_number, entry_date, description, reference,
-          status, source_module, source_document_id, created_by, posted_by, posted_at
+          entry_number, entry_date, description,
+          status, reference_type, reference_id, created_by, posted_by, posted_at
         ) VALUES (
           ${entryNumber},
           ${body.transaction_date},
           ${`Bank ${isDeposit ? 'deposit' : 'withdrawal'}: ${body.description}`},
-          ${body.reference_number || data.id},
           'posted',
           'bank',
           ${data.id},
@@ -137,8 +136,8 @@ export async function POST(request: NextRequest) {
     try {
       for (const line of journalLines) {
         await sql`
-          INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit, description, created_by)
-          VALUES (${journalEntry.id}, ${line.account_id}, ${line.debit}, ${line.credit}, ${body.description}, ${user.id})
+          INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit, description)
+          VALUES (${journalEntry.id}, ${line.account_id}, ${line.debit}, ${line.credit}, ${body.description})
         `;
       }
     } catch (jlError) {

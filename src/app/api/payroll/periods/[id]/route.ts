@@ -39,8 +39,8 @@ export async function GET(
           '[]'
         ) AS payslips
       FROM payroll_periods pp
-      LEFT JOIN user_profiles cu ON cu.id = pp.created_by
-      LEFT JOIN user_profiles pu ON pu.id = pp.processed_by
+      LEFT JOIN users cu ON cu.id = pp.created_by
+      LEFT JOIN users pu ON pu.id = pp.processed_by
       LEFT JOIN payroll_payslips ps ON ps.payroll_period_id = pp.id
       LEFT JOIN employees e ON e.id = ps.employee_id
       WHERE pp.id = ${id}

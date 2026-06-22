@@ -36,7 +36,7 @@ export async function GET(
       LEFT JOIN vendors v ON v.id = po.vendor_id
       LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
       LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
-      LEFT JOIN user_profiles up ON up.id = gr.received_by
+      LEFT JOIN users up ON up.id = gr.received_by
       WHERE gr.id = ${id}
       GROUP BY gr.id, po.id, po.po_number, v.id, v.name, v.email, up.id, up.full_name
     `;

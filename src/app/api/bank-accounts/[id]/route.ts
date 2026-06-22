@@ -37,23 +37,16 @@ export async function PATCH(
       return NextResponse.json({ error: 'Bank account not found' }, { status: 404 });
     }
 
-    // If this is being set as primary, unset other primary accounts
-    if (body.is_primary) {
-      await sql`
-        UPDATE bank_accounts SET is_primary = false WHERE is_primary = true AND id != ${params.id}
-      `;
-    }
-
     const rows = await sql`
       UPDATE bank_accounts
       SET
-        name = ${body.name},
+        account_name = ${body.account_name},
         bank_name = ${body.bank_name},
-        account_number_encrypted = ${null},
-        routing_number = ${body.routing_number || null},
-        account_type = ${body.account_type},
+        account_number = ${body.account_number || null},
+        bank_branch = ${body.bank_branch || null},
+        swift_code = ${body.swift_code || null},
         currency = ${body.currency},
-        is_primary = ${body.is_primary},
+        gl_account_id = ${body.gl_account_id || null},
         is_active = ${body.is_active}
       WHERE id = ${params.id}
       RETURNING *

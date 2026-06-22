@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     // Update period status to open
     const rows = await sql`
       UPDATE fiscal_periods
-      SET status = 'open', closed_by = NULL, closed_at = NULL
+      SET status = 'open', locked_by = NULL, locked_at = NULL
       WHERE id = ${body.period_id}
       RETURNING *
     `;

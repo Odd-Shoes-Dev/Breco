@@ -53,7 +53,7 @@ export async function canOverridePeriodLock(
     if (!userId) return false;
 
     const rows = await sql`
-      SELECT role FROM user_profiles WHERE id = ${userId} LIMIT 1
+      SELECT role FROM users WHERE id = ${userId} LIMIT 1
     `;
 
     return rows[0]?.role === 'admin';

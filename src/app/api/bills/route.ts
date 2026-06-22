@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     const rows = await sql`
       SELECT
         b.*,
-        json_build_object('id', v.id, 'name', v.name, 'company_name', v.company_name) AS vendors
+        json_build_object('id', v.id, 'name', v.name) AS vendors
       FROM bills b
       LEFT JOIN vendors v ON v.id = b.vendor_id
       WHERE ${sql.unsafe(where)}
@@ -111,15 +111,14 @@ export async function POST(request: NextRequest) {
 
     const billRows = await sql`
       INSERT INTO bills (
-        bill_number, vendor_id, bill_date, due_date, vendor_invoice_number,
+        bill_number, vendor_id, bill_date, due_date,
         notes, subtotal, tax_amount, total, amount_paid, status, currency,
-        exchange_rate, payment_terms, ap_account_id, created_by
+        payment_terms, ap_account_id, created_by
       ) VALUES (
         ${billNumber},
         ${body.vendor_id},
         ${body.bill_date},
         ${body.due_date},
-        ${body.vendor_invoice_number || null},
         ${body.notes || null},
         ${subtotal},
         ${taxAmount},
@@ -127,7 +126,6 @@ export async function POST(request: NextRequest) {
         0,
         ${body.status || 'draft'},
         ${body.currency || 'USD'},
-        ${body.exchange_rate || 1},
         ${body.payment_terms || 30},
         ${apAccount?.id},
         ${user.id}
@@ -150,17 +148,15 @@ export async function POST(request: NextRequest) {
           const unitCost = parseFloat(line.unit_cost || line.unit_price || 0);
           const quantity = parseFloat(line.quantity || 0);
           const taxRate = parseFloat(line.tax_rate || 0);
-          const expenseAccountId = line.expense_account_id || (line.account_code ? accountMap[line.account_code] : null);
+          const accountId = line.account_id || line.expense_account_id || (line.account_code ? accountMap[line.account_code] : null);
           return {
             bill_id: bill.id,
             line_number: index + 1,
-            expense_account_id: expenseAccountId,
+            account_id: accountId,
             product_id: line.product_id || null,
-            project_id: line.project_id || null,
-            department: line.department || null,
             description: line.description || '',
             quantity,
-            unit_cost: unitCost,
+            unit_price: unitCost,
             tax_rate: taxRate,
             tax_amount: quantity * unitCost * taxRate,
             line_total: quantity * unitCost,
@@ -171,12 +167,12 @@ export async function POST(request: NextRequest) {
         for (const line of billLines) {
           await sql`
             INSERT INTO bill_lines (
-              bill_id, line_number, expense_account_id, product_id, project_id,
-              department, description, quantity, unit_cost, tax_rate, tax_amount, line_total
+              bill_id, line_number, account_id, product_id,
+              description, quantity, unit_price, tax_rate, tax_amount, line_total
             ) VALUES (
-              ${line.bill_id}, ${line.line_number}, ${line.expense_account_id},
-              ${line.product_id}, ${line.project_id}, ${line.department},
-              ${line.description}, ${line.quantity}, ${line.unit_cost},
+              ${line.bill_id}, ${line.line_number}, ${line.account_id},
+              ${line.product_id},
+              ${line.description}, ${line.quantity}, ${line.unit_price},
               ${line.tax_rate}, ${line.tax_amount}, ${line.line_total}
             )
           `;
@@ -195,7 +191,7 @@ export async function POST(request: NextRequest) {
           billLines.map((line: any) => ({
             product_id: line.product_id,
             quantity: line.quantity,
-            unit_cost: line.unit_cost,
+            unit_cost: line.unit_price,
             line_total: line.line_total,
             description: line.description,
           })),
@@ -208,7 +204,7 @@ export async function POST(request: NextRequest) {
 
         const journalBillLines = billLines.map((line: any) => {
           const accountCode =
-            Object.keys(accountMap).find((key) => accountMap[key] === line.expense_account_id) || '5000';
+            Object.keys(accountMap).find((key) => accountMap[key] === line.account_id) || '5000';
           return {
             account_code: accountCode,
             amount: line.line_total + line.tax_amount,
