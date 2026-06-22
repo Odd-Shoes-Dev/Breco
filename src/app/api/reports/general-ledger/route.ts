@@ -38,8 +38,8 @@ export async function GET(request: NextRequest) {
     // Fetch journal entries with lines
     const journalEntries = await sql`
       SELECT
-        je.id, je.entry_number, je.entry_date, je.description, je.memo,
-        je.source_module, je.status,
+        je.id, je.entry_number, je.entry_date, je.description,
+        je.reference_type, je.status,
         jl.id AS line_id, jl.line_number, jl.account_id,
         jl.debit, jl.credit, jl.description AS line_description,
         a.id AS acct_id, a.code AS acct_code, a.name AS acct_name, a.account_type
@@ -94,11 +94,11 @@ export async function GET(request: NextRequest) {
         accountName: row.acct_name,
         accountType: mapAccountType(row.account_type),
         description: row.line_description || row.description || '',
-        reference: row.memo || row.entry_number,
+        reference: row.entry_number,
         debit: parseFloat(row.debit) || 0,
         credit: parseFloat(row.credit) || 0,
         runningBalance: 0,
-        journalType: getJournalType(row.source_module)
+        journalType: getJournalType(row.reference_type)
       }));
 
     // Calculate running balances for each account

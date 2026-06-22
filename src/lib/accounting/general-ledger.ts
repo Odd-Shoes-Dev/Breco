@@ -32,8 +32,8 @@ export interface CreateJournalEntryInput {
   entry_date: string;
   description: string;
   memo?: string;
-  source_module?: string;
-  source_document_id?: string;
+  reference_type?: string;
+  reference_id?: string;
   is_adjusting?: boolean;
   is_closing?: boolean;
   is_reversing?: boolean;
@@ -107,13 +107,13 @@ export async function createJournalEntry(
   // Create journal entry
   const entryRows = await sql`
     INSERT INTO journal_entries (
-      entry_number, entry_date, period_id, description, memo,
-      source_module, source_document_id, is_adjusting, is_closing,
+      entry_number, entry_date, period_id, description,
+      reference_type, reference_id, is_adjusting, is_closing,
       status, created_by
     ) VALUES (
       ${entryNumber}, ${input.entry_date}, ${period?.id ?? null},
-      ${input.description}, ${input.memo ?? null},
-      ${input.source_module || 'manual'}, ${input.source_document_id ?? null},
+      ${input.description},
+      ${input.reference_type || 'manual'}, ${input.reference_id ?? null},
       ${input.is_adjusting || false}, ${input.is_closing || false},
       'draft', ${userId}
     )
@@ -233,7 +233,7 @@ export async function voidJournalEntry(
 
   const voidedRows = await sql`
     UPDATE journal_entries
-    SET status = 'void', memo = ${`${entry.memo || ''}\n[VOIDED: ${reason}]`}
+    SET status = 'void', description = ${`${entry.description || ''}\n[VOIDED: ${reason}]`}
     WHERE id = ${entryId}
     RETURNING *
   `;
@@ -292,8 +292,8 @@ export async function reverseJournalEntry(
       entry_date: reversalDate,
       description: `Reversal of ${original.entry_number}`,
       memo: `Reversing entry for ${original.entry_number}`,
-      source_module: 'reversal',
-      source_document_id: entryId,
+      reference_type: 'reversal',
+      reference_id: entryId,
       is_reversing: true,
       lines: reversalLines,
     },
@@ -410,7 +410,7 @@ export async function closePeriod(
   // Close the period
   await sql`
     UPDATE fiscal_periods
-    SET status = 'closed', closed_by = ${userId}, closed_at = ${new Date().toISOString()}
+    SET status = 'closed', locked_by = ${userId}, locked_at = ${new Date().toISOString()}
     WHERE id = ${periodId}
   `;
 

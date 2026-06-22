@@ -110,11 +110,11 @@ export async function POST(request: NextRequest) {
     // Create journal lines
     try {
       await sql`
-        INSERT INTO journal_entry_lines (journal_entry_id, account_id, debit, credit)
+        INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit)
         VALUES (${journalEntry.id}, ${body.cash_account_id}, ${body.amount}, 0)
       `;
       await sql`
-        INSERT INTO journal_entry_lines (journal_entry_id, account_id, debit, credit)
+        INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit)
         VALUES (${journalEntry.id}, ${body.bank_account_id}, 0, ${body.amount})
       `;
     } catch (linesError: any) {

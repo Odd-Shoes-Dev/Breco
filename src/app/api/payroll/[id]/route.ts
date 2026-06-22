@@ -91,7 +91,7 @@ export async function PATCH(
       const jeRows = await sql`
         INSERT INTO journal_entries (
           entry_number, entry_date, description, reference, status,
-          source_module, source_document_id, created_by, posted_by, posted_at
+          reference_type, reference_id, created_by, posted_by, posted_at
         ) VALUES (
           ${entryNumber}, ${period.payment_date},
           ${`Payroll payment for ${period.period_name}`},

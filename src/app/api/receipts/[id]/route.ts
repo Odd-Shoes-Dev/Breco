@@ -124,7 +124,7 @@ export async function DELETE(request: NextRequest, context: any) {
       if (originalLines.length > 0) {
         const reversingEntryRows = await sql`
           INSERT INTO journal_entries (
-            entry_number, entry_date, description, source_module, source_document_id,
+            entry_number, entry_date, description, reference_type, reference_id,
             status, created_by, posted_by, posted_at
           ) VALUES (
             ${entryNumber}, ${new Date().toISOString().split('T')[0]},

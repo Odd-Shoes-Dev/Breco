@@ -5,11 +5,11 @@ import { NextRequest, NextResponse } from 'next/server';
 async function createJournalEntryRaw(params: {
   entry_date: string;
   description: string;
-  source_module: string;
+  reference_type: string;
   lines: Array<{ account_id: string; debit: number; credit: number; description: string }>;
   created_by: string;
   status?: string;
-  source_document_id?: string;
+  reference_id?: string;
 }) {
   try {
     const totalDebits = params.lines.reduce((sum, l) => sum + l.debit, 0);
@@ -22,10 +22,10 @@ async function createJournalEntryRaw(params: {
     const entryNumber = entryNumRows[0]?.num;
 
     const jeRows = await sql`
-      INSERT INTO journal_entries (entry_number, entry_date, description, source_module, source_document_id, status, created_by)
+      INSERT INTO journal_entries (entry_number, entry_date, description, reference_type, reference_id, status, created_by)
       VALUES (
         ${entryNumber}, ${params.entry_date}, ${params.description},
-        ${params.source_module}, ${params.source_document_id || null},
+        ${params.reference_type}, ${params.reference_id || null},
         ${params.status || 'posted'}, ${params.created_by}
       )
       RETURNING *
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
     const journalResult = await createJournalEntryRaw({
       entry_date: recognition_date || new Date().toISOString().split('T')[0],
       description: `Revenue recognition for Invoice ${invoice.invoice_number}`,
-      source_module: 'revenue_recognition',
+      reference_type: 'revenue_recognition',
       lines: [
         {
           account_id: unearnedRevenueId,

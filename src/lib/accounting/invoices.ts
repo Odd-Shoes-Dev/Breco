@@ -255,8 +255,8 @@ export async function postInvoice(
     {
       entry_date: invoice.invoice_date,
       description: `Invoice ${invoice.invoice_number} - ${customer?.name}`,
-      source_module: 'sales',
-      source_document_id: invoiceId,
+      reference_type: 'sales',
+      reference_id: invoiceId,
       lines: journalLines,
     },
     userId
@@ -352,7 +352,7 @@ export async function recordPaymentReceived(
     {
       entry_date: input.payment_date,
       description: `Payment received - ${paymentNumber}`,
-      source_module: 'payments',
+      reference_type: 'payments',
       lines: [
         {
           account_id: input.deposit_to_account_id,

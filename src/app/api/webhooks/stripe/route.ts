@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
               `;
 
               const journalEntryRows = await sql`
-                INSERT INTO journal_entries (entry_date, description, source_module, source_document_id, status)
+                INSERT INTO journal_entries (entry_date, description, reference_type, reference_id, status)
                 VALUES (
                   ${new Date().toISOString().split('T')[0]},
                   ${'Payment received for Invoice ' + invoice.invoice_number},

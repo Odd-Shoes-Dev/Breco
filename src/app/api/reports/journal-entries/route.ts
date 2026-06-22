@@ -35,8 +35,8 @@ export async function GET(request: NextRequest) {
     if (status !== 'all') {
       journalEntriesData = await sql`
         SELECT
-          je.id, je.entry_number, je.entry_date, je.description, je.memo,
-          je.source_module, je.status, je.created_at, je.created_by,
+          je.id, je.entry_number, je.entry_date, je.description,
+          je.reference_type, je.status, je.created_at, je.created_by,
           jl.id AS line_id, jl.line_number, jl.debit, jl.credit, jl.description AS line_description,
           a.code AS acct_code, a.name AS acct_name
         FROM journal_entries je
@@ -50,8 +50,8 @@ export async function GET(request: NextRequest) {
     } else {
       journalEntriesData = await sql`
         SELECT
-          je.id, je.entry_number, je.entry_date, je.description, je.memo,
-          je.source_module, je.status, je.created_at, je.created_by,
+          je.id, je.entry_number, je.entry_date, je.description,
+          je.reference_type, je.status, je.created_at, je.created_by,
           jl.id AS line_id, jl.line_number, jl.debit, jl.credit, jl.description AS line_description,
           a.code AS acct_code, a.name AS acct_name
         FROM journal_entries je
@@ -72,8 +72,7 @@ export async function GET(request: NextRequest) {
           entry_number: row.entry_number,
           entry_date: row.entry_date,
           description: row.description,
-          memo: row.memo,
-          source_module: row.source_module,
+          reference_type: row.reference_type,
           status: row.status,
           created_by: row.created_by,
           lines: [],
@@ -108,9 +107,9 @@ export async function GET(request: NextRequest) {
         id: entry.id,
         entryNumber: entry.entry_number,
         date: entry.entry_date,
-        reference: entry.memo || entry.entry_number,
+        reference: entry.entry_number,
         description: entry.description || '',
-        type: getEntryType(entry.source_module),
+        type: getEntryType(entry.reference_type),
         status: entry.status === 'posted' ? 'Posted' : entry.status === 'void' ? 'Reversed' : 'Draft',
         createdBy: entry.created_by || 'System',
         totalDebit,

@@ -40,17 +40,17 @@ export async function GET(request: NextRequest) {
             )
           ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
         FROM goods_receipts gr
-        LEFT JOIN purchase_orders po ON po.id = gr.purchase_order_id
+        LEFT JOIN purchase_orders po ON po.id = gr.po_id
         LEFT JOIN vendors v ON v.id = po.vendor_id
         LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
         LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
-        WHERE gr.purchase_order_id = ${purchase_order_id} AND gr.status = ${status}
+        WHERE gr.po_id = ${purchase_order_id} AND gr.status = ${status}
         GROUP BY gr.id, po.id, po.po_number, v.id, v.name
         ORDER BY gr.receipt_date DESC
         LIMIT ${limit} OFFSET ${offset}
       `;
       countRows = await sql`
-        SELECT COUNT(*) FROM goods_receipts WHERE purchase_order_id = ${purchase_order_id} AND status = ${status}
+        SELECT COUNT(*) FROM goods_receipts WHERE po_id = ${purchase_order_id} AND status = ${status}
       `;
     } else if (purchase_order_id) {
       rows = await sql`
@@ -76,17 +76,17 @@ export async function GET(request: NextRequest) {
             )
           ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
         FROM goods_receipts gr
-        LEFT JOIN purchase_orders po ON po.id = gr.purchase_order_id
+        LEFT JOIN purchase_orders po ON po.id = gr.po_id
         LEFT JOIN vendors v ON v.id = po.vendor_id
         LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
         LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
-        WHERE gr.purchase_order_id = ${purchase_order_id}
+        WHERE gr.po_id = ${purchase_order_id}
         GROUP BY gr.id, po.id, po.po_number, v.id, v.name
         ORDER BY gr.receipt_date DESC
         LIMIT ${limit} OFFSET ${offset}
       `;
       countRows = await sql`
-        SELECT COUNT(*) FROM goods_receipts WHERE purchase_order_id = ${purchase_order_id}
+        SELECT COUNT(*) FROM goods_receipts WHERE po_id = ${purchase_order_id}
       `;
     } else if (status) {
       rows = await sql`
@@ -112,7 +112,7 @@ export async function GET(request: NextRequest) {
             )
           ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
         FROM goods_receipts gr
-        LEFT JOIN purchase_orders po ON po.id = gr.purchase_order_id
+        LEFT JOIN purchase_orders po ON po.id = gr.po_id
         LEFT JOIN vendors v ON v.id = po.vendor_id
         LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
         LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
@@ -146,7 +146,7 @@ export async function GET(request: NextRequest) {
             )
           ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
         FROM goods_receipts gr
-        LEFT JOIN purchase_orders po ON po.id = gr.purchase_order_id
+        LEFT JOIN purchase_orders po ON po.id = gr.po_id
         LEFT JOIN vendors v ON v.id = po.vendor_id
         LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
         LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
@@ -221,7 +221,7 @@ export async function POST(request: NextRequest) {
 
     // Create goods receipt
     const receiptRows = await sql`
-      INSERT INTO goods_receipts (gr_number, purchase_order_id, receipt_date, status, notes, received_by)
+      INSERT INTO goods_receipts (gr_number, po_id, receipt_date, status, notes, created_by)
       VALUES (${gr_number}, ${body.purchase_order_id}, ${body.receipt_date}, ${body.status || 'received'}, ${body.notes || null}, ${user.id})
       RETURNING *
     `;
@@ -273,7 +273,7 @@ export async function POST(request: NextRequest) {
           )
         ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
       FROM goods_receipts gr
-      LEFT JOIN purchase_orders po ON po.id = gr.purchase_order_id
+      LEFT JOIN purchase_orders po ON po.id = gr.po_id
       LEFT JOIN vendors v ON v.id = po.vendor_id
       LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
       LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id

@@ -23,7 +23,7 @@ async function createReceiptJournalEntryRaw(payment: {
     const entryNumber = entryNumRows[0]?.num;
 
     const jeRows = await sql`
-      INSERT INTO journal_entries (entry_number, entry_date, description, source_module, source_document_id, status, created_by)
+      INSERT INTO journal_entries (entry_number, entry_date, description, reference_type, reference_id, status, created_by)
       VALUES (${entryNumber}, ${payment.payment_date}, ${'Receipt ' + payment.payment_number}, 'receipt', ${payment.id}, 'posted', ${userId})
       RETURNING *
     `;

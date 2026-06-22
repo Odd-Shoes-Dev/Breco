@@ -14,14 +14,14 @@ import Decimal from 'decimal.js';
 export function calculateMonthlyDepreciation(
   asset: {
     purchase_price: number;
-    residual_value: number;
+    salvage_value: number;
     useful_life_months: number;
     depreciation_method: string;
     accumulated_depreciation: number;
   }
 ): Decimal {
   const cost = new Decimal(asset.purchase_price);
-  const residual = new Decimal(asset.residual_value || 0);
+  const residual = new Decimal(asset.salvage_value || 0);
   const depreciableAmount = cost.minus(residual);
   const accumulated = new Decimal(asset.accumulated_depreciation || 0);
   const remainingValue = cost.minus(accumulated).minus(residual);
@@ -141,8 +141,8 @@ export async function runAssetDepreciation(
     {
       entry_date: depreciationDate,
       description: `Depreciation - ${asset.name} (${asset.asset_number})`,
-      source_module: 'depreciation',
-      source_document_id: assetId,
+      reference_type: 'depreciation',
+      reference_id: assetId,
       lines: [
         {
           account_id: deprExpenseAccountId,
@@ -178,7 +178,7 @@ export async function runAssetDepreciation(
     .toNumber();
 
   const newStatus =
-    new Decimal(asset.purchase_price).minus(newAccumDepr).lessThanOrEqualTo(asset.residual_value || 0)
+    new Decimal(asset.purchase_price).minus(newAccumDepr).lessThanOrEqualTo(asset.salvage_value || 0)
       ? 'fully_depreciated'
       : 'active';
 
@@ -324,8 +324,8 @@ export async function disposeAsset(
     {
       entry_date: disposalDate,
       description: `Asset Disposal - ${asset.name} (${asset.asset_number})`,
-      source_module: 'asset_disposal',
-      source_document_id: assetId,
+      reference_type: 'asset_disposal',
+      reference_id: assetId,
       lines,
     },
     userId
@@ -359,7 +359,7 @@ export async function disposeAsset(
 export function generateDepreciationSchedule(
   asset: {
     purchase_price: number;
-    residual_value: number;
+    salvage_value: number;
     useful_life_months: number;
     depreciation_method: string;
     depreciation_start_date: string;
@@ -380,7 +380,7 @@ export function generateDepreciationSchedule(
 
   let accumulated = new Decimal(asset.accumulated_depreciation || 0);
   const cost = new Decimal(asset.purchase_price);
-  const residual = new Decimal(asset.residual_value || 0);
+  const residual = new Decimal(asset.salvage_value || 0);
 
   const startDate = new Date(asset.depreciation_start_date);
 

@@ -253,8 +253,8 @@ export async function postBill(
     {
       entry_date: bill.bill_date,
       description: `Bill ${bill.bill_number} - ${vendor?.name}`,
-      source_module: 'purchases',
-      source_document_id: billId,
+      reference_type: 'purchases',
+      reference_id: billId,
       lines: journalLines,
     },
     userId
@@ -324,7 +324,7 @@ export async function recordBillPayment(
     {
       entry_date: input.payment_date,
       description: `Bill payment - ${paymentNumber}`,
-      source_module: 'bill_payments',
+      reference_type: 'bill_payments',
       lines: [
         {
           account_id: apAccount!.id,

@@ -10,14 +10,13 @@ interface AssetDepreciation {
   purchasePrice: number;
   depreciationMethod: string;
   usefulLifeMonths: number;
-  residualValue: number;
+  salvageValue: number;
   currentBookValue: number;
   accumulatedDepreciation: number;
   annualDepreciation: number;
   monthlyDepreciation: number;
   remainingLifeMonths: number;
   status: string;
-  location: string;
   depreciationSchedule?: Array<{
     year: number;
     beginningValue: number;
@@ -138,22 +137,22 @@ export async function GET(request: NextRequest) {
     if (status !== 'all') {
       assets = await sql`
         SELECT fa.id, fa.asset_number, fa.name, fa.purchase_date, fa.purchase_price,
-               fa.depreciation_method, fa.useful_life_months, fa.residual_value,
-               fa.accumulated_depreciation, fa.book_value, fa.status, fa.location, fa.currency,
+               fa.depreciation_method, fa.useful_life_months, fa.salvage_value,
+               fa.accumulated_depreciation, fa.current_book_value, fa.status, fa.currency,
                ac.name AS category_name
         FROM fixed_assets fa
-        LEFT JOIN asset_categories ac ON fa.asset_category_id = ac.id
+        LEFT JOIN asset_categories ac ON fa.category_id = ac.id
         WHERE fa.status = ${status}
         ORDER BY fa.asset_number
       `;
     } else {
       assets = await sql`
         SELECT fa.id, fa.asset_number, fa.name, fa.purchase_date, fa.purchase_price,
-               fa.depreciation_method, fa.useful_life_months, fa.residual_value,
-               fa.accumulated_depreciation, fa.book_value, fa.status, fa.location, fa.currency,
+               fa.depreciation_method, fa.useful_life_months, fa.salvage_value,
+               fa.accumulated_depreciation, fa.current_book_value, fa.status, fa.currency,
                ac.name AS category_name
         FROM fixed_assets fa
-        LEFT JOIN asset_categories ac ON fa.asset_category_id = ac.id
+        LEFT JOIN asset_categories ac ON fa.category_id = ac.id
         ORDER BY fa.asset_number
       `;
     }
@@ -163,7 +162,7 @@ export async function GET(request: NextRequest) {
       const depCalc = calculateDepreciation(
         asset.purchase_date,
         parseFloat(asset.purchase_price) || 0,
-        parseFloat(asset.residual_value) || 0,
+        parseFloat(asset.salvage_value) || 0,
         parseInt(asset.useful_life_months) || 0,
         asset.depreciation_method || 'straight_line',
         parseFloat(asset.accumulated_depreciation) || 0
@@ -171,7 +170,7 @@ export async function GET(request: NextRequest) {
 
       const schedule = generateDepreciationSchedule(
         parseFloat(asset.purchase_price) || 0,
-        parseFloat(asset.residual_value) || 0,
+        parseFloat(asset.salvage_value) || 0,
         parseInt(asset.useful_life_months) || 0,
         depCalc.annualDepreciation
       );
@@ -185,14 +184,13 @@ export async function GET(request: NextRequest) {
         purchasePrice: parseFloat(asset.purchase_price) || 0,
         depreciationMethod: asset.depreciation_method || 'straight_line',
         usefulLifeMonths: parseInt(asset.useful_life_months) || 0,
-        residualValue: parseFloat(asset.residual_value) || 0,
+        salvageValue: parseFloat(asset.salvage_value) || 0,
         currentBookValue: depCalc.bookValue,
         accumulatedDepreciation: depCalc.accumulatedDepreciation,
         annualDepreciation: depCalc.annualDepreciation,
         monthlyDepreciation: depCalc.monthlyDepreciation,
         remainingLifeMonths: depCalc.remainingMonths,
         status: asset.status || 'active',
-        location: asset.location || '',
         depreciationSchedule: schedule,
         _currency: asset.currency || 'USD',
       };

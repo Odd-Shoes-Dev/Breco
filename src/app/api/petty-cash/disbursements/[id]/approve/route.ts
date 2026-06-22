@@ -65,11 +65,11 @@ export async function POST(
     // Create journal lines
     try {
       await sql`
-        INSERT INTO journal_entry_lines (journal_entry_id, account_id, debit, credit)
+        INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit)
         VALUES (${journalEntry.id}, ${expenseAccount.id}, ${existing.amount}, 0)
       `;
       await sql`
-        INSERT INTO journal_entry_lines (journal_entry_id, account_id, debit, credit)
+        INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit)
         VALUES (${journalEntry.id}, ${existing.cash_account_id}, 0, ${existing.amount})
       `;
     } catch (linesError: any) {

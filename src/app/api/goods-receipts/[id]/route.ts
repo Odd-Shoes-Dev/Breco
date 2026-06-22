@@ -32,11 +32,11 @@ export async function GET(
           )
         ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
       FROM goods_receipts gr
-      LEFT JOIN purchase_orders po ON po.id = gr.purchase_order_id
+      LEFT JOIN purchase_orders po ON po.id = gr.po_id
       LEFT JOIN vendors v ON v.id = po.vendor_id
       LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
       LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
-      LEFT JOIN users up ON up.id = gr.received_by
+      LEFT JOIN users up ON up.id = gr.created_by
       WHERE gr.id = ${id}
       GROUP BY gr.id, po.id, po.po_number, v.id, v.name, v.email, up.id, up.full_name
     `;
@@ -74,7 +74,7 @@ export async function PATCH(
 
     const gr = rows[0];
 
-    const poRows = await sql`SELECT id, po_number FROM purchase_orders WHERE id = ${gr.purchase_order_id}`;
+    const poRows = await sql`SELECT id, po_number FROM purchase_orders WHERE id = ${gr.po_id}`;
     const data = { ...gr, purchase_order: poRows[0] || null };
 
     return NextResponse.json(data);

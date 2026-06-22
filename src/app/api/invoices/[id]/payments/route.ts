@@ -91,7 +91,7 @@ export async function POST(request: NextRequest, context: any) {
 
       if (journalEntry) {
         await sql`
-          INSERT INTO journal_entry_lines (entry_id, account_id, debit, credit, description)
+          INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit, description)
           VALUES
             (${journalEntry.id}, ${cashAccount.id}, ${body.amount}, 0, 'Payment received'),
             (${journalEntry.id}, ${arAccount.id}, 0, ${body.amount}, 'AR reduction')

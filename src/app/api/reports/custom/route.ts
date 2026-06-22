@@ -41,7 +41,7 @@ const fetchTransactionData = async (config: CustomReportConfig) => {
   let entries;
   if (config.dateRange) {
     entries = await sql`
-      SELECT id, entry_number, entry_date, description, memo, status
+      SELECT id, entry_number, entry_date, description, status
       FROM journal_entries
       WHERE entry_date >= ${config.dateRange.startDate}
         AND entry_date <= ${config.dateRange.endDate}
@@ -49,7 +49,7 @@ const fetchTransactionData = async (config: CustomReportConfig) => {
     `;
   } else {
     entries = await sql`
-      SELECT id, entry_number, entry_date, description, memo, status
+      SELECT id, entry_number, entry_date, description, status
       FROM journal_entries
       ORDER BY entry_date DESC
     `;
@@ -71,7 +71,7 @@ const fetchTransactionData = async (config: CustomReportConfig) => {
       amount: totalDebit || totalCredit || 0,
       account_name: 'Journal Entry',
       account_type: entry.status || 'N/A',
-      description: entry.description || entry.memo || '',
+      description: entry.description || '',
       reference: entry.entry_number || '',
       debit_amount: totalDebit,
       credit_amount: totalCredit,

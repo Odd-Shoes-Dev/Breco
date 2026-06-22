@@ -21,9 +21,9 @@ export async function GET(request: NextRequest) {
           row_to_json(up.*) AS users
         FROM stock_takes st
         LEFT JOIN inventory_locations il ON il.id = st.location_id
-        LEFT JOIN users up ON up.id = st.counted_by
+        LEFT JOIN users up ON up.id = st.created_by
         WHERE st.status = ${status} AND st.id = ${stockTakeId}
-        ORDER BY st.stock_take_date DESC
+        ORDER BY st.started_at DESC
       `;
     } else if (status) {
       data = await sql`
@@ -32,9 +32,9 @@ export async function GET(request: NextRequest) {
           row_to_json(up.*) AS users
         FROM stock_takes st
         LEFT JOIN inventory_locations il ON il.id = st.location_id
-        LEFT JOIN users up ON up.id = st.counted_by
+        LEFT JOIN users up ON up.id = st.created_by
         WHERE st.status = ${status}
-        ORDER BY st.stock_take_date DESC
+        ORDER BY st.started_at DESC
       `;
     } else if (stockTakeId) {
       data = await sql`
@@ -43,9 +43,9 @@ export async function GET(request: NextRequest) {
           row_to_json(up.*) AS users
         FROM stock_takes st
         LEFT JOIN inventory_locations il ON il.id = st.location_id
-        LEFT JOIN users up ON up.id = st.counted_by
+        LEFT JOIN users up ON up.id = st.created_by
         WHERE st.id = ${stockTakeId}
-        ORDER BY st.stock_take_date DESC
+        ORDER BY st.started_at DESC
       `;
     } else {
       data = await sql`
@@ -54,8 +54,8 @@ export async function GET(request: NextRequest) {
           row_to_json(up.*) AS users
         FROM stock_takes st
         LEFT JOIN inventory_locations il ON il.id = st.location_id
-        LEFT JOIN users up ON up.id = st.counted_by
-        ORDER BY st.stock_take_date DESC
+        LEFT JOIN users up ON up.id = st.created_by
+        ORDER BY st.started_at DESC
       `;
     }
 
@@ -76,14 +76,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       reference_number,
-      stock_take_date,
+      started_at,
       location_id,
-      type,
       notes,
       lines,
     } = body;
 
-    if (!reference_number || !stock_take_date || !location_id || !type) {
+    if (!reference_number || !started_at || !location_id) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -92,8 +91,8 @@ export async function POST(request: NextRequest) {
 
     // Create stock take
     const stockTakeRows = await sql`
-      INSERT INTO stock_takes (reference_number, stock_take_date, location_id, type, status, counted_by, notes)
-      VALUES (${reference_number}, ${stock_take_date}, ${location_id}, ${type}, 'draft', ${user.id}, ${notes || null})
+      INSERT INTO stock_takes (reference_number, started_at, location_id, status, created_by, notes)
+      VALUES (${reference_number}, ${started_at}, ${location_id}, 'draft', ${user.id}, ${notes || null})
       RETURNING *
     `;
     const stockTake = stockTakeRows[0];
