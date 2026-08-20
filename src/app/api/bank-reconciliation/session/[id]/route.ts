@@ -73,34 +73,23 @@ export async function PATCH(request: NextRequest, context: any) {
       );
     }
 
-    // Build dynamic SET clause from body fields
     const allowed = [
       'statement_date', 'statement_ending_balance', 'statement_starting_balance',
       'book_balance', 'reconciliation_date',
     ];
-    const updates: string[] = [];
-    const vals: any[] = [];
-
-    for (const key of allowed) {
-      if (body[key] !== undefined) {
-        vals.push(body[key]);
-        updates.push(`${key} = $${vals.length}`);
-      }
-    }
-
-    if (updates.length === 0) {
+    if (!allowed.some((key) => body[key] !== undefined)) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
     }
 
-    vals.push(params.id);
-    const setClause = updates.join(', ');
-    const idParam = `$${vals.length}`;
-
-    // Use sql.unsafe for dynamic SET clause - values already parameterized above
-    // Re-build using tagged template for safety
     const rows = await sql`
       UPDATE bank_reconciliations
-      SET ${sql.unsafe(setClause.replace(/\$\d+/g, (m) => `$${m.slice(1)}`))}
+      SET
+        statement_date = COALESCE(${body.statement_date ?? null}, statement_date),
+        statement_ending_balance = COALESCE(${body.statement_ending_balance ?? null}, statement_ending_balance),
+        statement_starting_balance = COALESCE(${body.statement_starting_balance ?? null}, statement_starting_balance),
+        book_balance = COALESCE(${body.book_balance ?? null}, book_balance),
+        reconciliation_date = COALESCE(${body.reconciliation_date ?? null}, reconciliation_date),
+        updated_at = NOW()
       WHERE id = ${params.id}
       RETURNING *
     `;

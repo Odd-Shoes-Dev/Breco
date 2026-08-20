@@ -3,6 +3,30 @@ import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { validatePeriodLock } from '@/lib/accounting/period-lock';
 
+// GET /api/cafe/sales?start_date=&end_date= - Cafe revenue for a period
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const startDate = searchParams.get('start_date');
+    const endDate = searchParams.get('end_date');
+
+    const rows = await sql`
+      SELECT COALESCE(SUM(jl.credit), 0) AS revenue
+      FROM journal_lines jl
+      JOIN journal_entries je ON je.id = jl.journal_entry_id
+      JOIN accounts a ON a.id = jl.account_id
+      WHERE a.code IN ('4210', '4220', '4230')
+        AND je.status = 'posted'
+        AND (${startDate ?? null}::date IS NULL OR je.entry_date >= ${startDate ?? null}::date)
+        AND (${endDate ?? null}::date IS NULL OR je.entry_date <= ${endDate ?? null}::date)
+    `;
+
+    return NextResponse.json({ revenue: Number((rows as any[])[0]?.revenue || 0) });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 // POST /api/cafe/sales - Record cafe sales
 export async function POST(request: NextRequest) {
   try {

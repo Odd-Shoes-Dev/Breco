@@ -77,12 +77,16 @@ export async function POST(request: NextRequest) {
     const {
       reference_number,
       started_at,
+      stock_take_date,
       location_id,
+      type,
       notes,
       lines,
     } = body;
 
-    if (!reference_number || !started_at || !location_id) {
+    const startedAt = started_at || stock_take_date || new Date().toISOString();
+
+    if (!reference_number || !location_id) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -91,8 +95,8 @@ export async function POST(request: NextRequest) {
 
     // Create stock take
     const stockTakeRows = await sql`
-      INSERT INTO stock_takes (reference_number, started_at, location_id, status, created_by, notes)
-      VALUES (${reference_number}, ${started_at}, ${location_id}, 'draft', ${user.id}, ${notes || null})
+      INSERT INTO stock_takes (reference_number, started_at, location_id, type, status, created_by, notes)
+      VALUES (${reference_number}, ${startedAt}, ${location_id}, ${type || 'full'}, 'draft', ${user.id}, ${notes || null})
       RETURNING *
     `;
     const stockTake = stockTakeRows[0];
@@ -105,11 +109,10 @@ export async function POST(request: NextRequest) {
     if (lines && lines.length > 0) {
       for (const line of lines) {
         await sql`
-          INSERT INTO stock_take_lines (stock_take_id, product_id, expected_quantity, counted_quantity, variance, notes)
+          INSERT INTO stock_take_items (stock_take_id, product_id, expected_quantity, counted_quantity, notes)
           VALUES (
             ${stockTake.id}, ${line.product_id}, ${line.expected_quantity},
-            ${line.counted_quantity}, ${line.counted_quantity - line.expected_quantity},
-            ${line.notes || null}
+            ${line.counted_quantity}, ${line.notes || null}
           )
         `;
       }

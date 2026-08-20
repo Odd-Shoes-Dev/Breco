@@ -25,12 +25,12 @@ export async function GET(request: NextRequest) {
           json_agg(
             json_build_object(
               'id', grl.id,
-              'goods_receipt_id', grl.goods_receipt_id,
-              'purchase_order_line_id', grl.purchase_order_line_id,
+              'goods_receipt_id', grl.gr_id,
+              'purchase_order_line_id', grl.po_line_id,
               'quantity_received', grl.quantity_received,
-              'quantity_accepted', grl.quantity_accepted,
-              'quantity_rejected', grl.quantity_rejected,
-              'notes', grl.notes,
+              'unit_cost', grl.unit_cost,
+              'description', grl.description,
+              'product_id', grl.product_id,
               'purchase_order_line', json_build_object(
                 'id', pol.id,
                 'description', pol.description,
@@ -42,8 +42,8 @@ export async function GET(request: NextRequest) {
         FROM goods_receipts gr
         LEFT JOIN purchase_orders po ON po.id = gr.po_id
         LEFT JOIN vendors v ON v.id = po.vendor_id
-        LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
-        LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
+        LEFT JOIN goods_receipt_lines grl ON grl.gr_id = gr.id
+        LEFT JOIN purchase_order_lines pol ON pol.id = grl.po_line_id
         WHERE gr.po_id = ${purchase_order_id} AND gr.status = ${status}
         GROUP BY gr.id, po.id, po.po_number, v.id, v.name
         ORDER BY gr.receipt_date DESC
@@ -61,12 +61,12 @@ export async function GET(request: NextRequest) {
           json_agg(
             json_build_object(
               'id', grl.id,
-              'goods_receipt_id', grl.goods_receipt_id,
-              'purchase_order_line_id', grl.purchase_order_line_id,
+              'goods_receipt_id', grl.gr_id,
+              'purchase_order_line_id', grl.po_line_id,
               'quantity_received', grl.quantity_received,
-              'quantity_accepted', grl.quantity_accepted,
-              'quantity_rejected', grl.quantity_rejected,
-              'notes', grl.notes,
+              'unit_cost', grl.unit_cost,
+              'description', grl.description,
+              'product_id', grl.product_id,
               'purchase_order_line', json_build_object(
                 'id', pol.id,
                 'description', pol.description,
@@ -78,8 +78,8 @@ export async function GET(request: NextRequest) {
         FROM goods_receipts gr
         LEFT JOIN purchase_orders po ON po.id = gr.po_id
         LEFT JOIN vendors v ON v.id = po.vendor_id
-        LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
-        LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
+        LEFT JOIN goods_receipt_lines grl ON grl.gr_id = gr.id
+        LEFT JOIN purchase_order_lines pol ON pol.id = grl.po_line_id
         WHERE gr.po_id = ${purchase_order_id}
         GROUP BY gr.id, po.id, po.po_number, v.id, v.name
         ORDER BY gr.receipt_date DESC
@@ -97,12 +97,12 @@ export async function GET(request: NextRequest) {
           json_agg(
             json_build_object(
               'id', grl.id,
-              'goods_receipt_id', grl.goods_receipt_id,
-              'purchase_order_line_id', grl.purchase_order_line_id,
+              'goods_receipt_id', grl.gr_id,
+              'purchase_order_line_id', grl.po_line_id,
               'quantity_received', grl.quantity_received,
-              'quantity_accepted', grl.quantity_accepted,
-              'quantity_rejected', grl.quantity_rejected,
-              'notes', grl.notes,
+              'unit_cost', grl.unit_cost,
+              'description', grl.description,
+              'product_id', grl.product_id,
               'purchase_order_line', json_build_object(
                 'id', pol.id,
                 'description', pol.description,
@@ -114,8 +114,8 @@ export async function GET(request: NextRequest) {
         FROM goods_receipts gr
         LEFT JOIN purchase_orders po ON po.id = gr.po_id
         LEFT JOIN vendors v ON v.id = po.vendor_id
-        LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
-        LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
+        LEFT JOIN goods_receipt_lines grl ON grl.gr_id = gr.id
+        LEFT JOIN purchase_order_lines pol ON pol.id = grl.po_line_id
         WHERE gr.status = ${status}
         GROUP BY gr.id, po.id, po.po_number, v.id, v.name
         ORDER BY gr.receipt_date DESC
@@ -131,12 +131,12 @@ export async function GET(request: NextRequest) {
           json_agg(
             json_build_object(
               'id', grl.id,
-              'goods_receipt_id', grl.goods_receipt_id,
-              'purchase_order_line_id', grl.purchase_order_line_id,
+              'goods_receipt_id', grl.gr_id,
+              'purchase_order_line_id', grl.po_line_id,
               'quantity_received', grl.quantity_received,
-              'quantity_accepted', grl.quantity_accepted,
-              'quantity_rejected', grl.quantity_rejected,
-              'notes', grl.notes,
+              'unit_cost', grl.unit_cost,
+              'description', grl.description,
+              'product_id', grl.product_id,
               'purchase_order_line', json_build_object(
                 'id', pol.id,
                 'description', pol.description,
@@ -148,8 +148,8 @@ export async function GET(request: NextRequest) {
         FROM goods_receipts gr
         LEFT JOIN purchase_orders po ON po.id = gr.po_id
         LEFT JOIN vendors v ON v.id = po.vendor_id
-        LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
-        LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
+        LEFT JOIN goods_receipt_lines grl ON grl.gr_id = gr.id
+        LEFT JOIN purchase_order_lines pol ON pol.id = grl.po_line_id
         GROUP BY gr.id, po.id, po.po_number, v.id, v.name
         ORDER BY gr.receipt_date DESC
         LIMIT ${limit} OFFSET ${offset}
@@ -183,22 +183,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Accept both the current page field names (po_id, received_date) and legacy names
+    const poId = body.po_id || body.purchase_order_id;
+    const receiptDate = body.received_date || body.receipt_date;
+
     // Validate required fields
-    if (!body.purchase_order_id || !body.receipt_date || !body.lines || body.lines.length === 0) {
+    if (!poId || !receiptDate || !body.lines || body.lines.length === 0) {
       return NextResponse.json(
-        { error: 'Missing required fields: purchase_order_id, receipt_date, lines' },
+        { error: 'Missing required fields: po_id, received_date, lines' },
         { status: 400 }
       );
     }
 
     // Get PO details
-    const pos = await sql`SELECT * FROM purchase_orders WHERE id = ${body.purchase_order_id}`;
+    const pos = await sql`SELECT * FROM purchase_orders WHERE id = ${poId}`;
     if (pos.length === 0) {
       return NextResponse.json({ error: 'Purchase order not found' }, { status: 404 });
     }
     const po = pos[0];
 
-    const poLines = await sql`SELECT * FROM purchase_order_lines WHERE po_id = ${body.purchase_order_id}`;
+    const poLines = await sql`SELECT * FROM purchase_order_lines WHERE po_id = ${poId}`;
     po.purchase_order_lines = poLines;
 
     if (po.status !== 'approved') {
@@ -221,8 +225,8 @@ export async function POST(request: NextRequest) {
 
     // Create goods receipt
     const receiptRows = await sql`
-      INSERT INTO goods_receipts (gr_number, po_id, receipt_date, status, notes, created_by)
-      VALUES (${gr_number}, ${body.purchase_order_id}, ${body.receipt_date}, ${body.status || 'received'}, ${body.notes || null}, ${user.id})
+      INSERT INTO goods_receipts (gr_number, po_id, vendor_id, receipt_date, status, notes, created_by)
+      VALUES (${gr_number}, ${poId}, ${po.vendor_id}, ${receiptDate}, ${body.status || 'received'}, ${body.notes || null}, ${user.id})
       RETURNING *
     `;
     const receipt = receiptRows[0];
@@ -231,18 +235,18 @@ export async function POST(request: NextRequest) {
     for (const line of body.lines) {
       await sql`
         INSERT INTO goods_receipt_lines (
-          goods_receipt_id, purchase_order_line_id, quantity_received,
-          quantity_accepted, quantity_rejected, notes
+          gr_id, po_line_id, product_id, description, quantity_received, unit_cost
         ) VALUES (
-          ${receipt.id}, ${line.purchase_order_line_id}, ${line.quantity_received},
-          ${line.quantity_accepted}, ${line.quantity_rejected || 0}, ${line.notes || null}
+          ${receipt.id}, ${line.po_line_id || line.purchase_order_line_id || null},
+          ${line.product_id || null}, ${line.description || null},
+          ${line.quantity_received}, ${line.unit_cost ?? 0}
         )
       `;
     }
 
     // Update PO status to received if fully received
     const allLinesReceived = body.lines.every((line: any) => {
-      const poLine = po.purchase_order_lines.find((pol: any) => pol.id === line.purchase_order_line_id);
+      const poLine = po.purchase_order_lines.find((pol: any) => pol.id === (line.po_line_id || line.purchase_order_line_id));
       return poLine && line.quantity_received >= poLine.quantity;
     });
 
@@ -250,7 +254,7 @@ export async function POST(request: NextRequest) {
       await sql`
         UPDATE purchase_orders
         SET status = 'received'
-        WHERE id = ${body.purchase_order_id}
+        WHERE id = ${poId}
       `;
     }
 
@@ -263,20 +267,20 @@ export async function POST(request: NextRequest) {
         json_agg(
           json_build_object(
             'id', grl.id,
-            'goods_receipt_id', grl.goods_receipt_id,
-            'purchase_order_line_id', grl.purchase_order_line_id,
+            'goods_receipt_id', grl.gr_id,
+            'purchase_order_line_id', grl.po_line_id,
             'quantity_received', grl.quantity_received,
-            'quantity_accepted', grl.quantity_accepted,
-            'quantity_rejected', grl.quantity_rejected,
-            'notes', grl.notes,
+            'unit_cost', grl.unit_cost,
+            'description', grl.description,
+            'product_id', grl.product_id,
             'purchase_order_line', row_to_json(pol.*)
           )
         ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
       FROM goods_receipts gr
       LEFT JOIN purchase_orders po ON po.id = gr.po_id
       LEFT JOIN vendors v ON v.id = po.vendor_id
-      LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
-      LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
+      LEFT JOIN goods_receipt_lines grl ON grl.gr_id = gr.id
+      LEFT JOIN purchase_order_lines pol ON pol.id = grl.po_line_id
       WHERE gr.id = ${receipt.id}
       GROUP BY gr.id, po.id, po.po_number, v.id, v.name
     `;

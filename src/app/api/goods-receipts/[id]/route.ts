@@ -19,23 +19,23 @@ export async function GET(
         json_agg(
           json_build_object(
             'id', grl.id,
-            'goods_receipt_id', grl.goods_receipt_id,
-            'purchase_order_line_id', grl.purchase_order_line_id,
+            'goods_receipt_id', grl.gr_id,
+            'purchase_order_line_id', grl.po_line_id,
             'quantity_received', grl.quantity_received,
-            'quantity_accepted', grl.quantity_accepted,
-            'quantity_rejected', grl.quantity_rejected,
-            'notes', grl.notes,
+            'unit_cost', grl.unit_cost,
+            'description', grl.description,
+            'product_id', grl.product_id,
             'purchase_order_line', json_build_object(
               'id', pol.id, 'description', pol.description,
-              'quantity', pol.quantity, 'unit_price', pol.unit_price, 'unit', pol.unit
+              'quantity', pol.quantity, 'unit_price', pol.unit_price
             )
           )
         ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
       FROM goods_receipts gr
       LEFT JOIN purchase_orders po ON po.id = gr.po_id
       LEFT JOIN vendors v ON v.id = po.vendor_id
-      LEFT JOIN goods_receipt_lines grl ON grl.goods_receipt_id = gr.id
-      LEFT JOIN purchase_order_lines pol ON pol.id = grl.purchase_order_line_id
+      LEFT JOIN goods_receipt_lines grl ON grl.gr_id = gr.id
+      LEFT JOIN purchase_order_lines pol ON pol.id = grl.po_line_id
       LEFT JOIN users up ON up.id = gr.created_by
       WHERE gr.id = ${id}
       GROUP BY gr.id, po.id, po.po_number, v.id, v.name, v.email, up.id, up.full_name
@@ -45,7 +45,9 @@ export async function GET(
       return NextResponse.json({ error: 'Goods receipt not found' }, { status: 404 });
     }
 
-    return NextResponse.json(rows[0]);
+    const gr = rows[0] as any;
+    // The detail page reads `lines`; keep goods_receipt_lines for compatibility
+    return NextResponse.json({ ...gr, lines: gr.goods_receipt_lines || [] });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

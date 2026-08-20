@@ -31,6 +31,7 @@ export default function BillsPage() {
     dueThisWeek: 0,
     overdue: 0,
     paidThisMonth: 0,
+    currency: 'USD',
   });
   const pageSize = 20;
 
@@ -122,25 +123,25 @@ export default function BillsPage() {
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Total Unpaid</p>
-            <ScaledNumber value={formatCurrency(stats.totalUnpaid)} className="text-gray-900 mt-1" />
+            <ScaledNumber value={formatCurrency(stats.totalUnpaid, stats.currency)} className="text-gray-900 mt-1" />
           </div>
         </div>
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Due This Week</p>
-            <ScaledNumber value={formatCurrency(stats.dueThisWeek)} className="text-amber-600 mt-1" />
+            <ScaledNumber value={formatCurrency(stats.dueThisWeek, stats.currency)} className="text-amber-600 mt-1" />
           </div>
         </div>
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Overdue</p>
-            <ScaledNumber value={formatCurrency(stats.overdue)} className="text-red-600 mt-1" />
+            <ScaledNumber value={formatCurrency(stats.overdue, stats.currency)} className="text-red-600 mt-1" />
           </div>
         </div>
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Paid This Month</p>
-            <ScaledNumber value={formatCurrency(stats.paidThisMonth)} className="text-green-600 mt-1" />
+            <ScaledNumber value={formatCurrency(stats.paidThisMonth, stats.currency)} className="text-green-600 mt-1" />
           </div>
         </div>
       </div>

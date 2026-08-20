@@ -75,7 +75,7 @@ export default function ExpenseDetailPage() {
     try {
       setLoading(true);
       const res = await fetch(`/api/expenses/${params.id}`, { cache: 'no-store' });
-      const data = await res.json();
+      const { data } = await res.json();
       setExpense(data);
     } catch (error) {
       console.error('Failed to load expense:', error);

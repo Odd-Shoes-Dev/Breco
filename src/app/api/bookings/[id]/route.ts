@@ -86,6 +86,19 @@ export async function PATCH(
         hotel_id = CASE WHEN ${body.hotel_id !== undefined} THEN ${body.hotel_id ?? null} ELSE hotel_id END,
         assigned_vehicle_id = CASE WHEN ${body.assigned_vehicle_id !== undefined} THEN ${body.assigned_vehicle_id ?? null} ELSE assigned_vehicle_id END,
         number_of_people = COALESCE(${body.number_of_people ?? null}, number_of_people),
+        booking_date = COALESCE(${body.booking_date ?? null}, booking_date),
+        num_adults = COALESCE(${body.num_adults ?? null}, num_adults),
+        num_children = COALESCE(${body.num_children ?? null}, num_children),
+        num_infants = COALESCE(${body.num_infants ?? null}, num_infants),
+        subtotal = COALESCE(${body.subtotal ?? null}, subtotal),
+        discount_amount = COALESCE(${body.discount_amount ?? null}, discount_amount),
+        tax_amount = COALESCE(${body.tax_amount ?? null}, tax_amount),
+        dietary_requirements = CASE WHEN ${body.dietary_requirements !== undefined} THEN ${body.dietary_requirements ?? null} ELSE dietary_requirements END,
+        room_type = CASE WHEN ${body.room_type !== undefined} THEN ${body.room_type ?? null} ELSE room_type END,
+        num_rooms = COALESCE(${body.num_rooms ?? null}, num_rooms),
+        rental_type = CASE WHEN ${body.rental_type !== undefined} THEN ${body.rental_type ?? null} ELSE rental_type END,
+        pickup_location = CASE WHEN ${body.pickup_location !== undefined} THEN ${body.pickup_location ?? null} ELSE pickup_location END,
+        dropoff_location = CASE WHEN ${body.dropoff_location !== undefined} THEN ${body.dropoff_location ?? null} ELSE dropoff_location END,
         status = COALESCE(${body.status ?? null}, status),
         currency = COALESCE(${body.currency ?? null}, currency),
         exchange_rate = COALESCE(${body.exchange_rate ?? null}, exchange_rate),
@@ -134,9 +147,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
     }
 
-    if (booking.status !== 'draft') {
+    if (booking.status !== 'inquiry') {
       return NextResponse.json(
-        { error: 'Only draft bookings can be deleted. Please cancel confirmed bookings instead.' },
+        { error: 'Only inquiry bookings can be deleted. Please cancel confirmed bookings instead.' },
         { status: 400 }
       );
     }

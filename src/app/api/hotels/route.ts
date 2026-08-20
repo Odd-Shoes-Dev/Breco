@@ -132,13 +132,17 @@ export async function POST(request: NextRequest) {
     // Create the hotel
     const rows = await sql`
       INSERT INTO hotels (
-        name, destination_id, address, star_rating,
-        website, phone, email, is_active
+        name, destination_id, address, star_rating, hotel_type,
+        standard_rate_usd, deluxe_rate_usd, suite_rate_usd,
+        contact_person, contact_phone, commission_rate,
+        website, phone, email, notes, is_partner, is_active
       ) VALUES (
         ${body.name}, ${body.destination_id}, ${body.address || null},
-        ${body.star_rating || null},
+        ${body.star_rating || null}, ${body.hotel_type || null},
+        ${body.standard_rate_usd || null}, ${body.deluxe_rate_usd || null}, ${body.suite_rate_usd || null},
+        ${body.contact_person || null}, ${body.contact_phone || null}, ${body.commission_rate ?? 10},
         ${body.website || null}, ${body.phone || null}, ${body.email || null},
-        ${body.is_active !== false}
+        ${body.notes || null}, ${body.is_partner ?? true}, ${body.is_active !== false}
       )
       RETURNING *
     `;

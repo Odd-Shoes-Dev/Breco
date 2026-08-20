@@ -40,7 +40,7 @@ export default function AssetCategoriesPage() {
       const res = await fetch('/api/asset-categories');
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'Failed to load categories');
-      setCategories(result.data || []);
+      setCategories(result.data || result || []);
     } catch (error) {
       console.error('Failed to load categories:', error);
       toast.error('Failed to load categories');

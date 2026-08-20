@@ -116,7 +116,7 @@ export default function EditExpensePage() {
       setLoading(true);
       const res = await fetch(`/api/expenses/${params.id}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to load expense');
-      const data = await res.json();
+      const { data } = await res.json();
 
       setExpense(data);
       setFormData({

@@ -3,6 +3,43 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
+// GET /api/inventory-transfers - List transfers
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get('status');
+
+    let rows: any[];
+    if (status && status !== 'all') {
+      rows = await sql`
+        SELECT it.*,
+          json_build_object('name', fl.name, 'code', fl.location_code) AS from_location,
+          json_build_object('name', tl.name, 'code', tl.location_code) AS to_location
+        FROM inventory_transfers it
+        LEFT JOIN inventory_locations fl ON fl.id = it.from_location_id
+        LEFT JOIN inventory_locations tl ON tl.id = it.to_location_id
+        WHERE it.status = ${status}
+        ORDER BY it.created_at DESC
+      `;
+    } else {
+      rows = await sql`
+        SELECT it.*,
+          json_build_object('name', fl.name, 'code', fl.location_code) AS from_location,
+          json_build_object('name', tl.name, 'code', tl.location_code) AS to_location
+        FROM inventory_transfers it
+        LEFT JOIN inventory_locations fl ON fl.id = it.from_location_id
+        LEFT JOIN inventory_locations tl ON tl.id = it.to_location_id
+        ORDER BY it.created_at DESC
+      `;
+    }
+
+    return NextResponse.json({ data: rows });
+  } catch (error: any) {
+    console.error('Error fetching transfers:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { from_location_id, to_location_id, transfer_date, notes, lines } = await request.json();
@@ -30,7 +67,7 @@ export async function POST(request: NextRequest) {
     // Create transfer
     const transferRows = await sql`
       INSERT INTO inventory_transfers (transfer_number, from_location_id, to_location_id, transfer_date, status, notes)
-      VALUES (${transfer_number}, ${from_location_id}, ${to_location_id}, ${transfer_date ?? null}, 'pending', ${notes ?? null})
+      VALUES (${transfer_number}, ${from_location_id}, ${to_location_id}, ${transfer_date || new Date().toISOString().split('T')[0]}, 'pending', ${notes ?? null})
       RETURNING *
     `;
     const transfer = transferRows[0];
@@ -38,7 +75,7 @@ export async function POST(request: NextRequest) {
     // Create transfer lines
     for (const line of lines) {
       await sql`
-        INSERT INTO inventory_transfer_lines (transfer_id, product_id, quantity)
+        INSERT INTO inventory_transfer_items (transfer_id, product_id, quantity)
         VALUES (${transfer.id}, ${line.product_id}, ${line.quantity})
       `;
     }

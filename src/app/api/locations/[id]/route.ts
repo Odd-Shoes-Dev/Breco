@@ -10,18 +10,20 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const rows = await sql`SELECT * FROM locations WHERE id = ${id}`;
+    const rows = await sql`
+      SELECT *, location_code AS code, address_line1 AS address, zip_code AS postal_code
+      FROM inventory_locations WHERE id = ${id}`;
     const data = rows[0];
 
     if (!data) {
       return NextResponse.json({ error: 'Location not found' }, { status: 404 });
     }
 
-    // Get inventory count at this location
+    // Get inventory count at this location (stock is computed from inventory_movements)
     const inventoryRows = await sql`
-      SELECT quantity FROM inventory_by_location WHERE location_id = ${id}
+      SELECT COALESCE(SUM(quantity), 0) AS quantity FROM inventory_movements WHERE location_id = ${id}
     `;
-    const totalQuantity = inventoryRows.reduce((sum: number, item: any) => sum + item.quantity, 0);
+    const totalQuantity = Number(inventoryRows[0]?.quantity || 0);
 
     return NextResponse.json({ ...data, total_inventory: totalQuantity });
   } catch (error: any) {
@@ -47,21 +49,21 @@ export async function PATCH(
     // Update fields one by one safely
     for (const field of fields) {
       const value = body[field];
-      if (field === 'name') await sql`UPDATE locations SET name = ${value} WHERE id = ${id}`;
-      else if (field === 'code') await sql`UPDATE locations SET code = ${value} WHERE id = ${id}`;
-      else if (field === 'type') await sql`UPDATE locations SET type = ${value} WHERE id = ${id}`;
-      else if (field === 'address') await sql`UPDATE locations SET address = ${value} WHERE id = ${id}`;
-      else if (field === 'city') await sql`UPDATE locations SET city = ${value} WHERE id = ${id}`;
-      else if (field === 'state') await sql`UPDATE locations SET state = ${value} WHERE id = ${id}`;
-      else if (field === 'postal_code') await sql`UPDATE locations SET postal_code = ${value} WHERE id = ${id}`;
-      else if (field === 'country') await sql`UPDATE locations SET country = ${value} WHERE id = ${id}`;
-      else if (field === 'phone') await sql`UPDATE locations SET phone = ${value} WHERE id = ${id}`;
-      else if (field === 'email') await sql`UPDATE locations SET email = ${value} WHERE id = ${id}`;
-      else if (field === 'manager_name') await sql`UPDATE locations SET manager_name = ${value} WHERE id = ${id}`;
-      else if (field === 'is_active') await sql`UPDATE locations SET is_active = ${value} WHERE id = ${id}`;
+      if (field === 'name') await sql`UPDATE inventory_locations SET name = ${value} WHERE id = ${id}`;
+      else if (field === 'code') await sql`UPDATE inventory_locations SET location_code = ${value} WHERE id = ${id}`;
+      else if (field === 'type') await sql`UPDATE inventory_locations SET type = ${value} WHERE id = ${id}`;
+      else if (field === 'address') await sql`UPDATE inventory_locations SET address_line1 = ${value} WHERE id = ${id}`;
+      else if (field === 'city') await sql`UPDATE inventory_locations SET city = ${value} WHERE id = ${id}`;
+      else if (field === 'state') await sql`UPDATE inventory_locations SET state = ${value} WHERE id = ${id}`;
+      else if (field === 'postal_code') await sql`UPDATE inventory_locations SET zip_code = ${value} WHERE id = ${id}`;
+      else if (field === 'country') await sql`UPDATE inventory_locations SET country = ${value} WHERE id = ${id}`;
+      else if (field === 'phone') await sql`UPDATE inventory_locations SET phone = ${value} WHERE id = ${id}`;
+      else if (field === 'is_active') await sql`UPDATE inventory_locations SET is_active = ${value} WHERE id = ${id}`;
     }
 
-    const rows = await sql`SELECT * FROM locations WHERE id = ${id}`;
+    const rows = await sql`
+      SELECT *, location_code AS code, address_line1 AS address, zip_code AS postal_code
+      FROM inventory_locations WHERE id = ${id}`;
     return NextResponse.json(rows[0]);
   } catch (error: any) {
     console.error('Error updating location:', error);
@@ -76,9 +78,9 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    // Check if location has inventory
+    // Check if location has inventory movements
     const inventoryRows = await sql`
-      SELECT id FROM inventory_by_location WHERE location_id = ${id} LIMIT 1
+      SELECT id FROM inventory_movements WHERE location_id = ${id} LIMIT 1
     `;
 
     if (inventoryRows.length > 0) {
@@ -88,7 +90,7 @@ export async function DELETE(
       );
     }
 
-    await sql`DELETE FROM locations WHERE id = ${id}`;
+    await sql`DELETE FROM inventory_locations WHERE id = ${id}`;
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

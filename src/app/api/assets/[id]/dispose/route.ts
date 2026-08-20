@@ -66,8 +66,8 @@ export async function POST(
     // Create journal entry for disposal
     const description = `Asset disposal - ${asset.name}`;
     const jeRows = await sql`
-      INSERT INTO journal_entries (entry_date, description, reference_type, reference_id, created_by)
-      VALUES (${body.disposal_date}, ${description}, 'asset_disposal', ${id}, ${user.id})
+      INSERT INTO journal_entries (entry_number, entry_date, description, reference_type, reference_id, created_by)
+      VALUES (generate_journal_number(), ${body.disposal_date}, ${description}, 'asset_disposal', ${id}, ${user.id})
       RETURNING *
     `;
     const journalEntry = jeRows[0];

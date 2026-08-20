@@ -10,9 +10,13 @@ export async function GET(request: NextRequest) {
 
     let rows: any[];
     if (type) {
-      rows = await sql`SELECT * FROM locations WHERE type = ${type} ORDER BY name`;
+      rows = await sql`
+        SELECT *, location_code AS code, address_line1 AS address, zip_code AS postal_code
+        FROM inventory_locations WHERE type = ${type} ORDER BY name`;
     } else {
-      rows = await sql`SELECT * FROM locations ORDER BY name`;
+      rows = await sql`
+        SELECT *, location_code AS code, address_line1 AS address, zip_code AS postal_code
+        FROM inventory_locations ORDER BY name`;
     }
 
     return NextResponse.json(rows);
@@ -48,16 +52,15 @@ export async function POST(request: NextRequest) {
     }
 
     const rows = await sql`
-      INSERT INTO locations (
-        name, code, type, address, city, state, postal_code,
-        country, phone, email, manager_name, is_active
+      INSERT INTO inventory_locations (
+        name, location_code, type, address_line1, city, state, zip_code,
+        country, phone, is_active
       ) VALUES (
         ${name}, ${code}, ${type}, ${address ?? null}, ${city ?? null},
-        ${state ?? null}, ${postal_code ?? null}, ${country ?? null},
-        ${phone ?? null}, ${email ?? null}, ${manager_name ?? null},
-        ${is_active ?? true}
+        ${state ?? null}, ${postal_code ?? null}, ${country ?? 'Uganda'},
+        ${phone ?? null}, ${is_active ?? true}
       )
-      RETURNING *
+      RETURNING *, location_code AS code, address_line1 AS address, zip_code AS postal_code
     `;
 
     return NextResponse.json(rows[0]);

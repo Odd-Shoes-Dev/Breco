@@ -38,10 +38,10 @@ export async function POST(
 
     const rows = await sql`
       INSERT INTO tour_seasonal_pricing (
-        tour_package_id, season_name, start_date, end_date, price_per_person, price_modifier
+        tour_package_id, season_name, start_date, end_date, price_adjustment_percent, price_adjustment_fixed_usd, notes
       ) VALUES (
         ${id}, ${body.season_name || null}, ${body.start_date || null}, ${body.end_date || null},
-        ${body.price_per_person || null}, ${body.price_modifier || null}
+        ${body.price_adjustment_percent ?? 0}, ${body.price_adjustment_fixed_usd ?? 0}, ${body.notes || null}
       )
       RETURNING *
     `;

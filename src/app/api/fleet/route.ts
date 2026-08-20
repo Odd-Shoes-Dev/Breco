@@ -75,9 +75,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // Validate required fields
-    if (!body.registration_number || !body.make || !body.model || !body.vehicle_type) {
+    if (!body.vehicle_number || !body.registration_number || !body.make || !body.model) {
       return NextResponse.json(
-        { error: 'Missing required fields: registration_number, make, model, vehicle_type' },
+        { error: 'Missing required fields: vehicle_number, registration_number, make, model' },
         { status: 400 }
       );
     }
@@ -102,16 +102,23 @@ export async function POST(request: NextRequest) {
     // Create the vehicle
     const rows = await sql`
       INSERT INTO vehicles (
-        registration_number, make, model, vehicle_type, year, color, status,
-        purchase_price, purchase_date, insurance_expiry, license_expiry,
-        mileage, fuel_type, capacity, notes, created_by
+        vehicle_number, registration_number, make, model, vehicle_type, year, color, status,
+        fuel_type, transmission, seating_capacity, luggage_capacity, features,
+        purchase_date, purchase_price, current_value, insurance_expiry,
+        daily_rate_usd, daily_rate_ugx, weekly_rate_usd, mileage_rate,
+        current_mileage, last_service_date, next_service_mileage,
+        location, notes, is_active
       ) VALUES (
-        ${body.registration_number}, ${body.make}, ${body.model}, ${body.vehicle_type},
-        ${body.year || null}, ${body.color || null}, ${body.status || 'available'},
-        ${body.purchase_price || null}, ${body.purchase_date || null},
-        ${body.insurance_expiry || null}, ${body.license_expiry || null},
-        ${body.mileage || null}, ${body.fuel_type || null}, ${body.capacity || null},
-        ${body.notes || null}, ${user.id}
+        ${body.vehicle_number}, ${body.registration_number}, ${body.make}, ${body.model},
+        ${body.vehicle_type || null}, ${body.year || null}, ${body.color || null}, ${body.status || 'available'},
+        ${body.fuel_type || null}, ${body.transmission || null},
+        ${body.seating_capacity ?? 4}, ${body.luggage_capacity || null}, ${body.features ?? null},
+        ${body.purchase_date || null}, ${body.purchase_price || null}, ${body.current_value || null},
+        ${body.insurance_expiry || null},
+        ${body.daily_rate_usd || null}, ${body.daily_rate_ugx || null}, ${body.weekly_rate_usd || null},
+        ${body.mileage_rate || null},
+        ${body.current_mileage ?? 0}, ${body.last_service_date || null}, ${body.next_service_mileage || null},
+        ${body.location || null}, ${body.notes || null}, ${body.is_active ?? true}
       )
       RETURNING *
     `;

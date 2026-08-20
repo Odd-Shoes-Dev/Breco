@@ -10,6 +10,7 @@ export async function GET(request: NextRequest, context: any) {
     const rows = await sql`
       SELECT
         e.*,
+        e.account_id AS expense_account_id,
         json_build_object('id', v.id, 'name', v.name) AS vendor,
         json_build_object('id', ea.id, 'name', ea.name, 'code', ea.code) AS expense_account,
         json_build_object('id', pa.id, 'name', pa.name, 'code', pa.code) AS payment_account,
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest, context: any) {
         json_build_object('id', up.id, 'email', up.email, 'full_name', up.full_name) AS created_by_user
       FROM expenses e
       LEFT JOIN vendors v ON v.id = e.vendor_id
-      LEFT JOIN accounts ea ON ea.id = e.expense_account_id
+      LEFT JOIN accounts ea ON ea.id = e.account_id
       LEFT JOIN accounts pa ON pa.id = e.payment_account_id
       LEFT JOIN bank_accounts ba ON ba.id = e.bank_account_id
       LEFT JOIN customers c ON c.id = e.customer_id
@@ -45,7 +46,7 @@ export async function PATCH(request: NextRequest, context: any) {
   try {
     const body = await request.json();
 
-    const existingRows = await sql`SELECT status, journal_entry_id, expense_account_id, bank_account_id FROM expenses WHERE id = ${params.id}`;
+    const existingRows = await sql`SELECT status, journal_entry_id, account_id, bank_account_id FROM expenses WHERE id = ${params.id}`;
     const existing = (existingRows as any[])[0];
 
     if (!existing) {
@@ -67,7 +68,7 @@ export async function PATCH(request: NextRequest, context: any) {
       UPDATE expenses SET
         expense_date = COALESCE(${body.expense_date ?? null}, expense_date),
         vendor_id = CASE WHEN ${body.vendor_id !== undefined} THEN ${body.vendor_id ?? null} ELSE vendor_id END,
-        expense_account_id = COALESCE(${body.expense_account_id ?? null}, expense_account_id),
+        account_id = COALESCE(${body.expense_account_id ?? body.account_id ?? null}, account_id),
         payment_account_id = CASE WHEN ${body.payment_account_id !== undefined} THEN ${body.payment_account_id ?? null} ELSE payment_account_id END,
         amount = COALESCE(${body.amount ?? null}, amount),
         tax_amount = COALESCE(${body.tax_amount ?? null}, tax_amount),
@@ -79,6 +80,9 @@ export async function PATCH(request: NextRequest, context: any) {
         payment_method = COALESCE(${body.payment_method ?? null}, payment_method),
         bank_account_id = CASE WHEN ${body.bank_account_id !== undefined} THEN ${body.bank_account_id ?? null} ELSE bank_account_id END,
         receipt_url = CASE WHEN ${body.receipt_url !== undefined} THEN ${body.receipt_url ?? null} ELSE receipt_url END,
+        payee = CASE WHEN ${body.payee !== undefined} THEN ${body.payee ?? null} ELSE payee END,
+        reference_number = CASE WHEN ${body.reference_number !== undefined} THEN ${body.reference_number ?? null} ELSE reference_number END,
+        is_reimbursable = COALESCE(${body.is_reimbursable ?? null}, is_reimbursable),
         is_billable = COALESCE(${body.is_billable ?? null}, is_billable),
         customer_id = CASE WHEN ${body.customer_id !== undefined} THEN ${body.customer_id ?? null} ELSE customer_id END,
         status = COALESCE(${body.status ?? null}, status)
@@ -90,7 +94,7 @@ export async function PATCH(request: NextRequest, context: any) {
 
     // Create journal entry if status changed to 'paid' and no journal entry exists
     if (body.status === 'paid' && existing.status !== 'paid' && !existing.journal_entry_id && user) {
-      const acctRows = await sql`SELECT code FROM accounts WHERE id = ${expense.expense_account_id} LIMIT 1`;
+      const acctRows = await sql`SELECT code FROM accounts WHERE id = ${expense.account_id} LIMIT 1`;
       const expenseAccount = (acctRows as any[])[0];
 
       if (expenseAccount) {

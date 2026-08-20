@@ -97,15 +97,19 @@ export async function POST(request: NextRequest) {
 
     const rows = await sql`
       INSERT INTO vendors (
-        vendor_number, name, email, phone,
-        address, city, country,
+        vendor_number, name, company_name, email, phone,
+        address_line1, address_line2, city, state, zip_code, country,
+        tax_id, is_1099_vendor, default_expense_account_id,
         payment_terms, currency, notes, is_active
       ) VALUES (
-        ${vendorNumber}, ${body.name},
+        ${vendorNumber}, ${body.name}, ${body.company_name || null},
         ${body.email || null}, ${body.phone || null},
-        ${body.address || null},
-        ${body.city || null},
-        ${body.country || 'USA'}, ${body.payment_terms || 30},
+        ${body.address_line1 ?? body.address ?? null}, ${body.address_line2 || null},
+        ${body.city || null}, ${body.state || null}, ${body.zip_code || null},
+        ${body.country || 'Uganda'},
+        ${body.tax_id || null}, ${body.is_1099_vendor ?? false},
+        ${body.default_expense_account_id || null},
+        ${body.payment_terms || 30},
         ${body.currency || 'USD'}, ${body.notes || null},
         ${body.is_active !== false}
       )

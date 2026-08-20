@@ -38,7 +38,7 @@ interface Invoice {
   quotation_number: string | null;
   proforma_number: string | null;
   receipt_number: string | null;
-  customer?: {
+  customers?: {
     name: string;
     email: string | null;
     phone: string | null;
@@ -81,15 +81,23 @@ export default function InvoiceDetailPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [companySettings, setCompanySettings] = useState<any>(null);
 
   useEffect(() => {
     fetchInvoice();
   }, [params.id]);
 
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((settings) => settings && setCompanySettings(settings))
+      .catch((error) => console.error('Failed to fetch company settings:', error));
+  }, []);
+
   const fetchInvoice = async () => {
     try {
       const res = await fetch(`/api/invoices/${params.id}`, { cache: 'no-store' });
-      const invoiceData = await res.json();
+      const { data: invoiceData } = await res.json();
 
       const parsedInvoice = {
         ...invoiceData,
@@ -103,7 +111,7 @@ export default function InvoiceDetailPage() {
 
       setInvoice(parsedInvoice);
 
-      const parsedItems = (invoiceData.line_items || []).map((item: any) => {
+      const parsedItems = (invoiceData.invoice_lines || []).map((item: any) => {
         const quantity = parseFloat(item.quantity || 0);
         const unitPrice = parseFloat(item.unit_price || 0);
         const lineTotal = parseFloat(item.line_total || 0);
@@ -162,7 +170,7 @@ export default function InvoiceDetailPage() {
     };
     return (
       <Badge variant={variants[status] || 'default'}>
-        {status.replace('_', ' ').toUpperCase()}
+        {(status || 'draft').replace('_', ' ').toUpperCase()}
       </Badge>
     );
   };
@@ -379,6 +387,7 @@ export default function InvoiceDetailPage() {
                 <p class="address">Tel: +256 782 884 933 | +256 772 891 729 | +256 775 766 578</p>
                 <p class="address">Email: brecosafaris@gmail.com | Website: www.brecosafaris.com</p>
                 <p class="address">URA TIN: 1014756280 | URSB Reg. No: 80020001634842</p>
+                ${companySettings?.duns_number ? `<p class="address">DUNS: ${companySettings.duns_number}</p>` : ''}
               </div>
             </div>
             <div class="invoice-header">
@@ -393,11 +402,11 @@ export default function InvoiceDetailPage() {
             <!-- Customer -->
             <div class="section">
               <h3>Bill To</h3>
-              <p><strong>${invoice.customer?.name || 'N/A'}</strong></p>
-              ${invoice.customer?.email ? `<p>${invoice.customer.email}</p>` : ''}
-              ${invoice.customer?.phone ? `<p>${invoice.customer.phone}</p>` : ''}
-              ${invoice.customer?.address ? `<p style="margin-top: 8px;">${invoice.customer.address}</p>` : ''}
-              ${invoice.customer?.city ? `<p>${[invoice.customer.city, invoice.customer.state, invoice.customer.zip_code].filter(Boolean).join(', ')}</p>` : ''}
+              <p><strong>${invoice.customers?.name || 'N/A'}</strong></p>
+              ${invoice.customers?.email ? `<p>${invoice.customers.email}</p>` : ''}
+              ${invoice.customers?.phone ? `<p>${invoice.customers.phone}</p>` : ''}
+              ${invoice.customers?.address ? `<p style="margin-top: 8px;">${invoice.customers.address}</p>` : ''}
+              ${invoice.customers?.city ? `<p>${[invoice.customers.city, invoice.customers.state, invoice.customers.zip_code].filter(Boolean).join(', ')}</p>` : ''}
             </div>
 
             <!-- Invoice Details -->
@@ -560,7 +569,7 @@ export default function InvoiceDetailPage() {
   };
 
   const handleSendEmail = async () => {
-    if (!invoice?.customer?.email) {
+    if (!invoice?.customers?.email) {
       alert('Customer does not have an email address');
       return;
     }
@@ -695,13 +704,13 @@ export default function InvoiceDetailPage() {
               {getStatusBadge(invoice.status)}
             </div>
             <p className="text-sm sm:text-base text-gray-500 mt-0.5 sm:mt-1 truncate">
-              {invoice.customer?.name}
+              {invoice.customers?.name}
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {invoice.customer?.email && (
+          {invoice.customers?.email && (
             <Button 
               variant="success" 
               size="sm" 
@@ -921,18 +930,18 @@ export default function InvoiceDetailPage() {
             </CardHeader>
             <CardBody>
               <div className="space-y-2">
-                <p className="font-medium">{invoice.customer?.name}</p>
-                {invoice.customer?.email && (
-                  <p className="text-sm text-gray-500">{invoice.customer.email}</p>
+                <p className="font-medium">{invoice.customers?.name}</p>
+                {invoice.customers?.email && (
+                  <p className="text-sm text-gray-500">{invoice.customers.email}</p>
                 )}
-                {invoice.customer?.phone && (
-                  <p className="text-sm text-gray-500">{invoice.customer.phone}</p>
+                {invoice.customers?.phone && (
+                  <p className="text-sm text-gray-500">{invoice.customers.phone}</p>
                 )}
-                {invoice.customer?.address && (
+                {invoice.customers?.address && (
                   <p className="text-sm text-gray-500 mt-2">
-                    {invoice.customer.address}
-                    {invoice.customer.city && <br />}
-                    {[invoice.customer.city, invoice.customer.state, invoice.customer.zip_code]
+                    {invoice.customers.address}
+                    {invoice.customers.city && <br />}
+                    {[invoice.customers.city, invoice.customers.state, invoice.customers.zip_code]
                       .filter(Boolean)
                       .join(', ')}
                   </p>

@@ -17,39 +17,30 @@ export async function PATCH(
     }
     const gr = grRows[0];
 
-    // Update goods receipt status
+    // Update goods receipt status (inspection notes are appended to notes;
+    // the goods_receipts table has no inspection_notes column)
     await sql`
-      UPDATE goods_receipts SET status = ${status}, inspection_notes = ${inspection_notes ?? null}
+      UPDATE goods_receipts SET
+        status = ${status},
+        notes = COALESCE(${inspection_notes ?? null}, notes),
+        updated_at = NOW()
       WHERE id = ${id}
     `;
 
-    // If accepted, update inventory
+    // If accepted, record inventory movements (stock is computed from inventory_movements)
     if (status === 'accepted') {
-      const grLines = await sql`SELECT * FROM goods_receipt_lines WHERE goods_receipt_id = ${id}`;
+      const grLines = await sql`SELECT * FROM goods_receipt_lines WHERE gr_id = ${id}`;
 
       for (const line of grLines) {
         if (line.product_id) {
-          // Get current quantity
-          const productRows = await sql`
-            SELECT quantity_in_stock FROM products WHERE id = ${line.product_id}
-          `;
-          const currentQty = productRows[0]?.quantity_in_stock || 0;
-          const newQuantity = currentQty + line.quantity_received;
-
-          // Update product quantity
-          await sql`
-            UPDATE products SET quantity_in_stock = ${newQuantity} WHERE id = ${line.product_id}
-          `;
-
-          // Record inventory movement
           await sql`
             INSERT INTO inventory_movements (
-              product_id, company_id, movement_type, quantity, unit_cost,
-              reference_type, reference_id, movement_date, notes
+              product_id, movement_type, quantity, unit_cost, total_cost,
+              reference_type, reference_id, notes
             ) VALUES (
-              ${line.product_id}, ${gr.company_id}, 'purchase', ${line.quantity_received},
-              ${line.unit_cost ?? null}, 'goods_receipt', ${id},
-              ${gr.received_date ?? null}, ${`Goods Receipt ${gr.gr_number}`}
+              ${line.product_id}, 'purchase', ${line.quantity_received},
+              ${line.unit_cost ?? 0}, ${(Number(line.unit_cost) || 0) * (Number(line.quantity_received) || 0)},
+              'goods_receipt', ${id}, ${`Goods Receipt ${gr.gr_number}`}
             )
           `;
         }

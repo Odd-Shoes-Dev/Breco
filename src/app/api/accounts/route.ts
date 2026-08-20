@@ -13,11 +13,9 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
 
     let conditions = ['1=1'];
-    const params: any[] = [];
 
     if (type) {
-      params.push(type);
-      conditions.push(`account_type = $${params.length}`);
+      conditions.push(`account_type = '${type.replace(/'/g, "''")}'`);
     }
 
     if (active === 'true') {

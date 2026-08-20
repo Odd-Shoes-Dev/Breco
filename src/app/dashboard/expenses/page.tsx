@@ -35,6 +35,7 @@ export default function ExpensesPage() {
     pendingApproval: 0,
     approved: 0,
     paid: 0,
+    currency: 'USD',
   });
   const pageSize = 20;
 
@@ -158,7 +159,7 @@ export default function ExpensesPage() {
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">This Month (USD)</p>
-            <ScaledNumber value={formatCurrency(stats.thisMonth)} className="text-gray-900 mt-1" />
+            <ScaledNumber value={formatCurrency(stats.thisMonth, stats.currency)} className="text-gray-900 mt-1" />
           </div>
         </div>
         <div className="card">

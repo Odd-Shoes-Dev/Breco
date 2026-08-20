@@ -9,7 +9,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const rows = await sql`SELECT * FROM product_categories ORDER BY name`;
+    const rows = await sql`
+      SELECT pc.*, CASE WHEN pc.parent_id IS NOT NULL THEN json_build_object('id', p.id, 'name', p.name) END AS parent
+      FROM product_categories pc
+      LEFT JOIN product_categories p ON p.id = pc.parent_id
+      ORDER BY pc.name`;
 
     return NextResponse.json(rows);
   } catch (error: any) {
@@ -26,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, description } = body;
+    const { name, description, parent_id } = body;
 
     // Validate required fields
     if (!name) {
@@ -37,8 +41,8 @@ export async function POST(request: NextRequest) {
     }
 
     const rows = await sql`
-      INSERT INTO product_categories (name, description)
-      VALUES (${name}, ${description || null})
+      INSERT INTO product_categories (name, description, parent_id)
+      VALUES (${name}, ${description || null}, ${parent_id || null})
       RETURNING *
     `;
 

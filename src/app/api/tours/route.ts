@@ -42,11 +42,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (minPrice) {
-      data = data.filter((t: any) => parseFloat(t.price_per_person) >= parseFloat(minPrice));
+      data = data.filter((t: any) => parseFloat(t.base_price_usd) >= parseFloat(minPrice));
     }
 
     if (maxPrice) {
-      data = data.filter((t: any) => parseFloat(t.price_per_person) <= parseFloat(maxPrice));
+      data = data.filter((t: any) => parseFloat(t.base_price_usd) <= parseFloat(maxPrice));
     }
 
     if (isFeatured !== null && isFeatured !== undefined) {
@@ -70,9 +70,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    if (!body.name || !body.primary_destination_id || !body.duration_days || !body.price_per_person) {
+    if (!body.name || !body.package_code || !body.duration_days) {
       return NextResponse.json(
-        { error: 'Missing required fields: name, primary_destination_id, duration_days, price_per_person' },
+        { error: 'Missing required fields: name, package_code, duration_days' },
         { status: 400 }
       );
     }
@@ -84,15 +84,20 @@ export async function POST(request: NextRequest) {
 
     const rows = await sql`
       INSERT INTO tour_packages (
-        name, description, primary_destination_id, duration_days, price_per_person,
-        max_group_size, min_group_size, difficulty_level, included_services,
-        excluded_services, is_featured, is_active, created_by
+        package_code, name, description, primary_destination_id,
+        duration_days, duration_nights,
+        base_price_usd, base_price_eur, base_price_ugx, price_per_person,
+        max_group_size, min_group_size, tour_type, difficulty_level,
+        inclusions, exclusions, image_url,
+        is_featured, is_active, created_by
       ) VALUES (
-        ${body.name}, ${body.description || null}, ${body.primary_destination_id},
-        ${body.duration_days}, ${body.price_per_person},
+        ${body.package_code}, ${body.name}, ${body.description || null}, ${body.primary_destination_id || null},
+        ${body.duration_days}, ${body.duration_nights ?? 0},
+        ${body.base_price_usd ?? 0}, ${body.base_price_eur ?? 0}, ${body.base_price_ugx ?? 0},
+        ${body.price_per_person ?? true},
         ${body.max_group_size || null}, ${body.min_group_size || null},
-        ${body.difficulty_level || null}, ${body.included_services || null},
-        ${body.excluded_services || null},
+        ${body.tour_type || null}, ${body.difficulty_level || null},
+        ${body.inclusions || null}, ${body.exclusions || null}, ${body.image_url || null},
         ${body.is_featured ?? false}, ${body.is_active ?? true}, ${user.id}
       )
       RETURNING *

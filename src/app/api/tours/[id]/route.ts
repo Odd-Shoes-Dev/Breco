@@ -56,9 +56,11 @@ export async function PATCH(
 
     // Build SET clause from body fields
     const allowedFields = [
-      'name', 'description', 'primary_destination_id', 'duration_days', 'price_per_person',
-      'max_group_size', 'min_group_size', 'difficulty_level', 'included_services',
-      'excluded_services', 'is_featured', 'is_active',
+      'package_code', 'name', 'description', 'primary_destination_id',
+      'duration_days', 'duration_nights',
+      'base_price_usd', 'base_price_eur', 'base_price_ugx', 'price_per_person',
+      'max_group_size', 'min_group_size', 'tour_type', 'difficulty_level',
+      'inclusions', 'exclusions', 'image_url', 'is_featured', 'is_active',
     ];
 
     const updates: any = {};
@@ -78,16 +80,23 @@ export async function PATCH(
     const rows = await sql`
       UPDATE tour_packages
       SET
+        package_code = COALESCE(${updates.package_code ?? null}, package_code),
         name = COALESCE(${updates.name ?? null}, name),
         description = COALESCE(${updates.description ?? null}, description),
         primary_destination_id = COALESCE(${updates.primary_destination_id ?? null}, primary_destination_id),
         duration_days = COALESCE(${updates.duration_days ?? null}, duration_days),
+        duration_nights = COALESCE(${updates.duration_nights ?? null}, duration_nights),
+        base_price_usd = COALESCE(${updates.base_price_usd ?? null}, base_price_usd),
+        base_price_eur = COALESCE(${updates.base_price_eur ?? null}, base_price_eur),
+        base_price_ugx = COALESCE(${updates.base_price_ugx ?? null}, base_price_ugx),
         price_per_person = COALESCE(${updates.price_per_person ?? null}, price_per_person),
         max_group_size = COALESCE(${updates.max_group_size ?? null}, max_group_size),
         min_group_size = COALESCE(${updates.min_group_size ?? null}, min_group_size),
+        tour_type = COALESCE(${updates.tour_type ?? null}, tour_type),
         difficulty_level = COALESCE(${updates.difficulty_level ?? null}, difficulty_level),
-        included_services = COALESCE(${updates.included_services ?? null}, included_services),
-        excluded_services = COALESCE(${updates.excluded_services ?? null}, excluded_services),
+        inclusions = COALESCE(${updates.inclusions ?? null}, inclusions),
+        exclusions = COALESCE(${updates.exclusions ?? null}, exclusions),
+        image_url = COALESCE(${updates.image_url ?? null}, image_url),
         is_featured = COALESCE(${updates.is_featured ?? null}, is_featured),
         is_active = COALESCE(${updates.is_active ?? null}, is_active),
         updated_at = NOW()

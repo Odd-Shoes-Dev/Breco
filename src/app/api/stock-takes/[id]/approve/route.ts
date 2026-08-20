@@ -20,7 +20,7 @@ export async function POST(
       SELECT st.*,
         (
           SELECT json_agg(json_build_object('id', stl.id, 'product_id', stl.product_id, 'variance', stl.variance))
-          FROM stock_take_lines stl
+          FROM stock_take_items stl
           WHERE stl.stock_take_id = st.id
         ) AS stock_take_lines
       FROM stock_takes st
@@ -42,7 +42,7 @@ export async function POST(
     // Update stock take status
     await sql`
       UPDATE stock_takes
-      SET status = 'completed', approved_by = ${user.id}, approved_at = ${new Date().toISOString()}
+      SET status = 'completed', completed_at = ${new Date().toISOString()}, updated_at = NOW()
       WHERE id = ${stockTakeId}
     `;
 
@@ -50,32 +50,16 @@ export async function POST(
     const lines = stockTake.stock_take_lines || [];
     for (const line of lines) {
       if (line.variance !== 0) {
-        // Create adjustment record
+        // Record an adjustment movement (stock is computed from inventory_movements)
         await sql`
-          INSERT INTO inventory_adjustments (
-            product_id, adjustment_date, quantity_change, reason,
-            reference_type, reference_id, notes
+          INSERT INTO inventory_movements (
+            product_id, movement_type, quantity,
+            reference_type, reference_id, notes, created_by
           ) VALUES (
-            ${line.product_id}, ${new Date().toISOString()}, ${line.variance},
-            'stock_take', 'stock_take', ${stockTakeId},
-            ${'Stock take ' + stockTake.reference_number}
+            ${line.product_id}, 'adjustment', ${line.variance},
+            'stock_take', ${stockTakeId},
+            ${'Stock take ' + stockTake.reference_number}, ${user.id}
           )
-        `;
-
-        // Update product stock
-        const productRows = await sql`
-          SELECT current_stock FROM products WHERE id = ${line.product_id}
-        `;
-        const currentProduct = productRows[0];
-
-        if (!currentProduct) {
-          throw new Error(`Product ${line.product_id} not found`);
-        }
-
-        await sql`
-          UPDATE products
-          SET current_stock = ${(currentProduct.current_stock || 0) + line.variance}
-          WHERE id = ${line.product_id}
         `;
       }
     }

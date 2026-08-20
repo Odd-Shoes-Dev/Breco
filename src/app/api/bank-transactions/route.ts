@@ -2,6 +2,77 @@ import { sql } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
+// GET /api/bank-transactions - List bank transactions (or single with ?id=)
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    const accountId = searchParams.get('account_id');
+    const type = searchParams.get('type');
+    const reconciled = searchParams.get('reconciled');
+
+    const conditions: string[] = ['1=1'];
+    const esc = (v: string) => v.replace(/'/g, "''");
+    if (id) conditions.push(`bt.id = '${esc(id)}'`);
+    if (accountId && accountId !== 'all') conditions.push(`bt.bank_account_id = '${esc(accountId)}'`);
+    if (type && type !== 'all') conditions.push(`bt.transaction_type = '${esc(type)}'`);
+    if (reconciled && reconciled !== 'all') {
+      conditions.push(`bt.is_reconciled = ${reconciled === 'reconciled' ? 'true' : 'false'}`);
+    }
+    const where = conditions.join(' AND ');
+
+    const rows = await sql`
+      SELECT bt.*, row_to_json(ba.*) AS bank_accounts
+      FROM bank_transactions bt
+      LEFT JOIN bank_accounts ba ON ba.id = bt.bank_account_id
+      WHERE ${sql.unsafe(where)}
+      ORDER BY bt.transaction_date DESC, bt.created_at DESC
+    `;
+
+    if (id) {
+      const tx = (rows as any[])[0];
+      if (!tx) {
+        return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+      }
+      return NextResponse.json({ data: tx });
+    }
+
+    return NextResponse.json({ data: rows });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// DELETE /api/bank-transactions?id= - Delete an unreconciled bank transaction
+export async function DELETE(request: NextRequest) {
+  try {
+    const user = await getSession();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json({ error: 'Transaction id is required' }, { status: 400 });
+    }
+
+    const existing = await sql`SELECT id, is_reconciled FROM bank_transactions WHERE id = ${id}`;
+    if (existing.length === 0) {
+      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+    }
+    if (existing[0].is_reconciled) {
+      return NextResponse.json({ error: 'Cannot delete a reconciled transaction' }, { status: 400 });
+    }
+
+    await sql`DELETE FROM bank_transactions WHERE id = ${id}`;
+
+    return NextResponse.json({ message: 'Transaction deleted successfully' });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 // POST /api/bank-transactions - Create a bank transaction
 export async function POST(request: NextRequest) {
   try {

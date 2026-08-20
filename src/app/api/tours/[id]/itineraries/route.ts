@@ -38,10 +38,10 @@ export async function POST(
 
     const rows = await sql`
       INSERT INTO tour_itineraries (
-        tour_package_id, day_number, title, description, accommodation, meals, activities
+        tour_package_id, day_number, title, description, accommodation, meals_included, activities
       ) VALUES (
         ${id}, ${body.day_number}, ${body.title || null}, ${body.description || null},
-        ${body.accommodation || null}, ${body.meals || null}, ${body.activities || null}
+        ${body.accommodation || null}, ${body.meals_included ?? body.meals ?? null}, ${body.activities || null}
       )
       RETURNING *
     `;
@@ -73,7 +73,7 @@ export async function PATCH(
         title = COALESCE(${body.title ?? null}, title),
         description = COALESCE(${body.description ?? null}, description),
         accommodation = COALESCE(${body.accommodation ?? null}, accommodation),
-        meals = COALESCE(${body.meals ?? null}, meals),
+        meals_included = COALESCE(${body.meals_included ?? body.meals ?? null}, meals_included),
         activities = COALESCE(${body.activities ?? null}, activities)
       WHERE id = ${itineraryId}
       RETURNING *

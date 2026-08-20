@@ -40,7 +40,7 @@ export default function CategoriesPage() {
 
   const fetchCategories = async () => {
     try {
-      const res = await fetch('/api/asset-categories');
+      const res = await fetch('/api/product-categories');
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'Failed to load categories');
       setCategories(result.data || result || []);
@@ -63,7 +63,7 @@ export default function CategoriesPage() {
       };
 
       if (editingCategory) {
-        const res = await fetch(`/api/asset-categories/${editingCategory.id}`, {
+        const res = await fetch(`/api/product-categories/${editingCategory.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -72,7 +72,7 @@ export default function CategoriesPage() {
         if (!res.ok) throw new Error(result.error || 'Failed to update category');
         toast.success('Category updated successfully');
       } else {
-        const res = await fetch('/api/asset-categories', {
+        const res = await fetch('/api/product-categories', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -108,7 +108,7 @@ export default function CategoriesPage() {
     }
 
     try {
-      const res = await fetch(`/api/asset-categories/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/product-categories/${id}`, { method: 'DELETE' });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'Failed to delete category');
       toast.success('Category deleted successfully');

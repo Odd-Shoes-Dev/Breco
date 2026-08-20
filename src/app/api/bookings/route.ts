@@ -90,18 +90,27 @@ export async function POST(request: NextRequest) {
 
     const insertedRows = await sql`
       INSERT INTO bookings (
-        customer_id, booking_type, travel_start_date, travel_end_date,
+        customer_id, booking_type, booking_date, travel_start_date, travel_end_date,
         tour_package_id, hotel_id, assigned_vehicle_id, number_of_people,
+        num_adults, num_children, num_infants,
+        subtotal, discount_amount, tax_amount,
         status, currency, exchange_rate, total, amount_paid,
-        special_requests, notes, booking_number, created_by
+        special_requests, dietary_requirements, room_type, num_rooms,
+        rental_type, pickup_location, dropoff_location,
+        notes, booking_number, created_by
       ) VALUES (
-        ${body.customer_id}, ${body.booking_type}, ${body.travel_start_date}, ${body.travel_end_date},
+        ${body.customer_id}, ${body.booking_type}, ${body.booking_date || new Date().toISOString().split('T')[0]},
+        ${body.travel_start_date}, ${body.travel_end_date},
         ${body.tour_package_id ?? null}, ${body.hotel_id ?? null}, ${body.assigned_vehicle_id ?? null},
-        ${body.number_of_people || 1},
-        ${body.status || 'draft'}, ${body.currency || 'USD'}, ${body.exchange_rate || 1.0},
+        ${body.number_of_people || (Number(body.num_adults) || 1) + (Number(body.num_children) || 0)},
+        ${body.num_adults ?? 1}, ${body.num_children ?? 0}, ${body.num_infants ?? 0},
+        ${body.subtotal ?? 0}, ${body.discount_amount ?? 0}, ${body.tax_amount ?? 0},
+        ${body.status || 'inquiry'}, ${body.currency || 'USD'}, ${body.exchange_rate || 1.0},
         ${body.total || 0}, ${body.amount_paid || 0},
-        ${body.special_requests ?? null}, ${body.notes ?? null},
-        ${bookingNumber}, ${user.id}
+        ${body.special_requests ?? null}, ${body.dietary_requirements ?? null},
+        ${body.room_type ?? null}, ${body.num_rooms ?? 1},
+        ${body.rental_type ?? null}, ${body.pickup_location ?? null}, ${body.dropoff_location ?? null},
+        ${body.notes ?? null}, ${bookingNumber}, ${user.id}
       )
       RETURNING id
     `;
