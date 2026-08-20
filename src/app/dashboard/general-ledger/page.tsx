@@ -30,6 +30,7 @@ interface JournalEntry {
     account_name: string;
     debit_amount: number;
     credit_amount: number;
+    exchange_rate?: number;
     description: string;
   }>;
 }
@@ -223,8 +224,9 @@ export default function GeneralLedgerPage() {
           <div className="divide-y divide-gray-100">
             {filteredEntries.map((entry) => {
               const isExpanded = expandedEntries.has(entry.id);
-              const totalDebit = entry.lines?.reduce((sum, l) => sum + (l.debit_amount || 0), 0) || 0;
-              const totalCredit = entry.lines?.reduce((sum, l) => sum + (l.credit_amount || 0), 0) || 0;
+              // Convert each line to base amount using its exchange rate (amount x rate)
+              const totalDebit = entry.lines?.reduce((sum, l) => sum + (l.debit_amount || 0) * (l.exchange_rate || 1), 0) || 0;
+              const totalCredit = entry.lines?.reduce((sum, l) => sum + (l.credit_amount || 0) * (l.exchange_rate || 1), 0) || 0;
 
               return (
                 <div key={entry.id}>

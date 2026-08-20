@@ -24,7 +24,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Payroll period not found' }, { status: 404 });
     }
 
-    const payslips = await sql`SELECT * FROM payroll_payslips WHERE payroll_period_id = ${id}`;
+    const payslips = await sql`SELECT * FROM payslips WHERE payroll_period_id = ${id}`;
 
     // Check if status is changing to 'paid' - this requires GL posting
     if (body.status === 'paid' && period.status !== 'paid') {

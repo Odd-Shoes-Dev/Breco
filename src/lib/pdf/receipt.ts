@@ -4,13 +4,14 @@ import { Invoice, InvoiceLine, Customer } from '@/types/database';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 
 interface ReceiptPDFData {
+  companySettings?: { duns_number?: string };
   invoice: Invoice;
   lineItems: InvoiceLine[];
   customer: Customer;
 }
 
 export function generateReceiptHTML(data: ReceiptPDFData): string {
-  const { invoice, lineItems, customer } = data;
+  const { invoice, lineItems, customer, companySettings } = data;
 
   const formatCurrency = (amount: number) => {
     return currencyFormatter(amount, invoice.currency as any || 'USD');
@@ -284,7 +285,7 @@ export function generateReceiptHTML(data: ReceiptPDFData): string {
                 <p>Tel: +256 782 884 933, +256 772 891 729, +256 775 766 578</p>
                 <p>+256 746 757 53991, +256 702 834 511</p>
                 <p>Email: brecosafaris@gmail.com • Website: www.brecosafaris.com</p>
-                <p>URA TIN: 1014756280 • URSB Reg. No: 80020001634842</p>
+                <p>URA TIN: 1014756280 • URSB Reg. No: 80020001634842${companySettings?.duns_number ? ` • DUNS: ${companySettings.duns_number}` : ''}</p>
               </div>
             </div>
           </div>

@@ -172,7 +172,7 @@ export async function GET(request: NextRequest, context: any) {
     const invoiceId = (await params).id;
 
     const payments = await sql`
-      SELECT ip.*, json_build_object('name', ba.name) AS bank_accounts
+      SELECT ip.*, json_build_object('name', ba.account_name) AS bank_accounts
       FROM invoice_payments ip
       LEFT JOIN bank_accounts ba ON ba.id = ip.bank_account_id
       WHERE ip.invoice_id = ${invoiceId}

@@ -318,9 +318,10 @@ function exportPDF(config: CustomReportConfig, reportData: any, origin: string, 
             <h1>${companySettings.name}</h1>
             <div class="address">${companySettings.address_line1}${companySettings.address_line2 ? ', ' + companySettings.address_line2 : ''}, ${companySettings.city}, ${companySettings.state} ${companySettings.zip_code}</div>
             <div class="address">Phone: ${companySettings.phone}</div>
+            ${(companySettings as any).duns_number ? `<div class="address">DUNS: ${(companySettings as any).duns_number}</div>` : ''}
           </div>
         </div>
-        
+
         <div class="report-header">
           <h2>${reportName}</h2>
           <div class="description">${reportDescription}</div>

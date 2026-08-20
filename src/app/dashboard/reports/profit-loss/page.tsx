@@ -30,6 +30,7 @@ interface ProfitLossData {
 
 export default function ProfitLossReportPage() {
   const [data, setData] = useState<ProfitLossData | null>(null);
+  const [companySettings, setCompanySettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState(() => {
     const now = new Date();
@@ -42,6 +43,13 @@ export default function ProfitLossReportPage() {
   useEffect(() => {
     loadReport();
   }, [startDate, endDate]);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((settings) => settings && setCompanySettings(settings))
+      .catch((error) => console.error('Failed to fetch company settings:', error));
+  }, []);
 
   const loadReport = async () => {
     try {
@@ -260,6 +268,7 @@ export default function ProfitLossReportPage() {
               <div class="company-address">Kampala Road Plot 14 Eagen House, Russel Street, P.O.Box 144011, Kampala, Uganda</div>
               <div class="company-contact">Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com</div>
               <div class="company-contact">URA TIN: 1014756280 • URSB Reg. No: 80020001634842</div>
+              ${companySettings?.duns_number ? `<div class="company-contact">DUNS: ${companySettings.duns_number}</div>` : ''}
             </div>
           </div>
           <div class="report-info">

@@ -28,6 +28,7 @@ export default function InventoryPage() {
     totalValue: 0,
     lowStock: 0,
     outOfStock: 0,
+    currency: 'USD',
   });
   const pageSize = 20;
 
@@ -115,7 +116,7 @@ export default function InventoryPage() {
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Total Value</p>
-            <ScaledNumber value={formatCurrency(stats.totalValue)} className="text-gray-900 mt-1" />
+            <ScaledNumber value={formatCurrency(stats.totalValue, stats.currency)} className="text-gray-900 mt-1" />
           </div>
         </div>
         <div className="card">
@@ -230,7 +231,7 @@ export default function InventoryPage() {
                       <td className="text-right font-medium">
                         {available} {item.unit_of_measure}
                       </td>
-                      <td className="text-right">{formatCurrency(item.cost_price, item.currency)}</td>
+                      <td className="text-right">{formatCurrency(item.cost_price || 0, item.currency)}</td>
                       <td className="text-right font-medium">
                         {formatCurrency((item.quantity_on_hand || 0) * (item.cost_price || 0), item.currency)}
                       </td>
@@ -286,7 +287,7 @@ export default function InventoryPage() {
                       <div>
                         <span className="text-gray-500">Value:</span>
                         <span className="ml-1.5 font-medium">
-                          {formatCurrency((item.quantity_on_hand || 0) * (item.cost_price || 0))}
+                          {formatCurrency((item.quantity_on_hand || 0) * (item.cost_price || 0), item.currency)}
                         </span>
                       </div>
                       <Link

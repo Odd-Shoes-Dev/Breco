@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -40,8 +40,18 @@ export default function NewInventoryItemPage() {
     notes: '',
   });
 
+  const currencyTouched = useRef(false);
+
   useEffect(() => {
     fetchCategories();
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.base_currency && !currencyTouched.current) {
+          setFormData((prev) => ({ ...prev, currency: data.base_currency }));
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const fetchCategories = async () => {
@@ -305,7 +315,7 @@ export default function NewInventoryItemPage() {
               </label>
               <CurrencySelect
                 value={formData.currency}
-                onChange={(e) => setFormData(prev => ({ ...prev, currency: e.target.value }))}
+                onChange={(e) => { currencyTouched.current = true; setFormData(prev => ({ ...prev, currency: e.target.value })); }}
               />
               <p className="text-xs text-gray-500 mt-1">Pricing currency</p>
             </div>

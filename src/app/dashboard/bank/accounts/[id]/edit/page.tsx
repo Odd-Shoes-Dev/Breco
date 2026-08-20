@@ -36,10 +36,18 @@ export default function EditBankAccountPage({ params }: { params: Promise<{ id: 
   useEffect(() => {
     async function loadBankAccount() {
       try {
-        const res = await fetch(`/api/bank-accounts/${resolvedParams.id}`);
+        const [res, settingsRes] = await Promise.all([
+          fetch(`/api/bank-accounts/${resolvedParams.id}`),
+          fetch('/api/settings').catch(() => null),
+        ]);
         if (!res.ok) throw new Error('Failed to load bank account');
         const result = await res.json();
         const data = result.data || result;
+        let baseCurrency = 'USD';
+        try {
+          const settingsData = settingsRes ? await settingsRes.json() : null;
+          if (settingsData?.base_currency) baseCurrency = settingsData.base_currency;
+        } catch {}
 
         if (data) {
           setFormData({
@@ -48,7 +56,7 @@ export default function EditBankAccountPage({ params }: { params: Promise<{ id: 
             account_type: data.account_type || 'checking',
             account_number: data.account_number || '',
             routing_number: data.routing_number || '',
-            currency: data.currency || 'USD',
+            currency: data.currency || baseCurrency,
             is_primary: data.is_primary || false,
             is_active: data.is_active !== false,
           });

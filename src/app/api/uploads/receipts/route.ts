@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import ImageKit from '@imagekit/nodejs';
+// SDK typings lag the runtime API
 
-const imagekit = new ImageKit({
+const imagekit = new (ImageKit as any)({
   publicKey: process.env.IMAGEKIT_PUBLIC_KEY!,
   privateKey: process.env.IMAGEKIT_PRIVATE_KEY!,
   urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT!,
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const folder = process.env.IMAGEKIT_APP_FOLDER || 'breco';
 
-    const result = await imagekit.upload({
+    const result = await (imagekit as any).upload({
       file: buffer,
       fileName: file.name,
       folder: `${folder}/receipts`,

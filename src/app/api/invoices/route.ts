@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if period is closed
-    const periodError = await validatePeriodLock(sql, body.invoice_date);
+    const periodError = await validatePeriodLock(body.invoice_date);
     if (periodError) {
       return NextResponse.json({ error: periodError }, { status: 403 });
     }
@@ -249,7 +249,7 @@ export async function POST(request: NextRequest) {
 
     // Handle inventory based on document type and status
     if (documentType === 'quotation' || documentType === 'proforma') {
-      const reserveResult = await reserveInventoryForQuotation(sql, invoice.id, lines, user.id);
+      const reserveResult = await reserveInventoryForQuotation(invoice.id, lines, user.id);
       if (!reserveResult.success) {
         await sql`DELETE FROM invoices WHERE id = ${invoice.id}`;
         return NextResponse.json(
@@ -258,7 +258,7 @@ export async function POST(request: NextRequest) {
         );
       }
     } else if (documentType === 'invoice' && (invoice.status === 'posted' || invoice.status === 'sent')) {
-      const inventoryResult = await reduceInventoryForInvoice(sql, invoice.id, lines, user.id);
+      const inventoryResult = await reduceInventoryForInvoice(invoice.id, lines, user.id);
       if (!inventoryResult.success) {
         await sql`DELETE FROM invoices WHERE id = ${invoice.id}`;
         return NextResponse.json(
@@ -271,7 +271,6 @@ export async function POST(request: NextRequest) {
     // Create journal entry if invoice is posted
     if (invoice.status === 'posted' && documentType === 'invoice') {
       const journalResult = await createInvoiceJournalEntry(
-        sql,
         {
           id: invoice.id,
           invoice_number: invoice.invoice_number,

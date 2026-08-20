@@ -3,6 +3,17 @@ import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { createExpenseJournalEntry } from '@/lib/accounting/journal-entry-helpers';
 import { validatePeriodLock } from '@/lib/accounting/period-lock';
+import { getCompanySettings } from '@/lib/company-settings';
+
+async function convertCurrencyDB(amount: number, from: string, to: string, date: string): Promise<number> {
+  if (from === to) return amount;
+  try {
+    const rows = await sql`SELECT convert_currency(${amount}, ${from}, ${to}, ${date}) AS result`;
+    return Number(rows[0]?.result ?? amount);
+  } catch {
+    return amount;
+  }
+}
 
 // GET /api/expenses - List expenses
 export async function GET(request: NextRequest) {
@@ -23,7 +34,7 @@ export async function GET(request: NextRequest) {
         e.*,
         json_build_object('id', v.id, 'name', v.name) AS vendors,
         json_build_object('id', a.id, 'name', a.name, 'code', a.code) AS accounts,
-        json_build_object('id', ba.id, 'name', ba.name) AS bank_accounts
+        json_build_object('id', ba.id, 'name', ba.account_name) AS bank_accounts
       FROM expenses e
       LEFT JOIN vendors v ON v.id = e.vendor_id
       LEFT JOIN accounts a ON a.id = e.account_id
@@ -42,8 +53,22 @@ export async function GET(request: NextRequest) {
     const total = data.length;
     const paged = data.slice(offset, offset + limit);
 
+    // Convert each expense's total to the company base currency (per-record, own date)
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency;
+    const today = new Date().toISOString().split('T')[0];
+
+    const converted = [] as any[];
+    for (const expense of paged) {
+      const amount = Number(expense.total ?? expense.amount) || 0;
+      const expenseCurrency = expense.currency || baseCurrency;
+      const totalInBase = await convertCurrencyDB(amount, expenseCurrency, baseCurrency, expense.expense_date || today);
+      converted.push({ ...expense, total_in_base: totalInBase });
+    }
+
     return NextResponse.json({
-      data: paged,
+      data: converted,
+      currency: baseCurrency,
       pagination: {
         page,
         limit,

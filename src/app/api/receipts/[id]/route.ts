@@ -141,11 +141,11 @@ export async function DELETE(request: NextRequest, context: any) {
             await sql`
               INSERT INTO journal_lines (
                 journal_entry_id, line_number, account_id, description,
-                debit, credit, base_debit, base_credit
+                debit, credit
               ) VALUES (
                 ${reversingEntry.id}, ${index + 1}, ${line.account_id},
                 ${'Reverse: ' + (line.description || '')},
-                ${line.credit}, ${line.debit}, ${line.base_credit}, ${line.base_debit}
+                ${line.credit}, ${line.debit}
               )
             `;
           }

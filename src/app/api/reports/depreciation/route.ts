@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { getCompanySettings } from '@/lib/company-settings';
 
 interface AssetDepreciation {
   assetId: string;
@@ -131,6 +132,8 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category') || 'all';
     const status = searchParams.get('status') || 'all';
     const sortBy = searchParams.get('sortBy') || 'assetNumber';
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency;
 
     // Fetch fixed assets with categories
     let assets;
@@ -219,7 +222,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Calculate summary statistics with currency conversion to USD
+    // Calculate summary statistics with currency conversion to base currency
     let totalCost = 0;
     let totalAccumulatedDepreciation = 0;
     let totalBookValue = 0;
@@ -227,12 +230,16 @@ export async function GET(request: NextRequest) {
     let monthlyDepreciation = 0;
 
     for (const asset of assetDepreciations as any[]) {
-      const assetCurrency = asset._currency || 'USD';
+      const assetCurrency = asset._currency || baseCurrency;
 
       const convertIfNeeded = async (amount: number) => {
-        if (assetCurrency === 'USD') return amount;
-        const res = await sql`SELECT convert_currency(${amount}, ${assetCurrency}, 'USD', ${endDate}) AS val`;
-        return res[0]?.val ?? amount;
+        if (assetCurrency === baseCurrency) return amount;
+        try {
+          const res = await sql`SELECT convert_currency(${amount}, ${assetCurrency}, ${baseCurrency}, ${endDate}) AS val`;
+          return Number(res[0]?.val ?? amount);
+        } catch {
+          return amount;
+        }
       };
 
       const costUSD = await convertIfNeeded(asset.purchasePrice);
@@ -254,16 +261,20 @@ export async function GET(request: NextRequest) {
     // Category breakdown with currency conversion
     const byCategory: Record<string, any> = {};
     for (const asset of assetDepreciations as any[]) {
-      const assetCurrency = asset._currency || 'USD';
+      const assetCurrency = asset._currency || baseCurrency;
       const cat = asset.category || 'Uncategorized';
       if (!byCategory[cat]) {
         byCategory[cat] = { count: 0, cost: 0, accumulated: 0, bookValue: 0 };
       }
 
       const convertIfNeeded = async (amount: number) => {
-        if (assetCurrency === 'USD') return amount;
-        const res = await sql`SELECT convert_currency(${amount}, ${assetCurrency}, 'USD', ${endDate}) AS val`;
-        return res[0]?.val ?? amount;
+        if (assetCurrency === baseCurrency) return amount;
+        try {
+          const res = await sql`SELECT convert_currency(${amount}, ${assetCurrency}, ${baseCurrency}, ${endDate}) AS val`;
+          return Number(res[0]?.val ?? amount);
+        } catch {
+          return amount;
+        }
       };
 
       byCategory[cat].count += 1;
@@ -275,16 +286,20 @@ export async function GET(request: NextRequest) {
     // Method breakdown
     const byMethod: Record<string, any> = {};
     for (const asset of assetDepreciations as any[]) {
-      const assetCurrency = asset._currency || 'USD';
+      const assetCurrency = asset._currency || baseCurrency;
       const method = asset.depreciationMethod || 'straight_line';
       if (!byMethod[method]) {
         byMethod[method] = { count: 0, cost: 0 };
       }
 
       let costUSD = asset.purchasePrice;
-      if (assetCurrency !== 'USD') {
-        const res = await sql`SELECT convert_currency(${asset.purchasePrice}, ${assetCurrency}, 'USD', ${endDate}) AS val`;
-        costUSD = res[0]?.val ?? asset.purchasePrice;
+      if (assetCurrency !== baseCurrency) {
+        try {
+          const res = await sql`SELECT convert_currency(${asset.purchasePrice}, ${assetCurrency}, ${baseCurrency}, ${endDate}) AS val`;
+          costUSD = Number(res[0]?.val ?? asset.purchasePrice);
+        } catch {
+          // fall back to unconverted amount
+        }
       }
 
       byMethod[method].count += 1;
@@ -297,7 +312,8 @@ export async function GET(request: NextRequest) {
       return a;
     });
 
-    const response: DepreciationScheduleData = {
+    const response: DepreciationScheduleData & { currency: string } = {
+      currency: baseCurrency,
       reportPeriod: {
         startDate,
         endDate

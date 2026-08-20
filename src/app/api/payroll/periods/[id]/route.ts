@@ -41,7 +41,7 @@ export async function GET(
       FROM payroll_periods pp
       LEFT JOIN users cu ON cu.id = pp.created_by
       LEFT JOIN users pu ON pu.id = pp.processed_by
-      LEFT JOIN payroll_payslips ps ON ps.payroll_period_id = pp.id
+      LEFT JOIN payslips ps ON ps.payroll_period_id = pp.id
       LEFT JOIN employees e ON e.id = ps.employee_id
       WHERE pp.id = ${id}
       GROUP BY pp.id, cu.id, cu.full_name, cu.email, pu.id, pu.full_name, pu.email

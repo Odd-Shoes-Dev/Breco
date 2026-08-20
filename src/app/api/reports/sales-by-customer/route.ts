@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { getCompanySettings } from '@/lib/company-settings';
 
 interface CustomerSale {
   customerId: string;
@@ -48,11 +49,13 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate') || new Date().toISOString().split('T')[0];
     const customerType = searchParams.get('customerType') || 'all';
     const sortBy = searchParams.get('sortBy') || 'totalSales';
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency;
 
     // Fetch invoices with customer data for the period
     const invoices = await sql`
       SELECT i.id, i.customer_id, i.invoice_date, i.total, i.currency,
-             c.id AS c_id, c.name AS c_name, c.customer_type AS c_customer_type
+             c.id AS c_id, c.name AS c_name
       FROM invoices i
       LEFT JOIN customers c ON c.id = i.customer_id
       WHERE i.invoice_date >= ${startDate}
@@ -95,7 +98,7 @@ export async function GET(request: NextRequest) {
       const customerName = invoice.c_name;
       if (!customerName) continue;
 
-      const customerTypeRaw = invoice.c_customer_type || 'Individual';
+      const customerTypeRaw = 'Individual';
 
       let cType: 'Individual' | 'Business' | 'Government' = 'Individual';
       if (customerTypeRaw.toLowerCase().includes('business') || customerTypeRaw.toLowerCase().includes('company')) {
@@ -123,10 +126,14 @@ export async function GET(request: NextRequest) {
 
       const total = parseFloat(invoice.total);
       let totalUSD = total;
-      const invCurrency = invoice.currency || 'USD';
-      if (invCurrency !== 'USD') {
-        const res = await sql`SELECT convert_currency(${total}, ${invCurrency}, 'USD', ${invoice.invoice_date}) AS val`;
-        totalUSD = res[0]?.val ?? total;
+      const invCurrency = invoice.currency || baseCurrency;
+      if (invCurrency !== baseCurrency) {
+        try {
+          const res = await sql`SELECT convert_currency(${total}, ${invCurrency}, ${baseCurrency}, ${invoice.invoice_date}) AS val`;
+          totalUSD = Number(res[0]?.val ?? total);
+        } catch {
+          totalUSD = total;
+        }
       }
 
       customer.totalSales += totalUSD;
@@ -200,7 +207,8 @@ export async function GET(request: NextRequest) {
 
     const topCustomers = customers.slice(0, 10);
 
-    const response: SalesByCustomerData = {
+    const response: SalesByCustomerData & { currency: string } = {
+      currency: baseCurrency,
       reportPeriod: {
         startDate,
         endDate

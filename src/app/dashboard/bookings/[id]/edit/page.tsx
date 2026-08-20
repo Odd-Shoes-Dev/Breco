@@ -156,12 +156,13 @@ export default function EditBookingPage({ params }: EditBookingPageProps) {
 
     try {
       // Load all necessary data in parallel
-      const [customersRes, packagesRes, hotelsRes, vehiclesRes, bookingRes] = await Promise.all([
+      const [customersRes, packagesRes, hotelsRes, vehiclesRes, bookingRes, settingsRes] = await Promise.all([
         fetch('/api/customers'),
         fetch('/api/tours'),
         fetch('/api/hotels'),
         fetch('/api/fleet'),
         fetch(`/api/bookings/${bookingId}`),
+        fetch('/api/settings').catch(() => null),
       ]);
 
       const customersData = await customersRes.json();
@@ -169,6 +170,11 @@ export default function EditBookingPage({ params }: EditBookingPageProps) {
       const hotelsData = await hotelsRes.json();
       const vehiclesData = await vehiclesRes.json();
       const bookingData = await bookingRes.json();
+      let baseCurrency = 'USD';
+      try {
+        const settingsData = settingsRes ? await settingsRes.json() : null;
+        if (settingsData?.base_currency) baseCurrency = settingsData.base_currency;
+      } catch {}
 
       if (!customersRes.ok) throw new Error(customersData.error || 'Failed to load customers');
       if (!packagesRes.ok) throw new Error(packagesData.error || 'Failed to load tours');
@@ -204,7 +210,7 @@ export default function EditBookingPage({ params }: EditBookingPageProps) {
         discount_amount: booking.discount_amount || 0,
         tax_amount: booking.tax_amount || 0,
         total: booking.total || 0,
-        currency: booking.currency || 'USD',
+        currency: booking.currency || baseCurrency,
         special_requests: booking.special_requests || '',
         dietary_requirements: booking.dietary_requirements || '',
         notes: booking.notes || '',

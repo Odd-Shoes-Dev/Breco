@@ -14,7 +14,7 @@ import {
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline';
-import { formatCurrency } from '@/lib/currency';
+import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import { ScaledNumber } from '@/components/ui/scaled-number';
 
 interface CafeStats {
@@ -51,6 +51,7 @@ export default function CafeDashboardPage() {
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
   const [expenseBreakdown, setExpenseBreakdown] = useState<ExpenseBreakdown[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currency, setCurrency] = useState('USD');
 
   useEffect(() => {
     loadCafeData();
@@ -72,13 +73,16 @@ export default function CafeDashboardPage() {
       const expensesRes = await fetch(`/api/expenses?department=Cafe&start_date=${monthStart.toISOString().split('T')[0]}&end_date=${monthEnd.toISOString().split('T')[0]}`);
       const expensesResult = expensesRes.ok ? await expensesRes.json() : { data: [] };
       const expensesArr = expensesResult.data || [];
-      const expenses = expensesArr.reduce((sum: number, exp: any) => sum + Number(exp.total || 0), 0);
+      // Amounts are converted to the company base currency server-side
+      const expenses = expensesArr.reduce((sum: number, exp: any) => sum + Number(exp.total_in_base ?? exp.total ?? 0), 0);
+      if (expensesResult.currency) setCurrency(expensesResult.currency);
 
       const employeesRes = await fetch('/api/employees?department=Cafe&status=active');
       const employeesResult = employeesRes.ok ? await employeesRes.json() : { data: [] };
       const employeesData = employeesResult.data || [];
       const employeeCount = employeesData.length;
-      const totalPayroll = employeesData.reduce((sum: number, emp: any) => sum + Number(emp.basic_salary || 0), 0);
+      const totalPayroll = employeesData.reduce((sum: number, emp: any) => sum + Number(emp.salary_in_base ?? emp.basic_salary ?? 0), 0);
+      if (employeesResult.currency) setCurrency(employeesResult.currency);
 
       const profit = revenue - expenses;
       const profitMargin = revenue > 0 ? (profit / revenue) * 100 : 0;
@@ -120,7 +124,7 @@ export default function CafeDashboardPage() {
 
       const expRes = await fetch(`/api/expenses?department=Cafe&start_date=${monthStart.toISOString().split('T')[0]}&end_date=${monthEnd.toISOString().split('T')[0]}`);
       const expResult = expRes.ok ? await expRes.json() : { data: [] };
-      const expenses = (expResult.data || []).reduce((sum: number, exp: any) => sum + Number(exp.total || 0), 0);
+      const expenses = (expResult.data || []).reduce((sum: number, exp: any) => sum + Number(exp.total_in_base ?? exp.total ?? 0), 0);
 
       months.push({
         month: monthDate.toLocaleDateString('en-US', { month: 'short' }),
@@ -145,9 +149,9 @@ export default function CafeDashboardPage() {
 
     // Group by category
     const categoryTotals: Record<string, number> = {};
-    expenses.forEach(exp => {
+    expenses.forEach((exp: any) => {
       const category = exp.category || 'Other';
-      categoryTotals[category] = (categoryTotals[category] || 0) + Number(exp.total || 0);
+      categoryTotals[category] = (categoryTotals[category] || 0) + Number(exp.total_in_base ?? exp.total ?? 0);
     });
 
     // Add payroll to breakdown
@@ -162,6 +166,8 @@ export default function CafeDashboardPage() {
     breakdown.sort((a, b) => b.amount - a.amount);
     setExpenseBreakdown(breakdown);
   };
+
+  const formatCurrency = (amount: number) => currencyFormatter(amount, currency as any);
 
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('en-US', {

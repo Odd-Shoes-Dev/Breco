@@ -1,10 +1,14 @@
 import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { getCompanySettings } from '@/lib/company-settings';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customer_id');
+
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency;
 
     let receipts;
     if (customerId) {
@@ -31,14 +35,18 @@ export async function GET(request: NextRequest) {
       if (receipt.document_type !== 'receipt') continue;
 
       const amountPaid = parseFloat(receipt.amount_paid) || parseFloat(receipt.total) || 0;
-      let amountUSD = amountPaid;
+      let amountInBase = amountPaid;
 
-      if (receipt.currency && receipt.currency !== 'USD') {
-        const res = await sql`SELECT convert_currency(${amountPaid}, ${receipt.currency}, 'USD', ${receipt.invoice_date}) AS val`;
-        amountUSD = res[0]?.val || amountPaid;
+      if (receipt.currency && receipt.currency !== baseCurrency) {
+        try {
+          const res = await sql`SELECT convert_currency(${amountPaid}, ${receipt.currency}, ${baseCurrency}, ${receipt.invoice_date}) AS val`;
+          amountInBase = Number(res[0]?.val ?? amountPaid);
+        } catch {
+          amountInBase = amountPaid;
+        }
       }
 
-      totalAmount += amountUSD;
+      totalAmount += amountInBase;
 
       const receiptDate = new Date(receipt.invoice_date);
       if (receiptDate >= firstDayOfMonth) {
@@ -50,6 +58,7 @@ export async function GET(request: NextRequest) {
       totalAmount,
       totalCount: receipts.filter((r: any) => r.document_type === 'receipt').length,
       thisMonthCount,
+      currency: baseCurrency,
     });
   } catch (error) {
     console.error('Error calculating receipts stats:', error);

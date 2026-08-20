@@ -31,10 +31,22 @@ export async function POST(
     }
 
     // Delete existing payslips if any
-    await sql`DELETE FROM payroll_payslips WHERE payroll_period_id = ${periodId}`;
+    await sql`DELETE FROM payslips WHERE payroll_period_id = ${periodId}`;
 
     // Get all active employees
-    const employees = await sql`SELECT * FROM employees WHERE status = 'active'`;
+    const employees = await sql`
+      SELECT e.*,
+        COALESCE((
+          SELECT SUM(ea.amount) FROM employee_allowances ea
+          WHERE ea.employee_id = e.id AND ea.is_active = true
+        ), 0) AS total_allowances,
+        COALESCE((
+          SELECT SUM(ed.amount) FROM employee_deductions ed
+          WHERE ed.employee_id = e.id AND ed.is_active = true
+        ), 0) AS total_other_deductions
+      FROM employees e
+      WHERE e.is_active = true
+    `;
 
     if (!employees || employees.length === 0) {
       return NextResponse.json(
@@ -44,8 +56,8 @@ export async function POST(
     }
 
     // Calculate number of days in the period
-    const start = new Date(period.period_start);
-    const end = new Date(period.period_end);
+    const start = new Date(period.start_date);
+    const end = new Date(period.end_date);
     const daysInPeriod = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     const daysInMonth = 30; // Standard month for calculation
 
@@ -53,15 +65,11 @@ export async function POST(
     const insertedPayslips: any[] = [];
 
     for (const employee of employees) {
-      const monthlySalary = employee.salary || 0;
+      const monthlySalary = Number(employee.basic_salary) || 0;
 
       const basicSalary = (monthlySalary * daysInPeriod) / daysInMonth;
 
-      const housingAllowance = employee.housing_allowance || 0;
-      const transportAllowance = employee.transport_allowance || 0;
-      const otherAllowances = employee.other_allowances || 0;
-
-      const totalAllowances = (housingAllowance + transportAllowance + otherAllowances) * daysInPeriod / daysInMonth;
+      const totalAllowances = (Number(employee.total_allowances) || 0) * daysInPeriod / daysInMonth;
 
       const grossSalary = basicSalary + totalAllowances;
 
@@ -69,27 +77,26 @@ export async function POST(
       const taxDeduction = grossSalary * taxRate;
       const nhifDeduction = grossSalary * 0.025;
       const nssfDeduction = Math.min(grossSalary * 0.06, 500);
-      const loanDeduction = employee.loan_deduction || 0;
-      const advanceDeduction = employee.advance_deduction || 0;
+      const loanDeduction = 0;
+      const advanceDeduction = 0;
+      const otherDeductions = (Number(employee.total_other_deductions) || 0) + nhifDeduction;
 
-      const totalDeductions = taxDeduction + nhifDeduction + nssfDeduction + loanDeduction + advanceDeduction;
+      const totalDeductions = taxDeduction + otherDeductions + nssfDeduction + loanDeduction + advanceDeduction;
       const netSalary = grossSalary - totalDeductions;
 
+      const payslipNumRows = await sql`SELECT 'PS-' || to_char(NOW(), 'YYYYMMDDHH24MISS') || '-' || substring(md5(random()::text), 1, 6) AS num`;
+      const payslipNumber = payslipNumRows[0].num;
+
       const rows = await sql`
-        INSERT INTO payroll_payslips (
-          payroll_period_id, employee_id, basic_salary, allowances,
-          housing_allowance, transport_allowance, other_allowances,
-          gross_salary, deductions, tax_deduction, nhif_deduction,
-          nssf_deduction, loan_deduction, advance_deduction, net_salary,
-          days_worked, status, created_by
+        INSERT INTO payslips (
+          payslip_number, payroll_period_id, employee_id, basic_salary, total_allowances,
+          gross_salary, paye, nssf_employee, loan_deduction, salary_advance,
+          other_deductions, total_deductions, net_salary
         ) VALUES (
-          ${periodId}, ${employee.id}, ${basicSalary}, ${totalAllowances},
-          ${(housingAllowance * daysInPeriod) / daysInMonth},
-          ${(transportAllowance * daysInPeriod) / daysInMonth},
-          ${(otherAllowances * daysInPeriod) / daysInMonth},
-          ${grossSalary}, ${totalDeductions}, ${taxDeduction}, ${nhifDeduction},
-          ${nssfDeduction}, ${loanDeduction}, ${advanceDeduction}, ${netSalary},
-          ${daysInPeriod}, 'pending', ${user.id}
+          ${payslipNumber}, ${periodId}, ${employee.id}, ${basicSalary}, ${totalAllowances},
+          ${grossSalary}, ${taxDeduction}, ${nssfDeduction},
+          ${loanDeduction}, ${advanceDeduction},
+          ${otherDeductions}, ${totalDeductions}, ${netSalary}
         )
         RETURNING *
       `;
@@ -98,15 +105,14 @@ export async function POST(
 
     // Update period totals
     const totalGross = insertedPayslips.reduce((sum, p) => sum + (p.gross_salary || 0), 0);
-    const totalDeductions = insertedPayslips.reduce((sum, p) => sum + (p.deductions || 0), 0);
+    const totalDeductions = insertedPayslips.reduce((sum, p) => sum + (p.total_deductions || 0), 0);
     const totalNet = insertedPayslips.reduce((sum, p) => sum + (p.net_salary || 0), 0);
 
     await sql`
       UPDATE payroll_periods
       SET total_gross = ${totalGross},
           total_deductions = ${totalDeductions},
-          total_net = ${totalNet},
-          employee_count = ${insertedPayslips.length}
+          total_net = ${totalNet}
       WHERE id = ${periodId}
     `;
 

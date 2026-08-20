@@ -133,14 +133,14 @@ export async function createBill(
 
   // Log activity
   await sql`
-    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details)
     VALUES (
       ${userId}, 'create', 'bill', ${bill.id},
       ${JSON.stringify({ bill_number: billNumber, total: totals.total.toNumber() })}
     )
   `;
 
-  return { ...bill, lines };
+  return { ...bill, lines } as BillWithLines;
 }
 
 /**
@@ -261,14 +261,14 @@ export async function postBill(
 
   // Log activity
   await sql`
-    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details)
     VALUES (
       ${userId}, 'post', 'bill', ${billId},
       ${JSON.stringify({ status: 'approved', journal_entry_id: journalEntry.id })}
     )
   `;
 
-  return { bill: updatedBill, journalEntryId: journalEntry.id };
+  return { bill: updatedBill as Bill, journalEntryId: journalEntry.id };
 }
 
 /**
@@ -374,7 +374,7 @@ export async function recordBillPayment(
 
   // Log activity
   await sql`
-    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details)
     VALUES (
       ${userId}, 'create', 'bill_payment', ${payment.id},
       ${JSON.stringify({ payment_number: paymentNumber, amount: input.amount })}

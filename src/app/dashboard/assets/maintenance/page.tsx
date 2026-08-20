@@ -32,10 +32,20 @@ export default function AssetMaintenancePage() {
   const [maintenances, setMaintenances] = useState<Maintenance[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('scheduled');
+  const [defaultCurrency, setDefaultCurrency] = useState('USD');
 
   useEffect(() => {
     loadMaintenances();
   }, [statusFilter]);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.base_currency) setDefaultCurrency(data.base_currency);
+      })
+      .catch(() => {});
+  }, []);
 
   const loadMaintenances = async () => {
     try {
@@ -169,7 +179,7 @@ export default function AssetMaintenancePage() {
             <div className="text-2xl font-bold text-gray-900 mt-1">
               {new Intl.NumberFormat('en-US', {
                 style: 'currency',
-                currency: 'USD',
+                currency: defaultCurrency,
               }).format(
                 maintenances
                   .filter(m => m.status === 'completed')
@@ -292,7 +302,7 @@ export default function AssetMaintenancePage() {
                         <td>
                           {new Intl.NumberFormat('en-US', {
                             style: 'currency',
-                            currency: 'USD',
+                            currency: defaultCurrency,
                           }).format(maintenance.cost)}
                         </td>
                         <td>

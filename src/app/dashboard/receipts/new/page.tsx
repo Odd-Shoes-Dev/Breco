@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
@@ -60,6 +60,7 @@ export default function NewReceiptPage() {
     UGX: 1,
   });
   const [previousCurrency, setPreviousCurrency] = useState('USD');
+  const currencyTouchedRef = useRef(false);
 
   const {
     register,
@@ -100,6 +101,14 @@ export default function NewReceiptPage() {
   useEffect(() => {
     loadData();
     fetchExchangeRates();
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.base_currency && !currencyTouchedRef.current) {
+          setValue('currency', data.base_currency);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const fetchExchangeRates = async () => {
@@ -268,7 +277,7 @@ export default function NewReceiptPage() {
       const usdRate = exchangeRates['USD'] || 1;
       const currentRate = exchangeRates[currentCurrency] || 1;
       const conversionFactor = currentRate / usdRate;
-      const convertedPrice = product.unit_price * conversionFactor;
+      const convertedPrice = (product.unit_price ?? 0) * conversionFactor;
       
       console.log('Product selected:', {
         product: product.name,
@@ -433,6 +442,7 @@ export default function NewReceiptPage() {
                       setPreviousCurrency(newCurrency);
                     }
                     
+                    currencyTouchedRef.current = true;
                     setValue('currency', newCurrency);
                   }}
                 />

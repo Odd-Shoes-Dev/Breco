@@ -18,7 +18,7 @@ async function createJournalEntryRaw(params: {
       throw new Error(`Journal entry not balanced. Debits: ${totalDebits}, Credits: ${totalCredits}`);
     }
 
-    const entryNumRows = await sql`SELECT generate_journal_entry_number() AS num`;
+    const entryNumRows = await sql`SELECT generate_journal_number() AS num`;
     const entryNumber = entryNumRows[0]?.num;
 
     const jeRows = await sql`
@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
       total_recognized: newRecognizedAmount,
       remaining: invoice.total - newRecognizedAmount,
       fully_recognized: isFullyRecognized,
-      journal_entry_id: journalResult.journalEntry.id,
+      journal_entry_id: journalResult.journalEntry?.id ?? null,
     });
 
   } catch (error: any) {

@@ -68,10 +68,26 @@ export default function BookingsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [bookingTypeFilter, setBookingTypeFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<'all' | 'upcoming' | 'past'>('all');
+  const [revenueStats, setRevenueStats] = useState({ totalRevenue: 0, currency: 'USD' });
 
   useEffect(() => {
     fetchBookings();
+    fetchRevenueStats();
   }, []);
+
+  const fetchRevenueStats = async () => {
+    try {
+      const response = await fetch('/api/bookings/stats');
+      if (!response.ok) return;
+      const result = await response.json();
+      setRevenueStats({
+        totalRevenue: Number(result.paidRevenue) || 0,
+        currency: result.currency || 'USD',
+      });
+    } catch (error) {
+      console.error('Error fetching booking stats:', error);
+    }
+  };
 
   const fetchBookings = async () => {
     try {
@@ -170,7 +186,7 @@ export default function BookingsPage() {
     total: bookings.length,
     upcoming: bookings.filter(b => getDaysUntilTravel(b.travel_start_date) > 0 && !['cancelled', 'completed', 'refunded'].includes(b.status)).length,
     pendingPayment: bookings.filter(b => ['confirmed', 'deposit_paid'].includes(b.status) && b.balance_due > 0).length,
-    totalRevenue: bookings.filter(b => !['cancelled', 'refunded'].includes(b.status)).reduce((sum, b) => sum + b.amount_paid, 0),
+    totalRevenue: revenueStats.totalRevenue,
   };
 
   if (loading) {
@@ -239,7 +255,7 @@ export default function BookingsPage() {
               <CurrencyDollarIcon className="w-6 h-6 text-breco-teal" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalRevenue)}</p>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalRevenue, revenueStats.currency)}</p>
               <p className="text-sm text-gray-500">Revenue</p>
             </div>
           </div>

@@ -94,6 +94,16 @@ export default function NewInvoicePage() {
 
   useEffect(() => {
     loadData();
+    if (!prefilledCurrency) {
+      fetch('/api/settings')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.base_currency && !watchCustomerId) {
+            setValue('currency', data.base_currency);
+          }
+        })
+        .catch(() => {});
+    }
   }, []);
 
   // Pre-fill form when coming from booking page
@@ -149,12 +159,12 @@ export default function NewInvoicePage() {
       const invoiceCurrency = watchCurrency || 'USD';
       const productCurrency = product.currency || 'USD';
       
-      let convertedPrice = product.unit_price;
-      
+      let convertedPrice = product.unit_price ?? 0;
+
       if (productCurrency !== invoiceCurrency) {
         // Convert the product price to invoice currency
         const converted = await convertCurrency(
-          product.unit_price,
+          product.unit_price ?? 0,
           productCurrency as any,
           invoiceCurrency as any
         );

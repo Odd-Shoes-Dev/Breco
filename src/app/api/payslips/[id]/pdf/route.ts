@@ -2,6 +2,7 @@ import { sql } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { generatePayslipHTML, type PayslipData } from '@/lib/pdf/payslip-pdf';
+import { getCompanySettings } from '@/lib/company-settings';
 
 // GET /api/payslips/[id]/pdf - Generate and download payslip PDF
 export async function GET(
@@ -45,11 +46,17 @@ export async function GET(
       ORDER BY item_type DESC, item_name ASC
     `;
 
+    const companySettings = await getCompanySettings();
+
     // Prepare payslip data
-    const payslipData: PayslipData = {
+    const payslipData = {
       ...payslip,
-      payslip_items: payslipItems || [],
-    };
+      payslip_items: (payslipItems || []) as PayslipData["payslip_items"],
+      companySettings: {
+        name: companySettings.name,
+        duns_number: (companySettings as any).duns_number,
+      },
+    } as PayslipData;
 
     // Generate HTML
     const htmlContent = generatePayslipHTML(payslipData);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeftIcon, BanknotesIcon } from '@heroicons/react/24/outline';
@@ -21,9 +21,22 @@ export default function NewBankAccountPage() {
     is_primary: false,
     is_active: true,
   });
+  const currencyTouched = useRef(false);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.base_currency && !currencyTouched.current) {
+          setFormData((prev) => ({ ...prev, currency: data.base_currency }));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
+    if (name === 'currency') currencyTouched.current = true;
     setFormData((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,

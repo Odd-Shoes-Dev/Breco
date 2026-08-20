@@ -107,14 +107,13 @@ export async function createJournalEntry(
   // Create journal entry
   const entryRows = await sql`
     INSERT INTO journal_entries (
-      entry_number, entry_date, period_id, description,
-      reference_type, reference_id, is_adjusting, is_closing,
+      entry_number, entry_date, fiscal_period_id, description,
+      reference_type, reference_id,
       status, created_by
     ) VALUES (
       ${entryNumber}, ${input.entry_date}, ${period?.id ?? null},
       ${input.description},
       ${input.reference_type || 'manual'}, ${input.reference_id ?? null},
-      ${input.is_adjusting || false}, ${input.is_closing || false},
       'draft', ${userId}
     )
     RETURNING *
@@ -129,16 +128,11 @@ export async function createJournalEntry(
     const lineRows = await sql`
       INSERT INTO journal_lines (
         journal_entry_id, line_number, account_id, description,
-        debit, credit, currency, exchange_rate, base_debit, base_credit,
-        customer_id, vendor_id, project_id, department
+        debit, credit, currency, exchange_rate
       ) VALUES (
         ${entry.id}, ${index + 1}, ${line.account_id}, ${line.description ?? null},
         ${line.debit || 0}, ${line.credit || 0},
-        ${line.currency || 'USD'}, ${line.exchange_rate || 1},
-        ${new Decimal(line.debit || 0).times(line.exchange_rate || 1).toNumber()},
-        ${new Decimal(line.credit || 0).times(line.exchange_rate || 1).toNumber()},
-        ${line.customer_id ?? null}, ${line.vendor_id ?? null},
-        ${line.project_id ?? null}, ${line.department ?? null}
+        ${line.currency || 'USD'}, ${line.exchange_rate || 1}
       )
       RETURNING *
     `;
@@ -147,14 +141,14 @@ export async function createJournalEntry(
 
   // Log activity
   await sql`
-    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details)
     VALUES (
       ${userId}, 'create', 'journal_entry', ${entry.id},
       ${JSON.stringify({ entry_number: entryNumber, lines_count: lines.length })}
     )
   `;
 
-  return { ...entry, lines };
+  return { ...entry, lines } as JournalEntryWithLines;
 }
 
 /**
@@ -168,7 +162,7 @@ export async function postJournalEntry(
   const entryRows = await sql`
     SELECT je.*, fp.status AS period_status
     FROM journal_entries je
-    LEFT JOIN fiscal_periods fp ON fp.id = je.period_id
+    LEFT JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
     WHERE je.id = ${entryId}
     LIMIT 1
   `;
@@ -187,7 +181,7 @@ export async function postJournalEntry(
     SELECT * FROM journal_lines WHERE journal_entry_id = ${entryId}
   `;
 
-  const balance = validateJournalBalance(linesRows || []);
+  const balance = validateJournalBalance((linesRows || []) as any);
   if (!balance.valid) {
     throw new Error('Journal entry does not balance');
   }
@@ -204,15 +198,14 @@ export async function postJournalEntry(
 
   // Log activity
   await sql`
-    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, old_values, new_values)
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details)
     VALUES (
       ${userId}, 'post', 'journal_entry', ${entryId},
-      ${JSON.stringify({ status: 'draft' })},
-      ${JSON.stringify({ status: 'posted' })}
+      ${JSON.stringify({ old: { status: 'draft' }, new: { status: 'posted' } })}
     )
   `;
 
-  return posted;
+  return posted as JournalEntry;
 }
 
 /**
@@ -241,15 +234,14 @@ export async function voidJournalEntry(
   if (!voided) throw new Error('Failed to void journal entry');
 
   await sql`
-    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, old_values, new_values)
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details)
     VALUES (
       ${userId}, 'void', 'journal_entry', ${entryId},
-      ${JSON.stringify({ status: entry.status })},
-      ${JSON.stringify({ status: 'void', reason })}
+      ${JSON.stringify({ old: { status: entry.status }, new: { status: 'void', reason } })}
     )
   `;
 
-  return voided;
+  return voided as JournalEntry;
 }
 
 /**
@@ -281,29 +273,18 @@ export async function reverseJournalEntry(
     credit: line.debit,
     currency: line.currency,
     exchange_rate: line.exchange_rate,
-    customer_id: line.customer_id,
-    vendor_id: line.vendor_id,
-    project_id: line.project_id,
-    department: line.department,
   }));
 
   const reversal = await createJournalEntry(
     {
       entry_date: reversalDate,
       description: `Reversal of ${original.entry_number}`,
-      memo: `Reversing entry for ${original.entry_number}`,
       reference_type: 'reversal',
       reference_id: entryId,
-      is_reversing: true,
       lines: reversalLines,
     },
     userId
   );
-
-  // Update original entry to reference reversal
-  await sql`
-    UPDATE journal_entries SET reversed_entry_id = ${reversal.id} WHERE id = ${entryId}
-  `;
 
   return reversal;
 }
@@ -316,7 +297,7 @@ export async function getAccountBalance(
   asOfDate: string
 ): Promise<Decimal> {
   const lines = await sql`
-    SELECT jl.base_debit, jl.base_credit
+    SELECT jl.debit, jl.credit, jl.exchange_rate
     FROM journal_lines jl
     JOIN journal_entries je ON je.id = jl.journal_entry_id
     WHERE jl.account_id = ${accountId}
@@ -332,7 +313,10 @@ export async function getAccountBalance(
 
   let balance = new Decimal(0);
   for (const line of lines || []) {
-    balance = balance.plus(line.base_debit || 0).minus(line.base_credit || 0);
+    const rate = Number(line.exchange_rate) || 1;
+    balance = balance
+      .plus(new Decimal(line.debit || 0).times(rate))
+      .minus(new Decimal(line.credit || 0).times(rate));
   }
 
   // For credit-normal accounts (liabilities, equity, revenue), flip the sign
@@ -352,7 +336,7 @@ export async function getAccountBalanceForPeriod(
   endDate: string
 ): Promise<Decimal> {
   const lines = await sql`
-    SELECT jl.base_debit, jl.base_credit
+    SELECT jl.debit, jl.credit, jl.exchange_rate
     FROM journal_lines jl
     JOIN journal_entries je ON je.id = jl.journal_entry_id
     WHERE jl.account_id = ${accountId}
@@ -368,7 +352,10 @@ export async function getAccountBalanceForPeriod(
 
   let balance = new Decimal(0);
   for (const line of lines || []) {
-    balance = balance.plus(line.base_debit || 0).minus(line.base_credit || 0);
+    const rate = Number(line.exchange_rate) || 1;
+    balance = balance
+      .plus(new Decimal(line.debit || 0).times(rate))
+      .minus(new Decimal(line.credit || 0).times(rate));
   }
 
   if (account?.normal_balance === 'credit') {
@@ -400,7 +387,7 @@ export async function closePeriod(
   const period = periodRows[0];
 
   const unposted = await sql`
-    SELECT id FROM journal_entries WHERE period_id = ${periodId} AND status = 'draft'
+    SELECT id FROM journal_entries WHERE fiscal_period_id = ${periodId} AND status = 'draft'
   `;
 
   if ((unposted || []).length > 0) {
@@ -415,7 +402,7 @@ export async function closePeriod(
   `;
 
   await sql`
-    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details)
     VALUES (
       ${userId}, 'close', 'fiscal_period', ${periodId},
       ${JSON.stringify({ status: 'closed', period_name: period?.name })}

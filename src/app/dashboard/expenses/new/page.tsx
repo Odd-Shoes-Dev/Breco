@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -46,9 +46,18 @@ export default function NewExpensePage() {
   });
 
   const [attachments, setAttachments] = useState<File[]>([]);
+  const currencyTouched = useRef(false);
   useEffect(() => {
     fetchVendors();
     fetchExpenseAccounts();
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.base_currency && !currencyTouched.current) {
+          setFormData((prev) => ({ ...prev, currency: data.base_currency }));
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const fetchVendors = async () => {
@@ -314,7 +323,7 @@ export default function NewExpensePage() {
               </label>
               <CurrencySelect
                 value={formData.currency}
-                onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                onChange={(e) => { currencyTouched.current = true; setFormData({ ...formData, currency: e.target.value }); }}
               />
             </div>
 

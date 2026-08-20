@@ -4,10 +4,11 @@ interface BillPDFData {
   bill: any;
   vendor: any;
   lines: any[];
+  companySettings?: { duns_number?: string };
 }
 
 export function generateBillHTML(data: BillPDFData): string {
-  const { bill, vendor, lines } = data;
+  const { bill, vendor, lines, companySettings } = data;
   
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -255,7 +256,7 @@ export function generateBillHTML(data: BillPDFData): string {
                 <p>Tel: +256 782 884 933, +256 772 891 729, +256 775 766 578</p>
                 <p>+256 746 757 53991, +256 702 834 511</p>
                 <p>Email: brecosafaris@gmail.com • Website: www.brecosafaris.com</p>
-                <p>URA TIN: 1014756280 • URSB Reg. No: 80020001634842</p>
+                <p>URA TIN: 1014756280 • URSB Reg. No: 80020001634842${companySettings?.duns_number ? ` • DUNS: ${companySettings.duns_number}` : ''}</p>
               </div>
             </div>
           </div>

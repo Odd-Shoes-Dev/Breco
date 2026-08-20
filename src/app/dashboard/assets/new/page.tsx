@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -31,9 +31,22 @@ export default function NewAssetPage() {
     warranty_expiry: '',
     notes: '',
   });
+  const currencyTouched = useRef(false);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.base_currency && !currencyTouched.current) {
+          setFormData((prev) => ({ ...prev, currency: data.base_currency }));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
+    if (name === 'currency') currencyTouched.current = true;
     setFormData((prev) => ({
       ...prev,
       [name]: type === 'number' ? Number(value) : value,
@@ -274,7 +287,7 @@ export default function NewAssetPage() {
               </label>
               <CurrencySelect
                 value={formData.currency}
-                onChange={(e) => setFormData(prev => ({ ...prev, currency: e.target.value }))}
+                onChange={(e) => { currencyTouched.current = true; setFormData(prev => ({ ...prev, currency: e.target.value })); }}
               />
             </div>
 

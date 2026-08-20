@@ -53,7 +53,7 @@ export async function POST(request: NextRequest, context: any) {
     }
 
     // Release reserved inventory (quotations have reserved stock)
-    await releaseReservedInventory(null, params.id, quotation.invoice_lines);
+    await releaseReservedInventory(params.id, quotation.invoice_lines);
 
     // Mark original quotation status
     await sql`UPDATE invoices SET status = 'converted' WHERE id = ${params.id}`;

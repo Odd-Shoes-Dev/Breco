@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { CurrencySelect } from '@/components/ui';
@@ -33,8 +33,21 @@ export default function NewCustomerPage() {
     credit_limit: 0,
     notes: '',
   });
+  const currencyTouched = useRef(false);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.base_currency && !currencyTouched.current) {
+          setFormData((prev) => ({ ...prev, currency: data.base_currency }));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    if (e.target.name === 'currency') currencyTouched.current = true;
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -331,7 +344,7 @@ export default function NewCustomerPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Credit Limit ($)
+                Credit Limit ({formData.currency})
               </label>
               <input
                 type="number"

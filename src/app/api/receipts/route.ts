@@ -19,7 +19,7 @@ async function createReceiptJournalEntryRaw(payment: {
       throw new Error('Required accounts not found for receipt journal entry');
     }
 
-    const entryNumRows = await sql`SELECT generate_journal_entry_number() AS num`;
+    const entryNumRows = await sql`SELECT generate_journal_number() AS num`;
     const entryNumber = entryNumRows[0]?.num;
 
     const jeRows = await sql`

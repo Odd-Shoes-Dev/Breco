@@ -72,6 +72,7 @@ export default function BillDetailPage() {
   const [payments, setPayments] = useState<BillPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [companySettings, setCompanySettings] = useState<{ duns_number?: string } | null>(null);
 
   useEffect(() => {
     if (params.id) {
@@ -95,6 +96,13 @@ export default function BillDetailPage() {
       if (paymentsResponse.ok) {
         const paymentsResult = await paymentsResponse.json();
         setPayments(paymentsResult.data || []);
+      }
+
+      // Fetch company settings for DUNS number
+      const settingsRes = await fetch('/api/settings');
+      if (settingsRes.ok) {
+        const settingsData = await settingsRes.json();
+        setCompanySettings(settingsData);
       }
     } catch (error) {
       console.error('Failed to load bill:', error);
@@ -136,6 +144,7 @@ export default function BillDetailPage() {
         bill,
         vendor: bill.vendors || {},
         lines,
+        companySettings: companySettings || undefined,
       });
     }
   };

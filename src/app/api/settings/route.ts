@@ -23,13 +23,14 @@ export async function PATCH(request: NextRequest) {
     if (rows.length === 0) {
       const result = await sql`
         INSERT INTO company_settings (
-          name, legal_name, ein, address_line1, address_line2,
+          name, legal_name, ein, duns_number, address_line1, address_line2,
           city, state, zip_code, country, phone, email, website,
           base_currency, fiscal_year_start_month, sales_tax_rate
         ) VALUES (
           ${body.name || 'Breco Safaris Ltd'},
           ${body.legal_name || null},
           ${body.ein || null},
+          ${body.duns_number || null},
           ${body.address_line1 || null},
           ${body.address_line2 || null},
           ${body.city || null},
@@ -49,7 +50,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const allowedFields = [
-      'name', 'legal_name', 'ein', 'address_line1', 'address_line2',
+      'name', 'legal_name', 'ein', 'duns_number', 'address_line1', 'address_line2',
       'city', 'state', 'zip_code', 'country', 'phone', 'email', 'website',
       'logo_url', 'base_currency', 'fiscal_year_start_month',
       'inventory_method', 'sales_tax_rate',
@@ -73,6 +74,7 @@ export async function PATCH(request: NextRequest) {
         name = COALESCE(${updates.name ?? null}, name),
         legal_name = COALESCE(${updates.legal_name ?? null}, legal_name),
         ein = COALESCE(${updates.ein ?? null}, ein),
+        duns_number = COALESCE(${updates.duns_number ?? null}, duns_number),
         address_line1 = COALESCE(${updates.address_line1 ?? null}, address_line1),
         address_line2 = COALESCE(${updates.address_line2 ?? null}, address_line2),
         city = COALESCE(${updates.city ?? null}, city),

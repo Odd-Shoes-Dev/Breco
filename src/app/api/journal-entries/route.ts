@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
               'account_id', jl.account_id,
               'debit', jl.debit,
               'credit', jl.credit,
+              'exchange_rate', jl.exchange_rate,
               'description', jl.description,
               'account', json_build_object('code', a.code, 'name', a.name)
             )
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
               'account_id', jl.account_id,
               'debit', jl.debit,
               'credit', jl.credit,
+              'exchange_rate', jl.exchange_rate,
               'description', jl.description,
               'account', json_build_object('code', a.code, 'name', a.name)
             )
@@ -70,6 +72,7 @@ export async function GET(request: NextRequest) {
               'account_id', jl.account_id,
               'debit', jl.debit,
               'credit', jl.credit,
+              'exchange_rate', jl.exchange_rate,
               'description', jl.description,
               'account', json_build_object('code', a.code, 'name', a.name)
             )
@@ -91,6 +94,7 @@ export async function GET(request: NextRequest) {
               'account_id', jl.account_id,
               'debit', jl.debit,
               'credit', jl.credit,
+              'exchange_rate', jl.exchange_rate,
               'description', jl.description,
               'account', json_build_object('code', a.code, 'name', a.name)
             )
@@ -112,6 +116,7 @@ export async function GET(request: NextRequest) {
               'account_id', jl.account_id,
               'debit', jl.debit,
               'credit', jl.credit,
+              'exchange_rate', jl.exchange_rate,
               'description', jl.description,
               'account', json_build_object('code', a.code, 'name', a.name)
             )
@@ -132,6 +137,7 @@ export async function GET(request: NextRequest) {
               'account_id', jl.account_id,
               'debit', jl.debit,
               'credit', jl.credit,
+              'exchange_rate', jl.exchange_rate,
               'description', jl.description,
               'account', json_build_object('code', a.code, 'name', a.name)
             )
@@ -152,6 +158,7 @@ export async function GET(request: NextRequest) {
               'account_id', jl.account_id,
               'debit', jl.debit,
               'credit', jl.credit,
+              'exchange_rate', jl.exchange_rate,
               'description', jl.description,
               'account', json_build_object('code', a.code, 'name', a.name)
             )
@@ -172,6 +179,7 @@ export async function GET(request: NextRequest) {
               'account_id', jl.account_id,
               'debit', jl.debit,
               'credit', jl.credit,
+              'exchange_rate', jl.exchange_rate,
               'description', jl.description,
               'account', json_build_object('code', a.code, 'name', a.name)
             )
@@ -193,6 +201,7 @@ export async function GET(request: NextRequest) {
         account_name: line.account?.name || '',
         debit_amount: line.debit || 0,
         credit_amount: line.credit || 0,
+        exchange_rate: Number(line.exchange_rate) || 1,
         description: line.description,
       })),
     }));

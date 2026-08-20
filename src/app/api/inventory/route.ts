@@ -40,7 +40,18 @@ export async function GET(request: NextRequest) {
       const filtered = allRows.filter(
         (item: any) => (item?.quantity_on_hand ?? 0) <= (item?.reorder_point ?? 0)
       );
-      const paged = filtered.slice(offset, offset + limit);
+      const paged = filtered.slice(offset, offset + limit).map((item: any) => {
+        const onHand = Number(item.quantity_on_hand) || 0;
+        const reserved = Number(item.quantity_reserved) || 0;
+        return {
+          ...item,
+          cost_price: Number(item.purchase_price) || 0,
+          unit_price: Number(item.selling_price) || 0,
+          quantity_on_hand: onHand,
+          quantity_reserved: reserved,
+          quantity_available: onHand - reserved,
+        };
+      });
 
       return NextResponse.json({
         data: paged,
@@ -94,8 +105,21 @@ export async function GET(request: NextRequest) {
 
     const count = parseInt(countRows[0].count);
 
+    const data = rows.map((item: any) => {
+      const onHand = Number(item.quantity_on_hand) || 0;
+      const reserved = Number(item.quantity_reserved) || 0;
+      return {
+        ...item,
+        cost_price: Number(item.purchase_price) || 0,
+        unit_price: Number(item.selling_price) || 0,
+        quantity_on_hand: onHand,
+        quantity_reserved: reserved,
+        quantity_available: onHand - reserved,
+      };
+    });
+
     return NextResponse.json({
-      data: rows,
+      data,
       pagination: {
         page,
         limit,
@@ -140,14 +164,15 @@ export async function POST(request: NextRequest) {
     const rows = await sql`
       INSERT INTO products (
         sku, name, description, category_id, unit_of_measure,
-        purchase_price, selling_price,
-        reorder_point, inventory_account_id, expense_account_id,
+        purchase_price, selling_price, currency, product_type,
+        reorder_point, reorder_quantity, inventory_account_id, expense_account_id,
         income_account_id, is_active, track_inventory, is_taxable
       ) VALUES (
         ${body.sku}, ${body.name}, ${body.description || null}, ${body.category_id || null},
         ${body.unit_of_measure || 'each'},
         ${body.unit_cost || 0}, ${body.unit_price || 0},
-        ${body.reorder_point || 0},
+        ${body.currency || 'USD'}, ${body.product_type || 'inventory'},
+        ${body.reorder_point || 0}, ${body.reorder_quantity ?? null},
         ${inventoryAccountId}, ${cogsAccountId}, NULL,
         ${body.is_active !== false}, ${body.track_inventory !== false},
         ${body.is_taxable !== false}
@@ -155,6 +180,14 @@ export async function POST(request: NextRequest) {
       RETURNING *
     `;
     const data = rows[0];
+
+    // Record an initial stock movement if the user entered a starting quantity
+    if (data && Number(body.quantity_on_hand) > 0) {
+      await sql`
+        INSERT INTO inventory_movements (product_id, movement_type, quantity, unit_cost, notes)
+        VALUES (${data.id}, 'adjustment', ${Number(body.quantity_on_hand)}, ${body.unit_cost || 0}, 'Initial stock')
+      `;
+    }
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error: any) {

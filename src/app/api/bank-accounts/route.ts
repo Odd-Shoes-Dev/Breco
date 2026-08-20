@@ -1,5 +1,16 @@
 import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { getCompanySettings } from '@/lib/company-settings';
+
+async function convertCurrencyDB(amount: number, from: string, to: string, date: string): Promise<number> {
+  if (from === to) return amount;
+  try {
+    const rows = await sql`SELECT convert_currency(${amount}, ${from}, ${to}, ${date}) AS result`;
+    return Number(rows[0]?.result ?? amount);
+  } catch {
+    return amount;
+  }
+}
 
 // GET /api/bank-accounts - List bank accounts
 export async function GET(request: NextRequest) {
@@ -16,7 +27,26 @@ export async function GET(request: NextRequest) {
       rows = await sql`SELECT * FROM bank_accounts ORDER BY account_name`;
     }
 
-    return NextResponse.json({ data: rows });
+    // Convert each account's balance to the company base currency before summing
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency;
+    const today = new Date().toISOString().split('T')[0];
+
+    let totalBalanceInBase = 0;
+    const data = [] as any[];
+    for (const account of rows as any[]) {
+      const balance = Number(account.current_balance) || 0;
+      const accountCurrency = account.currency || baseCurrency;
+      const balanceInBase = await convertCurrencyDB(balance, accountCurrency, baseCurrency, today);
+      totalBalanceInBase += balanceInBase;
+      data.push({ ...account, balance_in_base: balanceInBase });
+    }
+
+    return NextResponse.json({
+      data,
+      total_balance_in_base: totalBalanceInBase,
+      currency: baseCurrency,
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

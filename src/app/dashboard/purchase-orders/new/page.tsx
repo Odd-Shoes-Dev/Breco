@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -65,10 +65,19 @@ export default function NewPurchaseOrderPage() {
       line_total: 0,
     },
   ]);
+  const currencyTouched = useRef(false);
 
   useEffect(() => {
     loadVendors();
     loadProducts();
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.base_currency && !currencyTouched.current) {
+          setFormData((prev) => ({ ...prev, currency: data.base_currency }));
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const loadVendors = async () => {
@@ -243,7 +252,7 @@ export default function NewPurchaseOrderPage() {
                 <label className="label">Currency</label>
                 <select
                   value={formData.currency}
-                  onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                  onChange={(e) => { currencyTouched.current = true; setFormData({ ...formData, currency: e.target.value }); }}
                   className="input"
                 >
                   <option value="USD">USD</option>

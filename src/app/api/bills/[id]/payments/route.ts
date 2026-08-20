@@ -170,7 +170,7 @@ export async function POST(
       const journalResult = await createJournalEntry({
         entry_date: body.payment_date,
         description: `Payment for Bill ${bill.bill_number} - ${bill.vendors?.name || 'Vendor'}`,
-        source_module: 'bill_payment',
+        reference_type: 'bill_payment',
         lines: [
           {
             account_id: apAccountId,

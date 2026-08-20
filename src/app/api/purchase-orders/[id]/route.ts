@@ -70,11 +70,10 @@ export async function PATCH(
     for (const [field, value] of Object.entries(body)) {
       if (field === 'status') await sql`UPDATE purchase_orders SET status = ${value} WHERE id = ${id}`;
       else if (field === 'vendor_id') await sql`UPDATE purchase_orders SET vendor_id = ${value} WHERE id = ${id}`;
-      else if (field === 'po_date') await sql`UPDATE purchase_orders SET po_date = ${value} WHERE id = ${id}`;
-      else if (field === 'expected_delivery_date') await sql`UPDATE purchase_orders SET expected_delivery_date = ${value} WHERE id = ${id}`;
+      else if (field === 'order_date' || field === 'po_date') await sql`UPDATE purchase_orders SET order_date = ${value} WHERE id = ${id}`;
+      else if (field === 'expected_date' || field === 'expected_delivery_date') await sql`UPDATE purchase_orders SET expected_date = ${value} WHERE id = ${id}`;
       else if (field === 'currency') await sql`UPDATE purchase_orders SET currency = ${value} WHERE id = ${id}`;
       else if (field === 'notes') await sql`UPDATE purchase_orders SET notes = ${value} WHERE id = ${id}`;
-      else if (field === 'tax_rate') await sql`UPDATE purchase_orders SET tax_rate = ${value} WHERE id = ${id}`;
       else if (field === 'subtotal') await sql`UPDATE purchase_orders SET subtotal = ${value} WHERE id = ${id}`;
       else if (field === 'tax_amount') await sql`UPDATE purchase_orders SET tax_amount = ${value} WHERE id = ${id}`;
       else if (field === 'total') await sql`UPDATE purchase_orders SET total = ${value} WHERE id = ${id}`;

@@ -1,6 +1,7 @@
 import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { convertCurrency, SupportedCurrency } from '@/lib/currency';
+import { getCompanySettings } from '@/lib/company-settings';
 
 // GET /api/reports/ar-aging - Accounts Receivable Aging
 export async function GET(request: NextRequest) {
@@ -8,6 +9,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
 
     const asOfDate = searchParams.get('as_of_date') || new Date().toISOString().split('T')[0];
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency as SupportedCurrency;
     const customerId = searchParams.get('customer_id');
 
     let invoices: any[];
@@ -64,12 +67,11 @@ export async function GET(request: NextRequest) {
       const balance = invoice.total - invoice.amount_paid;
       if (balance <= 0) continue;
 
-      // Convert balance to USD for reporting
-      const balanceUSD = await convertCurrency(
-        balance,
-        (invoice.currency || 'USD') as SupportedCurrency,
-        'USD' as SupportedCurrency
-      ) || balance;
+      // Convert balance to the company base currency for reporting
+      const invoiceCurrency = (invoice.currency || baseCurrency) as SupportedCurrency;
+      const balanceUSD = invoiceCurrency === baseCurrency
+        ? balance
+        : (await convertCurrency(balance, invoiceCurrency, baseCurrency) || balance);
 
       const dueDate = new Date(invoice.due_date);
       const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -145,6 +147,7 @@ export async function GET(request: NextRequest) {
         },
         aging,
         byCustomer: Object.values(customerAging).sort((a, b) => b.total - a.total),
+        currency: baseCurrency,
       },
     });
   } catch (error: any) {

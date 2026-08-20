@@ -138,8 +138,8 @@ export async function PATCH(request: NextRequest, context: any) {
     // Handle inventory for status changes
     if (user) {
       if ((documentType === 'quotation' || documentType === 'proforma') && newStatus === 'posted' && oldStatus === 'draft') {
-        await releaseReservedInventory(sql, resolvedParams.id, existing.invoice_lines);
-        const inventoryResult = await reduceInventoryForInvoice(sql, resolvedParams.id, existing.invoice_lines, user.id);
+        await releaseReservedInventory(resolvedParams.id, existing.invoice_lines);
+        const inventoryResult = await reduceInventoryForInvoice(resolvedParams.id, existing.invoice_lines, user.id);
         if (!inventoryResult.success) {
           return NextResponse.json(
             { error: inventoryResult.error || 'Insufficient inventory' },
@@ -147,7 +147,7 @@ export async function PATCH(request: NextRequest, context: any) {
           );
         }
       } else if (documentType === 'invoice' && (newStatus === 'sent' || newStatus === 'posted') && oldStatus === 'draft') {
-        const inventoryResult = await reduceInventoryForInvoice(sql, resolvedParams.id, existing.invoice_lines, user.id);
+        const inventoryResult = await reduceInventoryForInvoice(resolvedParams.id, existing.invoice_lines, user.id);
         if (!inventoryResult.success) {
           return NextResponse.json(
             { error: inventoryResult.error || 'Insufficient inventory' },
@@ -160,7 +160,6 @@ export async function PATCH(request: NextRequest, context: any) {
     // Create journal entry when invoice is marked as 'paid' or 'partial'
     if ((newStatus === 'paid' || newStatus === 'partial') && (oldStatus !== 'paid' && oldStatus !== 'partial') && !invoice.journal_entry_id && documentType === 'invoice') {
       const journalResult = await createInvoiceJournalEntry(
-        sql,
         {
           id: invoice.id,
           invoice_number: invoice.invoice_number,
@@ -263,6 +262,7 @@ export async function PATCH(request: NextRequest, context: any) {
         const lineDiscount = lineSubtotal * ((line.discount_percent || 0) / 100);
         const lineNet = lineSubtotal - lineDiscount;
         const lineTax = lineNet * (line.tax_rate || 0);
+        const lineTotal = lineNet + lineTax;
 
         subtotal += lineNet;
         taxAmount += lineTax;
@@ -275,7 +275,7 @@ export async function PATCH(request: NextRequest, context: any) {
           ) VALUES (
             ${resolvedParams.id}, ${index + 1}, ${line.product_id || null}, ${line.description},
             ${line.quantity}, ${line.unit_price}, ${line.discount_percent || 0},
-            ${lineDiscount}, ${line.tax_rate || 0}, ${lineTax}, ${lineNet}
+            ${lineDiscount}, ${line.tax_rate || 0}, ${lineTax}, ${lineTotal}
           )
         `;
       }
@@ -331,7 +331,7 @@ export async function DELETE(request: NextRequest, context: any) {
       }
 
       if ((existing.document_type === 'quotation' || existing.document_type === 'proforma') && user) {
-        await releaseReservedInventory(sql, resolvedParams.id, existing.invoice_lines);
+        await releaseReservedInventory(resolvedParams.id, existing.invoice_lines);
       }
 
       await sql`DELETE FROM invoice_lines WHERE invoice_id = ${resolvedParams.id}`;
@@ -341,7 +341,7 @@ export async function DELETE(request: NextRequest, context: any) {
     } else {
       if ((existing.status === 'posted' || existing.status === 'sent') &&
           existing.document_type === 'invoice' && user) {
-        await restoreInventoryForInvoice(sql, resolvedParams.id, existing.invoice_lines, user.id);
+        await restoreInventoryForInvoice(resolvedParams.id, existing.invoice_lines, user.id);
       }
 
       const rows = await sql`

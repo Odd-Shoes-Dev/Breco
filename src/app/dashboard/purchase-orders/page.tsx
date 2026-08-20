@@ -41,6 +41,7 @@ export default function PurchaseOrdersPage() {
     partial: 0,
     received: 0,
     totalValue: 0,
+    currency: 'USD',
   });
   const pageSize = 20;
 
@@ -68,17 +69,16 @@ export default function PurchaseOrdersPage() {
 
   const loadStats = async () => {
     try {
-      const res = await fetch('/api/purchase-orders?limit=1000');
+      const res = await fetch('/api/purchase-orders/stats');
       const result = await res.json();
-      const data = result.data || result || [];
-      const computedStats = {
-        draft: data.filter((o: any) => o.status === 'draft').length,
-        sent: data.filter((o: any) => o.status === 'sent').length,
-        partial: data.filter((o: any) => o.status === 'partial').length,
-        received: data.filter((o: any) => o.status === 'received').length,
-        totalValue: data.reduce((sum: number, o: any) => sum + Number(o.total || 0), 0),
-      };
-      setStats(computedStats);
+      setStats({
+        draft: result.draft || 0,
+        sent: result.sent || 0,
+        partial: result.partial || 0,
+        received: result.received || 0,
+        totalValue: Number(result.totalValue) || 0,
+        currency: result.currency || 'USD',
+      });
     } catch (error) {
       console.error('Failed to load stats:', error);
     }
@@ -150,7 +150,7 @@ export default function PurchaseOrdersPage() {
           <p className="text-sm text-gray-500">Received</p>
         </div>
         <div className="card p-4">
-          <p className="text-2xl font-bold text-breco-navy">{formatCurrency(stats.totalValue)}</p>
+          <p className="text-2xl font-bold text-breco-navy">{formatCurrency(stats.totalValue, stats.currency)}</p>
           <p className="text-sm text-gray-500">Total Value</p>
         </div>
       </div>

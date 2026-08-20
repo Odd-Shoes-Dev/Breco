@@ -85,6 +85,7 @@ export default function PayrollPage() {
   const [showProcessModal, setShowProcessModal] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<PayrollPeriodWithPayslips | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [salaryTotals, setSalaryTotals] = useState({ amount: 0, currency: defaultCurrency as string });
 
   // Form state
   const [formData, setFormData] = useState({
@@ -120,6 +121,10 @@ export default function PayrollPage() {
       const result = await res.json();
       if (!res.ok) return;
       setEmployees(result.data || []);
+      setSalaryTotals({
+        amount: Number(result.total_salary_in_base) || 0,
+        currency: result.currency || defaultCurrency,
+      });
     } catch (error) {
       console.error('Error fetching employees:', error);
     }
@@ -463,7 +468,10 @@ export default function PayrollPage() {
         </div>
         <div className="card p-4">
           <ScaledNumber
-            value={formatCurrency(currentPeriod?.total_net || employees.reduce((sum, e) => sum + (e.basic_salary || 0), 0))}
+            value={formatCurrency(
+              currentPeriod?.total_net || salaryTotals.amount,
+              salaryTotals.currency as SupportedCurrency
+            )}
             className="text-breco-navy"
           />
           <p className="text-sm text-gray-500">This Month Payroll</p>

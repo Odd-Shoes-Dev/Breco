@@ -53,10 +53,20 @@ function GoodsReceiptDetailPageClient({ grId }: { grId: string }) {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [inspectionNotes, setInspectionNotes] = useState('');
+  const [defaultCurrency, setDefaultCurrency] = useState('USD');
 
   useEffect(() => {
     loadGoodsReceipt();
   }, [grId]);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.base_currency) setDefaultCurrency(data.base_currency);
+      })
+      .catch(() => {});
+  }, []);
 
   const loadGoodsReceipt = async () => {
     try {
@@ -225,13 +235,13 @@ function GoodsReceiptDetailPageClient({ grId }: { grId: string }) {
                     <td className="text-right">
                       {new Intl.NumberFormat('en-US', {
                         style: 'currency',
-                        currency: 'USD',
+                        currency: defaultCurrency,
                       }).format(line.unit_cost)}
                     </td>
                     <td className="text-right">
                       {new Intl.NumberFormat('en-US', {
                         style: 'currency',
-                        currency: 'USD',
+                        currency: defaultCurrency,
                       }).format(line.line_total)}
                     </td>
                   </tr>
@@ -245,7 +255,7 @@ function GoodsReceiptDetailPageClient({ grId }: { grId: string }) {
                   <td className="text-right font-semibold">
                     {new Intl.NumberFormat('en-US', {
                       style: 'currency',
-                      currency: 'USD',
+                      currency: defaultCurrency,
                     }).format(total)}
                   </td>
                 </tr>

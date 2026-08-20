@@ -90,6 +90,14 @@ export default function InventoryValuationPage() {
   const [sortBy, setSortBy] = useState('totalValue');
   const [isLoading, setIsLoading] = useState(false);
   const [showLotDetails, setShowLotDetails] = useState<string | null>(null);
+  const [companySettings, setCompanySettings] = useState<any>(null);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((settings) => settings && setCompanySettings(settings))
+      .catch((error) => console.error('Failed to fetch company settings:', error));
+  }, []);
 
   const fetchCategories = async () => {
     try {
@@ -260,9 +268,10 @@ export default function InventoryValuationPage() {
               <div class="address">Kampala Road Plot 14 Eagen House, Russel Street, P.O.Box 144011, Kampala, Uganda</div>
               <div class="address">Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com</div>
               <div class="address">URA TIN: 1014756280 • URSB Reg. No: 80020001634842</div>
+              ${companySettings?.duns_number ? `<div class="address">DUNS: ${companySettings.duns_number}</div>` : ''}
             </div>
           </div>
-          
+
           <div class="report-header">
             <h2>Inventory Valuation Report</h2>
             <div class="period">

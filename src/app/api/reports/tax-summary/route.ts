@@ -80,9 +80,9 @@ export async function GET(request: NextRequest) {
 
     // Fetch invoices for revenue (paid and partial)
     const invoices = await sql`
-      SELECT total_amount, amount_paid, status, issue_date FROM invoices
-      WHERE issue_date >= ${startDate}
-        AND issue_date <= ${endDate}
+      SELECT total, amount_paid, status, invoice_date FROM invoices
+      WHERE invoice_date >= ${startDate}
+        AND invoice_date <= ${endDate}
         AND status IN ('paid', 'partial')
     `;
 
@@ -90,13 +90,15 @@ export async function GET(request: NextRequest) {
 
     // Fetch expenses for deductions
     const expenses = await sql`
-      SELECT amount, category, description, expense_date FROM expenses
-      WHERE expense_date >= ${startDate} AND expense_date <= ${endDate}
+      SELECT e.amount, a.name AS category, e.description, e.expense_date
+      FROM expenses e
+      LEFT JOIN accounts a ON a.id = e.account_id
+      WHERE e.expense_date >= ${startDate} AND e.expense_date <= ${endDate}
     `;
 
     // Fetch bills for additional deductions
     const bills = await sql`
-      SELECT total_amount, amount_paid, category, description, bill_date FROM bills
+      SELECT total, amount_paid, bill_date FROM bills
       WHERE bill_date >= ${startDate}
         AND bill_date <= ${endDate}
         AND status IN ('paid', 'partial')

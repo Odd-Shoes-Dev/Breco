@@ -42,7 +42,6 @@ export default function EditCustomerPage({ params }: PageProps) {
     notes: '',
     is_active: true,
   });
-
   useEffect(() => {
     loadCustomer();
   }, [id]);
@@ -50,9 +49,17 @@ export default function EditCustomerPage({ params }: PageProps) {
   const loadCustomer = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/customers/${id}`);
+      const [res, settingsRes] = await Promise.all([
+        fetch(`/api/customers/${id}`),
+        fetch('/api/settings').catch(() => null),
+      ]);
       if (!res.ok) throw new Error('Failed to load customer');
       const data = await res.json();
+      let baseCurrency = 'USD';
+      try {
+        const settingsData = settingsRes ? await settingsRes.json() : null;
+        if (settingsData?.base_currency) baseCurrency = settingsData.base_currency;
+      } catch {}
 
       if (data) {
         setFormData({
@@ -68,7 +75,7 @@ export default function EditCustomerPage({ params }: PageProps) {
           state: data.state || 'MA',
           zip_code: data.zip_code || '',
           country: data.country || 'USA',
-          currency: data.currency || 'USD',
+          currency: data.currency || baseCurrency,
           tax_id: data.tax_id || '',
           payment_terms: data.payment_terms || 30,
           credit_limit: data.credit_limit || 0,
@@ -432,7 +439,7 @@ export default function EditCustomerPage({ params }: PageProps) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Credit Limit ($)
+                Credit Limit ({formData.currency})
               </label>
               <input
                 type="number"

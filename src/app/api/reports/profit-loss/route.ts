@@ -41,8 +41,8 @@ export async function GET(request: NextRequest) {
 
     // Get expenses for the period
     const expenses = await sql`
-      SELECT id, amount, currency, date, category FROM expenses
-      WHERE date >= ${startDate} AND date <= ${endDate}
+      SELECT id, amount, currency, expense_date FROM expenses
+      WHERE expense_date >= ${startDate} AND expense_date <= ${endDate}
     `;
 
     // Get journal entry lines for the period
@@ -154,7 +154,7 @@ export async function GET(request: NextRequest) {
       const currency = expense.currency || baseCurrency;
 
       if (currency !== baseCurrency) {
-        const converted = await sql`SELECT convert_currency(${expense.amount}, ${currency}, ${baseCurrency}, ${expense.date}) AS val`;
+        const converted = await sql`SELECT convert_currency(${expense.amount}, ${currency}, ${baseCurrency}, ${expense.expense_date}) AS val`;
         amountInBase = converted[0]?.val ?? 0;
       }
 

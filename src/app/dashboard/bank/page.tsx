@@ -20,6 +20,7 @@ export default function BankPage() {
   const [stats, setStats] = useState({
     totalBalance: 0,
     unreconciledCount: 0,
+    currency: 'USD',
   });
 
   useEffect(() => {
@@ -36,10 +37,9 @@ export default function BankPage() {
       const accountsData = accountsResult.data || [];
       setAccounts(accountsData);
 
-      // Calculate total balance from all bank accounts
-      const totalBalance = accountsData.reduce((sum: number, account: any) => {
-        return sum + (account.current_balance || 0);
-      }, 0);
+      // Total balance is converted to base currency server-side
+      const totalBalance = Number(accountsResult.total_balance_in_base) || 0;
+      const baseCurrency = accountsResult.currency || 'USD';
 
       // Load recent transactions
       const txRes = await fetch('/api/bank-transactions?limit=10');
@@ -53,6 +53,7 @@ export default function BankPage() {
       setStats({
         totalBalance,
         unreconciledCount: statsResult.unreconciledCount || 0,
+        currency: baseCurrency,
       });
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -105,7 +106,7 @@ export default function BankPage() {
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Total Cash Balance</p>
-            <ScaledNumber value={formatCurrency(stats.totalBalance)} className="mt-1" />
+            <ScaledNumber value={formatCurrency(stats.totalBalance, stats.currency)} className="mt-1" />
             <p className="text-sm text-gray-500 mt-2">Across {accounts.length} accounts</p>
           </div>
         </div>

@@ -1,6 +1,17 @@
 import { sql } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { getCompanySettings } from '@/lib/company-settings';
+
+async function convertCurrencyDB(amount: number, from: string, to: string, date: string): Promise<number> {
+  if (from === to) return amount;
+  try {
+    const rows = await sql`SELECT convert_currency(${amount}, ${from}, ${to}, ${date}) AS result`;
+    return Number(rows[0]?.result ?? amount);
+  } catch {
+    return amount;
+  }
+}
 
 // GET /api/employees - List all employees with optional filters
 export async function GET(request: NextRequest) {
@@ -25,7 +36,25 @@ export async function GET(request: NextRequest) {
       data = data.filter((e: any) => e.is_active === active);
     }
 
-    return NextResponse.json({ data }, { status: 200 });
+    // Convert each employee's salary to the company base currency (today's rate)
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency;
+    const today = new Date().toISOString().split('T')[0];
+
+    let totalSalaryInBase = 0;
+    const converted = [] as any[];
+    for (const employee of data) {
+      const salary = Number(employee.basic_salary) || 0;
+      const salaryCurrency = employee.salary_currency || baseCurrency;
+      const salaryInBase = await convertCurrencyDB(salary, salaryCurrency, baseCurrency, today);
+      if (employee.is_active) totalSalaryInBase += salaryInBase;
+      converted.push({ ...employee, salary_in_base: salaryInBase });
+    }
+
+    return NextResponse.json(
+      { data: converted, total_salary_in_base: totalSalaryInBase, currency: baseCurrency },
+      { status: 200 }
+    );
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

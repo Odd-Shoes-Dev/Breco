@@ -74,8 +74,8 @@ export async function getAssetsDueForDepreciation(
       const existing = await sql`
         SELECT id FROM depreciation_entries
         WHERE asset_id = ${asset.id}
-          AND depreciation_date >= ${periodStart}
-          AND depreciation_date <= ${periodEndDate}
+          AND entry_date >= ${periodStart}
+          AND entry_date <= ${periodEndDate}
         LIMIT 1
       `;
       return { asset, hasDepreciation: existing.length > 0 };
@@ -110,7 +110,7 @@ export async function runAssetDepreciation(
   }
 
   // Calculate depreciation amount
-  const depreciationAmount = calculateMonthlyDepreciation(asset);
+  const depreciationAmount = calculateMonthlyDepreciation(asset as any);
 
   if (depreciationAmount.lessThanOrEqualTo(0)) {
     // Asset is fully depreciated
@@ -128,7 +128,7 @@ export async function runAssetDepreciation(
 
   // Get period
   const periodRows = await sql`
-    SELECT id FROM fiscal_periods
+    SELECT id, start_date, end_date FROM fiscal_periods
     WHERE level = 'monthly'
       AND start_date <= ${depreciationDate}
       AND end_date >= ${depreciationDate}
@@ -163,19 +163,26 @@ export async function runAssetDepreciation(
 
   await postJournalEntry(journalEntry.id, userId);
 
-  // Create depreciation entry record
-  const deprRows = await sql`
-    INSERT INTO depreciation_entries (asset_id, period_id, depreciation_date, amount, journal_entry_id)
-    VALUES (${assetId}, ${period?.id ?? null}, ${depreciationDate}, ${depreciationAmount.toNumber()}, ${journalEntry.id})
-    RETURNING *
-  `;
-  const deprEntry = deprRows[0];
-  if (!deprEntry) throw new Error('Failed to create depreciation entry');
-
   // Update asset accumulated depreciation
   const newAccumDepr = new Decimal(asset.accumulated_depreciation || 0)
     .plus(depreciationAmount)
     .toNumber();
+  const newBookValue = new Decimal(asset.purchase_price).minus(newAccumDepr).toNumber();
+
+  // Create depreciation entry record
+  const deprRows = await sql`
+    INSERT INTO depreciation_entries (
+      asset_id, entry_date, period_start, period_end,
+      depreciation_amount, accumulated_depreciation, book_value, journal_entry_id
+    )
+    VALUES (
+      ${assetId}, ${depreciationDate}, ${period?.start_date ?? depreciationDate}, ${period?.end_date ?? depreciationDate},
+      ${depreciationAmount.toNumber()}, ${newAccumDepr}, ${newBookValue}, ${journalEntry.id}
+    )
+    RETURNING *
+  `;
+  const deprEntry = deprRows[0];
+  if (!deprEntry) throw new Error('Failed to create depreciation entry');
 
   const newStatus =
     new Decimal(asset.purchase_price).minus(newAccumDepr).lessThanOrEqualTo(asset.salvage_value || 0)
@@ -190,14 +197,14 @@ export async function runAssetDepreciation(
 
   // Log activity
   await sql`
-    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details)
     VALUES (
       ${userId}, 'depreciate', 'fixed_asset', ${assetId},
       ${JSON.stringify({ amount: depreciationAmount.toNumber(), accumulated: newAccumDepr })}
     )
   `;
 
-  return deprEntry;
+  return deprEntry as DepreciationEntry;
 }
 
 /**
@@ -337,13 +344,13 @@ export async function disposeAsset(
   await sql`
     UPDATE fixed_assets
     SET status = 'disposed', disposal_date = ${disposalDate},
-        disposal_price = ${disposalPrice}, disposal_journal_id = ${journalEntry.id}
+        disposal_amount = ${disposalPrice}
     WHERE id = ${assetId}
   `;
 
   // Log activity
   await sql`
-    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details)
     VALUES (
       ${userId}, 'dispose', 'fixed_asset', ${assetId},
       ${JSON.stringify({ disposal_date: disposalDate, disposal_price: disposalPrice, gain_loss: gainLoss })}

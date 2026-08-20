@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate') || new Date().toISOString().split('T')[0];
 
     // Get bank accounts
-    const bankAccounts = await sql`SELECT id, name, currency FROM bank_accounts`;
+    const bankAccounts = await sql`SELECT id, account_name AS name, currency FROM bank_accounts`;
 
     // Get beginning cash balance (transactions before start date)
     let beginningCash = 0;
@@ -89,8 +89,8 @@ export async function GET(request: NextRequest) {
     `;
 
     const expenses = await sql`
-      SELECT amount, currency, date FROM expenses
-      WHERE date >= ${startDate} AND date <= ${endDate}
+      SELECT amount, currency, expense_date FROM expenses
+      WHERE expense_date >= ${startDate} AND expense_date <= ${endDate}
     `;
 
     let totalExpenses = 0;

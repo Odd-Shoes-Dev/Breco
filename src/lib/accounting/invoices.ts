@@ -156,14 +156,14 @@ export async function createInvoice(
 
   // Log activity
   await sql`
-    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details)
     VALUES (
       ${userId}, 'create', 'invoice', ${invoice.id},
       ${JSON.stringify({ invoice_number: invoiceNumber, total: totals.total.toNumber() })}
     )
   `;
 
-  return { ...invoice, lines };
+  return { ...invoice, lines } as InvoiceWithLines;
 }
 
 /**
@@ -294,14 +294,14 @@ export async function postInvoice(
 
   // Log activity
   await sql`
-    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details)
     VALUES (
       ${userId}, 'post', 'invoice', ${invoiceId},
       ${JSON.stringify({ status: 'sent', journal_entry_id: journalEntry.id })}
     )
   `;
 
-  return { invoice: updatedInvoice, journalEntryId: journalEntry.id };
+  return { invoice: updatedInvoice as Invoice, journalEntryId: journalEntry.id };
 }
 
 /**
@@ -408,7 +408,7 @@ export async function recordPaymentReceived(
 
   // Log activity
   await sql`
-    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, new_values)
+    INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details)
     VALUES (
       ${userId}, 'create', 'payment_received', ${payment.id},
       ${JSON.stringify({ payment_number: paymentNumber, amount: input.amount })}

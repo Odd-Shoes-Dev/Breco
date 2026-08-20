@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
 
     // Get bank accounts and their transactions
     const bankAccounts = await sql`
-      SELECT id, name, currency, created_at FROM bank_accounts
+      SELECT id, account_name AS name, currency, created_at FROM bank_accounts
     `;
 
     // Get accounts receivable (unpaid invoices)

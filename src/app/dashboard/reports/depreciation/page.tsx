@@ -12,7 +12,7 @@ import {
   ClockIcon,
   CogIcon,
 } from '@heroicons/react/24/outline';
-import { formatCurrency, formatDate, cn } from '@/lib/utils';
+import { formatCurrency as formatCurrencyBase, formatDate, cn } from '@/lib/utils';
 
 interface AssetDepreciation {
   assetId: string;
@@ -41,6 +41,7 @@ interface AssetDepreciation {
 }
 
 interface DepreciationData {
+  currency?: string;
   reportPeriod: {
     startDate: string;
     endDate: string;
@@ -91,6 +92,8 @@ export default function DepreciationSchedulePage() {
   useEffect(() => {
     fetchDepreciationData();
   }, [startDate, endDate, category, sortBy]);
+
+  const formatCurrency = (amount: number) => formatCurrencyBase(amount, data?.currency || 'USD');
 
   const exportToPDF = async () => {
     if (!data) return;

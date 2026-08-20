@@ -122,7 +122,6 @@ export async function PATCH(request: NextRequest, context: any) {
       const billLinesToProcess = lines.length > 0 ? lines : existing.bill_lines;
 
       const inventoryResult = await increaseInventoryForBill(
-        null as any,
         bill.id,
         bill.bill_date,
         billLinesToProcess.map((line: any) => ({
@@ -168,7 +167,6 @@ export async function PATCH(request: NextRequest, context: any) {
         }));
 
         const journalResult = await createBillJournalEntry(
-          null as any,
           { id: bill.id, bill_number: bill.bill_number, bill_date: bill.bill_date, total: billTotalFromLines },
           journalBillLines,
           user.id

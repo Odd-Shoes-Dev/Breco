@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { getCompanySettings } from '@/lib/company-settings';
 
 interface VendorPurchase {
   vendorId: string;
@@ -48,6 +49,8 @@ export async function GET(request: NextRequest) {
     const vendorType = searchParams.get('vendorType') || 'all';
     const sortBy = searchParams.get('sortBy') || 'totalPurchases';
     const minAmount = parseFloat(searchParams.get('minAmount') || '0');
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency;
 
     // Fetch bills with vendor data for the period
     const bills = await sql`
@@ -115,10 +118,14 @@ export async function GET(request: NextRequest) {
 
       const total = parseFloat(bill.total);
       let totalUSD = total;
-      const billCurrency = bill.currency || 'USD';
-      if (billCurrency !== 'USD') {
-        const res = await sql`SELECT convert_currency(${total}, ${billCurrency}, 'USD', ${bill.bill_date}) AS val`;
-        totalUSD = res[0]?.val ?? total;
+      const billCurrency = bill.currency || baseCurrency;
+      if (billCurrency !== baseCurrency) {
+        try {
+          const res = await sql`SELECT convert_currency(${total}, ${billCurrency}, ${baseCurrency}, ${bill.bill_date}) AS val`;
+          totalUSD = Number(res[0]?.val ?? total);
+        } catch {
+          totalUSD = total;
+        }
       }
 
       vendor.totalPurchases += totalUSD;
@@ -195,7 +202,8 @@ export async function GET(request: NextRequest) {
 
     const topVendors = vendors.slice(0, 10);
 
-    const response: PurchasesByVendorData = {
+    const response: PurchasesByVendorData & { currency: string } = {
+      currency: baseCurrency,
       reportPeriod: {
         startDate,
         endDate

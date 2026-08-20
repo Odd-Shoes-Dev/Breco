@@ -80,9 +80,17 @@ export default function EditInventoryItemPage() {
   const loadItem = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/inventory/${params.id}`);
+      const [res, settingsRes] = await Promise.all([
+        fetch(`/api/inventory/${params.id}`),
+        fetch('/api/settings').catch(() => null),
+      ]);
       if (!res.ok) throw new Error('Failed to load item');
       const data = await res.json();
+      let baseCurrency = 'USD';
+      try {
+        const settingsData = settingsRes ? await settingsRes.json() : null;
+        if (settingsData?.base_currency) baseCurrency = settingsData.base_currency;
+      } catch {}
 
       setItem(data);
       setFormData({
@@ -93,7 +101,7 @@ export default function EditInventoryItemPage() {
         unit_of_measure: data.unit_of_measure,
         unit_cost: parseFloat(data.cost_price),
         selling_price: parseFloat(data.unit_price),
-        currency: data.currency || 'USD',
+        currency: data.currency || baseCurrency,
         quantity_on_hand: data.quantity_on_hand,
         reorder_point: data.reorder_point || 10,
         reorder_quantity: data.reorder_quantity || 50,

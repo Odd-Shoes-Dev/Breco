@@ -48,7 +48,7 @@ export async function createJournalEntry({
     }
 
     // Generate journal entry number
-    const numRows = await sql`SELECT generate_journal_entry_number() AS entry_number`;
+    const numRows = await sql`SELECT generate_journal_number() AS entry_number`;
     const entryNumber = numRows[0]?.entry_number;
     if (!entryNumber) throw new Error('Failed to generate journal entry number');
 

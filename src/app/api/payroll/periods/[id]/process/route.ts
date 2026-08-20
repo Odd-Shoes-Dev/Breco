@@ -31,7 +31,7 @@ export async function POST(
       );
     }
 
-    const payslips = await sql`SELECT * FROM payroll_payslips WHERE payroll_period_id = ${periodId}`;
+    const payslips = await sql`SELECT * FROM payslips WHERE payroll_period_id = ${periodId}`;
 
     if (!payslips || payslips.length === 0) {
       return NextResponse.json(
@@ -112,7 +112,7 @@ export async function POST(
     const journalResult = await createJournalEntry({
       entry_date: period.payment_date,
       description: `Payroll for period ${period.period_start} to ${period.period_end}`,
-      source_module: 'payroll',
+      reference_type: 'payroll',
       lines,
       created_by: user.id,
     });
@@ -128,7 +128,6 @@ export async function POST(
     const updatedRows = await sql`
       UPDATE payroll_periods
       SET status = 'processed',
-          journal_entry_id = ${journalResult.journalEntry.id},
           processed_by = ${user.id},
           processed_at = ${new Date().toISOString()},
           total_gross = ${totalGross},
@@ -138,13 +137,10 @@ export async function POST(
       RETURNING *
     `;
 
-    // Update all payslips to processed
-    await sql`UPDATE payroll_payslips SET status = 'processed' WHERE payroll_period_id = ${periodId}`;
-
     return NextResponse.json({
       message: 'Payroll processed successfully',
       period: updatedRows[0],
-      journal_entry_id: journalResult.journalEntry.id,
+      journal_entry_id: journalResult.journalEntry?.id ?? null,
       totals: {
         gross: totalGross,
         tax: totalTax,

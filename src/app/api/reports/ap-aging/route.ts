@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { convertCurrency, SupportedCurrency } from '@/lib/currency';
+import { getCompanySettings } from '@/lib/company-settings';
 
 interface VendorAging {
   vendorId: string;
@@ -27,6 +28,8 @@ export async function GET(request: NextRequest) {
     const vendorType = searchParams.get('vendorType') || 'all';
     const sortBy = searchParams.get('sortBy') || 'totalAmount';
     const showCriticalOnly = searchParams.get('showCriticalOnly') === 'true';
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency as SupportedCurrency;
 
     // Fetch bills from database
     const bills = await sql`
@@ -54,12 +57,11 @@ export async function GET(request: NextRequest) {
 
       if (balance <= 0) continue; // Skip fully paid bills
 
-      // Convert balance to USD for reporting
-      const balanceUSD = await convertCurrency(
-        balance,
-        (bill.currency || 'USD') as SupportedCurrency,
-        'USD' as SupportedCurrency
-      ) || balance;
+      // Convert balance to the company base currency for reporting
+      const billCurrency = (bill.currency || baseCurrency) as SupportedCurrency;
+      const balanceUSD = billCurrency === baseCurrency
+        ? balance
+        : (await convertCurrency(balance, billCurrency, baseCurrency) || balance);
 
       const dueDate = new Date(bill.due_date);
       const daysOverdue = Math.floor((reportDateObj.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -165,6 +167,7 @@ export async function GET(request: NextRequest) {
 
     const response = {
       reportDate,
+      currency: baseCurrency,
       summary,
       agingDistribution,
       vendors,

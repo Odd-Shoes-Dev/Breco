@@ -185,7 +185,6 @@ export async function POST(request: NextRequest) {
       // Create journal entry and update inventory for the bill
       if (bill.status === 'posted' || bill.status === 'approved') {
         const inventoryResult = await increaseInventoryForBill(
-          null as any, // inventory-server needs to be updated separately
           bill.id,
           bill.bill_date,
           billLines.map((line: any) => ({
@@ -213,7 +212,6 @@ export async function POST(request: NextRequest) {
         });
 
         const journalResult = await createBillJournalEntry(
-          null as any,
           { id: bill.id, bill_number: bill.bill_number, bill_date: bill.bill_date, total: bill.total },
           journalBillLines,
           user.id

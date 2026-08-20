@@ -33,7 +33,7 @@ export async function GET(
           'payment_date', pp.payment_date,
           'status', pp.status
         ) AS period
-      FROM payroll_payslips ps
+      FROM payslips ps
       LEFT JOIN employees e ON e.id = ps.employee_id
       LEFT JOIN payroll_periods pp ON pp.id = ps.payroll_period_id
       WHERE ps.id = ${id}
@@ -67,7 +67,7 @@ export async function PATCH(
     // Check payslip exists and period is draft
     const rows = await sql`
       SELECT ps.*, pp.status AS period_status
-      FROM payroll_payslips ps
+      FROM payslips ps
       LEFT JOIN payroll_periods pp ON pp.id = ps.payroll_period_id
       WHERE ps.id = ${id}
     `;
@@ -113,24 +113,24 @@ export async function PATCH(
 
     // Apply updates for each field
     for (const [field, value] of Object.entries(updates)) {
-      if (field === 'basic_salary') await sql`UPDATE payroll_payslips SET basic_salary = ${value} WHERE id = ${id}`;
-      else if (field === 'allowances') await sql`UPDATE payroll_payslips SET allowances = ${value} WHERE id = ${id}`;
-      else if (field === 'housing_allowance') await sql`UPDATE payroll_payslips SET housing_allowance = ${value} WHERE id = ${id}`;
-      else if (field === 'transport_allowance') await sql`UPDATE payroll_payslips SET transport_allowance = ${value} WHERE id = ${id}`;
-      else if (field === 'other_allowances') await sql`UPDATE payroll_payslips SET other_allowances = ${value} WHERE id = ${id}`;
-      else if (field === 'gross_salary') await sql`UPDATE payroll_payslips SET gross_salary = ${value} WHERE id = ${id}`;
-      else if (field === 'deductions') await sql`UPDATE payroll_payslips SET deductions = ${value} WHERE id = ${id}`;
-      else if (field === 'tax_deduction') await sql`UPDATE payroll_payslips SET tax_deduction = ${value} WHERE id = ${id}`;
-      else if (field === 'nhif_deduction') await sql`UPDATE payroll_payslips SET nhif_deduction = ${value} WHERE id = ${id}`;
-      else if (field === 'nssf_deduction') await sql`UPDATE payroll_payslips SET nssf_deduction = ${value} WHERE id = ${id}`;
-      else if (field === 'loan_deduction') await sql`UPDATE payroll_payslips SET loan_deduction = ${value} WHERE id = ${id}`;
-      else if (field === 'advance_deduction') await sql`UPDATE payroll_payslips SET advance_deduction = ${value} WHERE id = ${id}`;
-      else if (field === 'net_salary') await sql`UPDATE payroll_payslips SET net_salary = ${value} WHERE id = ${id}`;
-      else if (field === 'days_worked') await sql`UPDATE payroll_payslips SET days_worked = ${value} WHERE id = ${id}`;
-      else if (field === 'notes') await sql`UPDATE payroll_payslips SET notes = ${value} WHERE id = ${id}`;
+      if (field === 'basic_salary') await sql`UPDATE payslips SET basic_salary = ${value} WHERE id = ${id}`;
+      else if (field === 'allowances') await sql`UPDATE payslips SET allowances = ${value} WHERE id = ${id}`;
+      else if (field === 'housing_allowance') await sql`UPDATE payslips SET housing_allowance = ${value} WHERE id = ${id}`;
+      else if (field === 'transport_allowance') await sql`UPDATE payslips SET transport_allowance = ${value} WHERE id = ${id}`;
+      else if (field === 'other_allowances') await sql`UPDATE payslips SET other_allowances = ${value} WHERE id = ${id}`;
+      else if (field === 'gross_salary') await sql`UPDATE payslips SET gross_salary = ${value} WHERE id = ${id}`;
+      else if (field === 'deductions') await sql`UPDATE payslips SET deductions = ${value} WHERE id = ${id}`;
+      else if (field === 'tax_deduction') await sql`UPDATE payslips SET tax_deduction = ${value} WHERE id = ${id}`;
+      else if (field === 'nhif_deduction') await sql`UPDATE payslips SET nhif_deduction = ${value} WHERE id = ${id}`;
+      else if (field === 'nssf_deduction') await sql`UPDATE payslips SET nssf_deduction = ${value} WHERE id = ${id}`;
+      else if (field === 'loan_deduction') await sql`UPDATE payslips SET loan_deduction = ${value} WHERE id = ${id}`;
+      else if (field === 'advance_deduction') await sql`UPDATE payslips SET advance_deduction = ${value} WHERE id = ${id}`;
+      else if (field === 'net_salary') await sql`UPDATE payslips SET net_salary = ${value} WHERE id = ${id}`;
+      else if (field === 'days_worked') await sql`UPDATE payslips SET days_worked = ${value} WHERE id = ${id}`;
+      else if (field === 'notes') await sql`UPDATE payslips SET notes = ${value} WHERE id = ${id}`;
     }
 
-    const updatedRows = await sql`SELECT * FROM payroll_payslips WHERE id = ${id}`;
+    const updatedRows = await sql`SELECT * FROM payslips WHERE id = ${id}`;
     return NextResponse.json(updatedRows[0]);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -153,7 +153,7 @@ export async function DELETE(
     // Check payslip exists and period is draft
     const rows = await sql`
       SELECT ps.*, pp.status AS period_status
-      FROM payroll_payslips ps
+      FROM payslips ps
       LEFT JOIN payroll_periods pp ON pp.id = ps.payroll_period_id
       WHERE ps.id = ${id}
     `;
@@ -170,7 +170,7 @@ export async function DELETE(
       );
     }
 
-    await sql`DELETE FROM payroll_payslips WHERE id = ${id}`;
+    await sql`DELETE FROM payslips WHERE id = ${id}`;
 
     return NextResponse.json({ message: 'Payslip deleted successfully' });
   } catch (error: any) {

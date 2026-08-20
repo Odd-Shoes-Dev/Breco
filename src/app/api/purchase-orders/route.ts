@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
         LEFT JOIN purchase_order_lines pol ON pol.po_id = po.id
         WHERE po.vendor_id = ${vendorId} AND po.status = ${status}
         GROUP BY po.id, v.id, v.name, v.email, v.phone
-        ORDER BY po.po_date DESC
+        ORDER BY po.order_date DESC
         LIMIT ${limit} OFFSET ${offset}
       `;
       countRows = await sql`SELECT COUNT(*) FROM purchase_orders WHERE vendor_id = ${vendorId} AND status = ${status}`;
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
         LEFT JOIN purchase_order_lines pol ON pol.po_id = po.id
         WHERE po.vendor_id = ${vendorId}
         GROUP BY po.id, v.id, v.name, v.email, v.phone
-        ORDER BY po.po_date DESC
+        ORDER BY po.order_date DESC
         LIMIT ${limit} OFFSET ${offset}
       `;
       countRows = await sql`SELECT COUNT(*) FROM purchase_orders WHERE vendor_id = ${vendorId}`;
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
         LEFT JOIN purchase_order_lines pol ON pol.po_id = po.id
         WHERE po.status = ${status}
         GROUP BY po.id, v.id, v.name, v.email, v.phone
-        ORDER BY po.po_date DESC
+        ORDER BY po.order_date DESC
         LIMIT ${limit} OFFSET ${offset}
       `;
       countRows = await sql`SELECT COUNT(*) FROM purchase_orders WHERE status = ${status}`;
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
         LEFT JOIN vendors v ON v.id = po.vendor_id
         LEFT JOIN purchase_order_lines pol ON pol.po_id = po.id
         GROUP BY po.id, v.id, v.name, v.email, v.phone
-        ORDER BY po.po_date DESC
+        ORDER BY po.order_date DESC
         LIMIT ${limit} OFFSET ${offset}
       `;
       countRows = await sql`SELECT COUNT(*) FROM purchase_orders`;
@@ -120,9 +120,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // Validate required fields
-    if (!body.vendor_id || !body.po_date || !body.lines || body.lines.length === 0) {
+    if (!body.vendor_id || !(body.order_date || body.po_date) || !body.lines || body.lines.length === 0) {
       return NextResponse.json(
-        { error: 'Missing required fields: vendor_id, po_date, lines' },
+        { error: 'Missing required fields: vendor_id, order_date, lines' },
         { status: 400 }
       );
     }
@@ -155,13 +155,13 @@ export async function POST(request: NextRequest) {
     // Create purchase order
     const poRows = await sql`
       INSERT INTO purchase_orders (
-        po_number, vendor_id, po_date, expected_delivery_date, currency,
-        exchange_rate, subtotal, tax_rate, tax_amount, total, status, notes, created_by
+        po_number, vendor_id, order_date, expected_date, currency,
+        subtotal, tax_amount, total, status, notes, created_by
       ) VALUES (
-        ${poNumber}, ${body.vendor_id}, ${body.po_date},
-        ${body.expected_delivery_date ?? null},
-        ${body.currency || 'USD'}, ${body.exchange_rate || 1.0},
-        ${subtotal}, ${body.tax_rate || 0}, ${taxAmount}, ${total},
+        ${poNumber}, ${body.vendor_id}, ${body.order_date || body.po_date},
+        ${body.expected_delivery_date ?? body.expected_date ?? null},
+        ${body.currency || 'USD'},
+        ${subtotal}, ${taxAmount}, ${total},
         'draft', ${body.notes ?? null}, ${user.id}
       )
       RETURNING *

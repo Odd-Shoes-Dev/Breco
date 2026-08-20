@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CurrencySelect } from '@/components/ui';
@@ -97,8 +97,18 @@ export default function NewBookingPage() {
     notes: '',
   });
 
+  const currencyTouched = useRef(false);
+
   useEffect(() => {
     loadData();
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.base_currency && !currencyTouched.current) {
+          setFormData(prev => ({ ...prev, currency: data.base_currency }));
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -263,6 +273,8 @@ export default function NewBookingPage() {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value, type } = e.target;
+
+    if (name === 'currency') currencyTouched.current = true;
 
     if (type === 'number') {
       setFormData(prev => ({ ...prev, [name]: parseFloat(value) || 0 }));

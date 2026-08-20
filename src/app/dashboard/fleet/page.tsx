@@ -42,9 +42,19 @@ export default function FleetPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [defaultCurrency, setDefaultCurrency] = useState('USD');
 
   useEffect(() => {
     fetchVehicles();
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.base_currency) setDefaultCurrency(data.base_currency);
+      })
+      .catch(() => {});
   }, []);
 
   const fetchVehicles = async () => {
@@ -179,7 +189,7 @@ export default function FleetPage() {
     if (!amount) return '-';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: defaultCurrency,
       minimumFractionDigits: 0,
     }).format(amount);
   };

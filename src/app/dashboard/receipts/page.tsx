@@ -14,6 +14,7 @@ export default function ReceiptsPage() {
     totalAmount: 0,
     totalCount: 0,
     thisMonthCount: 0,
+    currency: 'USD',
   });
 
   useEffect(() => {
@@ -38,7 +39,7 @@ export default function ReceiptsPage() {
       const response = await fetch('/api/receipts/stats');
       if (response.ok) {
         const data = await response.json();
-        setStats(data);
+        setStats({ ...data, currency: data.currency || 'USD' });
       }
     } catch (error) {
       console.error('Failed to load stats:', error);
@@ -200,9 +201,9 @@ export default function ReceiptsPage() {
           </div>
           <div className="card">
             <div className="card-body">
-              <p className="text-sm text-gray-500">Total Amount Received (USD)</p>
+              <p className="text-sm text-gray-500">Total Amount Received ({stats.currency})</p>
               <p className="text-2xl font-bold text-green-600 mt-1">
-                {formatCurrency(stats.totalAmount, 'USD')}
+                {formatCurrency(stats.totalAmount, stats.currency)}
               </p>
             </div>
           </div>
