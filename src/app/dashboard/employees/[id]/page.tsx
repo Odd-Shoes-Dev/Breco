@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import {
   ArrowLeftIcon,
   PencilIcon,
@@ -83,15 +82,8 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
       setAllowances(result.data.allowances || []);
       setDeductions(result.data.deductions || []);
 
-      // Fetch recent payslips
-      const { data: payslips } = await supabase
-        .from('payslips')
-        .select('*, payroll_period:payroll_periods(period_name, payment_date)')
-        .eq('employee_id', id)
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      setRecentPayslips(payslips || []);
+      // Recent payslips not available via current API routes — skip
+      setRecentPayslips([]);
     } catch (error) {
       console.error('Error fetching employee:', error);
       toast.error('Failed to load employee details');

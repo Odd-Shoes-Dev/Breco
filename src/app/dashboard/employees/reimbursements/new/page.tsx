@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { ArrowLeftIcon, CloudArrowUpIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
@@ -47,14 +46,10 @@ export default function NewReimbursementPage() {
 
   const fetchEmployees = async () => {
     try {
-      const { data, error } = await supabase
-        .from('employees')
-        .select('id, first_name, last_name, employee_number')
-        .eq('is_active', true)
-        .order('first_name');
-
-      if (error) throw error;
-      setEmployees(data || []);
+      const res = await fetch('/api/employees');
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to load employees');
+      setEmployees(result.data || []);
     } catch (error) {
       console.error('Error fetching employees:', error);
       toast.error('Failed to load employees');
@@ -65,13 +60,11 @@ export default function NewReimbursementPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast.error('File size must be less than 5MB');
       return;
     }
 
-    // Validate file type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
     if (!allowedTypes.includes(file.type)) {
       toast.error('Only JPG, PNG, and PDF files are allowed');
@@ -81,25 +74,18 @@ export default function NewReimbursementPage() {
     setUploadingReceipt(true);
 
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
-      const filePath = `receipts/${fileName}`;
+      const uploadForm = new FormData();
+      uploadForm.append('file', file);
 
-      const { error: uploadError } = await supabase.storage
-        .from('receipts')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('receipts')
-        .getPublicUrl(filePath);
-
-      setFormData({
-        ...formData,
-        receipt_url: publicUrl,
+      const res = await fetch('/api/uploads/receipts', {
+        method: 'POST',
+        body: uploadForm,
       });
 
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to upload receipt');
+
+      setFormData({ ...formData, receipt_url: result.url });
       toast.success('Receipt uploaded successfully');
     } catch (error: any) {
       console.error('Error uploading receipt:', error);
@@ -114,23 +100,21 @@ export default function NewReimbursementPage() {
     setLoading(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { error } = await supabase
-        .from('employee_reimbursements')
-        .insert({
+      const res = await fetch('/api/employees/reimbursements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           employee_id: formData.employee_id,
           reimbursement_date: formData.reimbursement_date,
           expense_type: formData.expense_type,
           description: formData.description || null,
           amount: parseFloat(formData.amount),
           receipt_url: formData.receipt_url || null,
-          status: 'pending',
-          created_by: user.id,
-        });
+        }),
+      });
 
-      if (error) throw error;
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to create reimbursement');
 
       toast.success('Reimbursement request created successfully');
       router.push('/dashboard/employees/reimbursements');

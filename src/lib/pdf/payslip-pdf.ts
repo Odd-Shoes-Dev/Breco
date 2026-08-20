@@ -42,6 +42,10 @@ export interface PayslipData {
     amount: number;
     is_taxable: boolean;
   }>;
+  companySettings?: {
+    name?: string | null;
+    duns_number?: string | null;
+  };
 }
 
 export function generatePayslipHTML(payslip: PayslipData): string {
@@ -317,7 +321,7 @@ export function generatePayslipHTML(payslip: PayslipData): string {
         <div class="payslip-container">
           <!-- Header -->
           <div class="header">
-            <h1>Breco Safaris Ltd</h1>
+            <h1>${payslip.companySettings?.name || 'Breco Safaris Ltd'}</h1>
             <p class="subtitle">Salary Slip</p>
             <p class="period">${payslip.payroll_period.period_name}</p>
           </div>
@@ -481,7 +485,8 @@ export function generatePayslipHTML(payslip: PayslipData): string {
           <div class="footer">
             <p>This is a computer-generated payslip and does not require a signature.</p>
             <p>Generated on ${new Date().toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })}</p>
-            <p class="contact">For any queries, please contact HR Department - Breco Safaris Ltd</p>
+            ${payslip.companySettings?.duns_number ? `<p>DUNS: ${payslip.companySettings.duns_number}</p>` : ''}
+            <p class="contact">For any queries, please contact HR Department - ${payslip.companySettings?.name || 'Breco Safaris Ltd'}</p>
           </div>
         </div>
       </body>

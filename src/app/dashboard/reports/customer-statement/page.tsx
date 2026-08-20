@@ -55,6 +55,7 @@ interface CustomerStatementData {
 export default function CustomerStatementPage() {
   const [data, setData] = useState<CustomerStatementData | null>(null);
   const [customers, setCustomers] = useState<Array<{id: string; name: string}>>([]);
+  const [companySettings, setCompanySettings] = useState<any>(null);
   const [customerId, setCustomerId] = useState('');
   const [startDate, setStartDate] = useState(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
@@ -79,6 +80,19 @@ export default function CustomerStatementPage() {
       }
     };
     loadCustomers();
+  }, []);
+
+  useEffect(() => {
+    const loadCompanySettings = async () => {
+      try {
+        const response = await fetch('/api/settings');
+        const result = await response.json();
+        setCompanySettings(result);
+      } catch (error) {
+        console.error('Failed to load company settings:', error);
+      }
+    };
+    loadCompanySettings();
   }, []);
 
   const fetchStatement = async () => {
@@ -287,9 +301,10 @@ export default function CustomerStatementPage() {
               <div class="address">Kampala Road Plot 14 Eagen House, Russel Street, P.O.Box 144011, Kampala, Uganda</div>
               <div class="address">Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com</div>
               <div class="address">URA TIN: 1014756280 • URSB Reg. No: 80020001634842</div>
+              ${companySettings?.duns_number ? `<div class="address">DUNS: ${companySettings.duns_number}</div>` : ''}
             </div>
           </div>
-          
+
           <div class="statement-header">
             <div class="statement-title">
               <h2>Customer Statement</h2>

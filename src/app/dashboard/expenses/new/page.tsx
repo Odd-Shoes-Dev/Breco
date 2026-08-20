@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -8,7 +8,6 @@ import {
   CreditCardIcon,
   PaperClipIcon,
 } from '@heroicons/react/24/outline';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import { CurrencySelect } from '@/components/ui';
 
@@ -47,9 +46,18 @@ export default function NewExpensePage() {
   });
 
   const [attachments, setAttachments] = useState<File[]>([]);
+  const currencyTouched = useRef(false);
   useEffect(() => {
     fetchVendors();
     fetchExpenseAccounts();
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.base_currency && !currencyTouched.current) {
+          setFormData((prev) => ({ ...prev, currency: data.base_currency }));
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const fetchVendors = async () => {
@@ -112,35 +120,6 @@ export default function NewExpensePage() {
     setError(null);
 
     try {
-      let receiptUrl = null;
-
-      // Upload attachment if exists
-      if (attachments.length > 0) {
-        const file = attachments[0]; // Take the first file
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const filePath = `expense-receipts/${fileName}`;
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('receipts')
-          .upload(filePath, file, {
-            cacheControl: '3600',
-            upsert: false
-          });
-
-        if (uploadError) {
-          console.error('Upload error:', uploadError);
-          throw new Error('Failed to upload receipt');
-        }
-
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('receipts')
-          .getPublicUrl(filePath);
-
-        receiptUrl = publicUrl;
-      }
-
       // Prepare the payload
       const payload = {
         expense_date: formData.expense_date,
@@ -152,7 +131,6 @@ export default function NewExpensePage() {
         currency: formData.currency,
         reference: formData.reference_number || null,
         notes: formData.notes || null,
-        receipt_url: receiptUrl,
       };
 
       const response = await fetch('/api/expenses', {
@@ -345,7 +323,7 @@ export default function NewExpensePage() {
               </label>
               <CurrencySelect
                 value={formData.currency}
-                onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                onChange={(e) => { currencyTouched.current = true; setFormData({ ...formData, currency: e.target.value }); }}
               />
             </div>
 

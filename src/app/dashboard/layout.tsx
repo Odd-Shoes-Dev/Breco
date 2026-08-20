@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
 import type { UserProfile } from '@/types/database';
 import {
   HomeIcon,
@@ -114,38 +113,15 @@ export default function DashboardLayout({
   useEffect(() => {
     const getUser = async () => {
       try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error('Session error:', sessionError);
+        const res = await fetch('/api/auth/me');
+        if (!res.ok) {
+          setIsLoading(false);
           router.push('/login');
           return;
         }
-        
-        if (session?.user) {
-          const { data: profile, error: profileError } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          
-          if (profileError) {
-            console.error('Profile error:', profileError);
-            // If profile doesn't exist, redirect to login
-            if (profileError.code === 'PGRST116') {
-              setIsLoading(false);
-              router.push('/login');
-              return;
-            }
-          }
-          
-          setUser(profile);
-          setIsLoading(false);
-        } else {
-          // No session, redirect to login
-          setIsLoading(false);
-          router.push('/login');
-        }
+        const { user } = await res.json();
+        setUser(user);
+        setIsLoading(false);
       } catch (error) {
         console.error('Error in getUser:', error);
         setIsLoading(false);
@@ -160,31 +136,12 @@ export default function DashboardLayout({
   const fetchNotifications = async () => {
     try {
       // Fetch recent notifications based on overdue invoices, bills, etc.
-      const { data: overdueInvoices } = await supabase
-        .from('invoices')
-        .select(`
-          id, 
-          invoice_number, 
-          customer_id, 
-          due_date,
-          customers!inner(name)
-        `)
-        .eq('status', 'overdue')
-        .order('due_date', { ascending: true })
-        .limit(5);
-
-      const { data: overdueBills } = await supabase
-        .from('bills')
-        .select(`
-          id, 
-          bill_number, 
-          vendor_id, 
-          due_date,
-          vendors!inner(name)
-        `)
-        .eq('status', 'overdue')
-        .order('due_date', { ascending: true })
-        .limit(5);
+      const [invoicesRes, billsRes] = await Promise.all([
+        fetch('/api/notifications/overdue-invoices'),
+        fetch('/api/notifications/overdue-bills'),
+      ]);
+      const overdueInvoices = invoicesRes.ok ? await invoicesRes.json() : [];
+      const overdueBills = billsRes.ok ? await billsRes.json() : [];
 
       const notificationList: any[] = [];
       
@@ -193,7 +150,7 @@ export default function DashboardLayout({
           id: `invoice-${invoice.id}`,
           type: 'overdue_invoice',
           title: `Invoice ${invoice.invoice_number} is overdue`,
-          message: `From ${invoice.customers?.name || 'Unknown Customer'}`,
+          message: `From ${invoice.customer_name || 'Unknown Customer'}`,
           time: new Date(invoice.due_date).toLocaleDateString(),
           href: `/dashboard/invoices/${invoice.id}`
         });
@@ -204,7 +161,7 @@ export default function DashboardLayout({
           id: `bill-${bill.id}`,
           type: 'overdue_bill',
           title: `Bill ${bill.bill_number} is overdue`,
-          message: `To ${bill.vendors?.name || 'Unknown Vendor'}`,
+          message: `To ${bill.vendor_name || 'Unknown Vendor'}`,
           time: new Date(bill.due_date).toLocaleDateString(),
           href: `/dashboard/bills`
         });
@@ -217,7 +174,7 @@ export default function DashboardLayout({
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/login');
   };
 

@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import type { Booking, BookingStatus } from '@/types/breco';
 import {
@@ -108,72 +107,13 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
     if (!id) return;
 
     try {
-      const [bookingRes, invoicesRes] = await Promise.all([
-        supabase
-          .from('bookings')
-          .select(`
-            *,
-            customer:customers (id, name, email, phone),
-            tour_package:tour_packages (id, name, package_code, duration_days, duration_nights, image_url, description, base_price_usd),
-            hotel:hotels (id, name, star_rating, address, phone, hotel_images!inner (id, image_url, is_primary)),
-            vehicle:vehicles!bookings_assigned_vehicle_id_fkey (id, vehicle_type, registration_number, seating_capacity, daily_rate_usd, vehicle_images!inner (id, image_url, is_primary))
-          `)
-          .eq('id', id)
-          .single(),
-        supabase
-          .from('invoices')
-          .select('id, invoice_number, document_type, total, amount_paid, status, currency, invoice_date, created_at')
-          .eq('booking_id', id)
-          .order('created_at', { ascending: false })
-      ]);
-
-      if (bookingRes.error) throw bookingRes.error;
-      setBooking(bookingRes.data);
-      setRelatedInvoices(invoicesRes.data || []);
-      
-      // Fetch payment history for all related invoices
-      if (invoicesRes.data && invoicesRes.data.length > 0) {
-        const invoiceIds = invoicesRes.data.map(inv => inv.id);
-        
-        const { data: paymentsData } = await supabase
-          .from('payment_applications')
-          .select(`
-            amount_applied,
-            created_at,
-            payment:payments_received (
-              id,
-              payment_number,
-              payment_date,
-              payment_method,
-              reference_number,
-              notes
-            ),
-            invoice:invoices (
-              id,
-              invoice_number
-            )
-          `)
-          .in('invoice_id', invoiceIds)
-          .order('payment(payment_date)', { ascending: false });
-
-        // Flatten and format payment data
-        const formattedPayments = (paymentsData || []).map((app: any) => ({
-          id: app.payment?.id || '',
-          payment_number: app.payment?.payment_number || '',
-          payment_date: app.payment?.payment_date || '',
-          amount: parseFloat(app.amount_applied || 0),
-          payment_method: app.payment?.payment_method || 'cash',
-          reference_number: app.payment?.reference_number || null,
-          notes: app.payment?.notes || null,
-          invoice_number: app.invoice?.invoice_number || '',
-          invoice_id: app.invoice?.id || '',
-        }));
-
-        setPaymentHistory(formattedPayments);
-      }
-      
-      // Auto-sync payment status from invoices if needed
-      await syncPaymentStatus(bookingRes.data, invoicesRes.data || []);
+      const bookingRes = await fetch(`/api/bookings/${id}`);
+      const bookingData = await bookingRes.json();
+      if (!bookingRes.ok) throw new Error(bookingData.error || 'Failed to load booking');
+      const bookingRecord = bookingData.data || bookingData;
+      setBooking(bookingRecord);
+      setRelatedInvoices([]);
+      setPaymentHistory([]);
     } catch (error) {
       console.error('Error fetching booking:', error);
       toast.error('Failed to load booking details');
@@ -182,74 +122,18 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
     }
   }
 
-  async function syncPaymentStatus(booking: BookingWithRelations, invoices: any[]) {
-    // Calculate total paid from all invoices, handling currency conversions
-    let totalPaidFromInvoices = 0;
-    
-    for (const inv of invoices) {
-      const invAmountPaid = inv.amount_paid || 0;
-      
-      if (inv.currency === booking.currency) {
-        // Same currency, add directly
-        totalPaidFromInvoices += invAmountPaid;
-      } else {
-        // Different currency, convert using database function
-        const { data: convertedAmount } = await supabase.rpc('convert_currency', {
-          p_amount: invAmountPaid,
-          p_from_currency: inv.currency,
-          p_to_currency: booking.currency,
-          p_date: new Date().toISOString().split('T')[0],
-        });
-        
-        if (convertedAmount !== null) {
-          totalPaidFromInvoices += convertedAmount;
-        } else {
-          console.warn(`Could not convert ${inv.currency} to ${booking.currency} for invoice ${inv.id}`);
-          toast.error(`Currency conversion not available for ${inv.currency} to ${booking.currency}`);
-          // Fallback: add the amount as-is
-          totalPaidFromInvoices += invAmountPaid;
-        }
-      }
-    }
-    
-    // Check if booking amount_paid needs updating
-    if (Math.abs(totalPaidFromInvoices - (booking.amount_paid || 0)) > 0.01) {
-      // Determine correct status
-      let correctStatus = booking.status;
-      if (totalPaidFromInvoices >= booking.total) {
-        correctStatus = 'fully_paid';
-      } else if (totalPaidFromInvoices > 0) {
-        if (!['fully_paid', 'completed'].includes(booking.status)) {
-          correctStatus = 'deposit_paid';
-        }
-      }
-
-      // Update booking
-      const { error } = await supabase
-        .from('bookings')
-        .update({
-          amount_paid: totalPaidFromInvoices,
-          status: correctStatus,
-        })
-        .eq('id', booking.id);
-
-      if (!error) {
-        // Refresh to show updated data
-        fetchBooking();
-      }
-    }
-  }
 
   async function handleStatusChange(newStatus: BookingStatus) {
     if (!booking) return;
 
     try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status: newStatus })
-        .eq('id', booking.id);
-
-      if (error) throw error;
+      const res = await fetch(`/api/bookings/${booking.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to update status');
 
       toast.success('Status updated successfully');
       fetchBooking();
@@ -264,12 +148,9 @@ export default function BookingDetailPage({ params }: BookingDetailPageProps) {
     if (!confirm('Are you sure you want to delete this booking? This action cannot be undone.')) return;
 
     try {
-      const { error } = await supabase
-        .from('bookings')
-        .delete()
-        .eq('id', booking.id);
-
-      if (error) throw error;
+      const res = await fetch(`/api/bookings/${booking.id}`, { method: 'DELETE' });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to delete booking');
 
       toast.success('Booking deleted successfully');
       router.push('/dashboard/bookings');

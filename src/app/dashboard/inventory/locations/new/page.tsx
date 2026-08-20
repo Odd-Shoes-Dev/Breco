@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import toast from 'react-hot-toast';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 
@@ -30,9 +30,10 @@ export default function NewLocationPage() {
     setLoading(true);
 
     try {
-      const { error } = await supabase
-        .from('locations')
-        .insert({
+      const res = await fetch('/api/locations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           name: formData.name,
           code: formData.code,
           type: formData.type,
@@ -45,10 +46,9 @@ export default function NewLocationPage() {
           email: formData.email || null,
           manager_name: formData.manager_name || null,
           is_active: formData.is_active,
-        });
-
-      if (error) throw error;
-
+        }),
+      });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
       toast.success('Location created successfully');
       router.push('/dashboard/inventory/locations');
     } catch (error: any) {

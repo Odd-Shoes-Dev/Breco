@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 
 // POST /api/payroll/periods/[id]/generate - Generate payslips for all employees
@@ -7,9 +8,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -17,13 +16,10 @@ export async function POST(
     const { id: periodId } = await params;
 
     // Check period exists and is draft
-    const { data: period, error: periodError } = await supabase
-      .from('payroll_periods')
-      .select('*')
-      .eq('id', periodId)
-      .single();
+    const periodRows = await sql`SELECT * FROM payroll_periods WHERE id = ${periodId}`;
+    const period = periodRows[0];
 
-    if (periodError) {
+    if (!period) {
       return NextResponse.json({ error: 'Payroll period not found' }, { status: 404 });
     }
 
@@ -35,20 +31,22 @@ export async function POST(
     }
 
     // Delete existing payslips if any
-    await supabase
-      .from('payroll_payslips')
-      .delete()
-      .eq('payroll_period_id', periodId);
+    await sql`DELETE FROM payslips WHERE payroll_period_id = ${periodId}`;
 
     // Get all active employees
-    const { data: employees, error: empError } = await supabase
-      .from('employees')
-      .select('*')
-      .eq('status', 'active');
-
-    if (empError) {
-      return NextResponse.json({ error: empError.message }, { status: 400 });
-    }
+    const employees = await sql`
+      SELECT e.*,
+        COALESCE((
+          SELECT SUM(ea.amount) FROM employee_allowances ea
+          WHERE ea.employee_id = e.id AND ea.is_active = true
+        ), 0) AS total_allowances,
+        COALESCE((
+          SELECT SUM(ed.amount) FROM employee_deductions ed
+          WHERE ed.employee_id = e.id AND ed.is_active = true
+        ), 0) AS total_other_deductions
+      FROM employees e
+      WHERE e.is_active = true
+    `;
 
     if (!employees || employees.length === 0) {
       return NextResponse.json(
@@ -58,98 +56,65 @@ export async function POST(
     }
 
     // Calculate number of days in the period
-    const start = new Date(period.period_start);
-    const end = new Date(period.period_end);
+    const start = new Date(period.start_date);
+    const end = new Date(period.end_date);
     const daysInPeriod = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     const daysInMonth = 30; // Standard month for calculation
 
-    // Generate payslips for each employee
-    const payslips = employees.map((employee: any) => {
-      const monthlySalary = employee.salary || 0;
-      
-      // Calculate basic salary (prorated if partial period)
+    // Generate and insert payslips for each employee
+    const insertedPayslips: any[] = [];
+
+    for (const employee of employees) {
+      const monthlySalary = Number(employee.basic_salary) || 0;
+
       const basicSalary = (monthlySalary * daysInPeriod) / daysInMonth;
-      
-      // Calculate allowances (example: housing, transport, etc.)
-      const housingAllowance = employee.housing_allowance || 0;
-      const transportAllowance = employee.transport_allowance || 0;
-      const otherAllowances = employee.other_allowances || 0;
-      
-      const totalAllowances = (housingAllowance + transportAllowance + otherAllowances) * daysInPeriod / daysInMonth;
-      
-      // Calculate gross salary
+
+      const totalAllowances = (Number(employee.total_allowances) || 0) * daysInPeriod / daysInMonth;
+
       const grossSalary = basicSalary + totalAllowances;
-      
-      // Calculate deductions
-      // Tax (simplified - should be based on tax brackets)
-      const taxRate = 0.15; // 15% flat tax (example)
+
+      const taxRate = 0.15;
       const taxDeduction = grossSalary * taxRate;
-      
-      // NHIF (National Health Insurance Fund - example rates)
-      const nhifDeduction = grossSalary * 0.025; // 2.5%
-      
-      // NSSF (National Social Security Fund - example rates)
-      const nssfDeduction = Math.min(grossSalary * 0.06, 500); // 6% up to max
-      
-      // Other deductions
-      const loanDeduction = employee.loan_deduction || 0;
-      const advanceDeduction = employee.advance_deduction || 0;
-      
-      const totalDeductions = taxDeduction + nhifDeduction + nssfDeduction + loanDeduction + advanceDeduction;
-      
-      // Calculate net salary
+      const nhifDeduction = grossSalary * 0.025;
+      const nssfDeduction = Math.min(grossSalary * 0.06, 500);
+      const loanDeduction = 0;
+      const advanceDeduction = 0;
+      const otherDeductions = (Number(employee.total_other_deductions) || 0) + nhifDeduction;
+
+      const totalDeductions = taxDeduction + otherDeductions + nssfDeduction + loanDeduction + advanceDeduction;
       const netSalary = grossSalary - totalDeductions;
-      
-      return {
-        payroll_period_id: periodId,
-        employee_id: employee.id,
-        basic_salary: basicSalary,
-        allowances: totalAllowances,
-        housing_allowance: (housingAllowance * daysInPeriod) / daysInMonth,
-        transport_allowance: (transportAllowance * daysInPeriod) / daysInMonth,
-        other_allowances: (otherAllowances * daysInPeriod) / daysInMonth,
-        gross_salary: grossSalary,
-        deductions: totalDeductions,
-        tax_deduction: taxDeduction,
-        nhif_deduction: nhifDeduction,
-        nssf_deduction: nssfDeduction,
-        loan_deduction: loanDeduction,
-        advance_deduction: advanceDeduction,
-        net_salary: netSalary,
-        days_worked: daysInPeriod,
-        status: 'pending',
-        created_by: user.id,
-      };
-    });
 
-    // Insert all payslips
-    const { data: insertedPayslips, error: insertError } = await supabase
-      .from('payroll_payslips')
-      .insert(payslips)
-      .select();
+      const payslipNumRows = await sql`SELECT 'PS-' || to_char(NOW(), 'YYYYMMDDHH24MISS') || '-' || substring(md5(random()::text), 1, 6) AS num`;
+      const payslipNumber = payslipNumRows[0].num;
 
-    if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 400 });
+      const rows = await sql`
+        INSERT INTO payslips (
+          payslip_number, payroll_period_id, employee_id, basic_salary, total_allowances,
+          gross_salary, paye, nssf_employee, loan_deduction, salary_advance,
+          other_deductions, total_deductions, net_salary
+        ) VALUES (
+          ${payslipNumber}, ${periodId}, ${employee.id}, ${basicSalary}, ${totalAllowances},
+          ${grossSalary}, ${taxDeduction}, ${nssfDeduction},
+          ${loanDeduction}, ${advanceDeduction},
+          ${otherDeductions}, ${totalDeductions}, ${netSalary}
+        )
+        RETURNING *
+      `;
+      insertedPayslips.push(rows[0]);
     }
 
     // Update period totals
-    const totalGross = payslips.reduce((sum: number, p: any) => sum + p.gross_salary, 0);
-    const totalDeductions = payslips.reduce((sum: number, p: any) => sum + p.deductions, 0);
-    const totalNet = payslips.reduce((sum: number, p: any) => sum + p.net_salary, 0);
+    const totalGross = insertedPayslips.reduce((sum, p) => sum + (p.gross_salary || 0), 0);
+    const totalDeductions = insertedPayslips.reduce((sum, p) => sum + (p.total_deductions || 0), 0);
+    const totalNet = insertedPayslips.reduce((sum, p) => sum + (p.net_salary || 0), 0);
 
-    const { error: updateError } = await supabase
-      .from('payroll_periods')
-      .update({
-        total_gross: totalGross,
-        total_deductions: totalDeductions,
-        total_net: totalNet,
-        employee_count: payslips.length,
-      })
-      .eq('id', periodId);
-
-    if (updateError) {
-      console.error('Failed to update period totals:', updateError);
-    }
+    await sql`
+      UPDATE payroll_periods
+      SET total_gross = ${totalGross},
+          total_deductions = ${totalDeductions},
+          total_net = ${totalNet}
+      WHERE id = ${periodId}
+    `;
 
     return NextResponse.json({
       message: 'Payslips generated successfully',

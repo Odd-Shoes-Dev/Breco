@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';import { formatCurrency as currencyFormatter, type SupportedCurrency } from '@/lib/currency';import { ArrowLeftIcon, PrinterIcon, CheckCircleIcon, EnvelopeIcon, EyeIcon } from '@heroicons/react/24/outline';
+import { formatCurrency as currencyFormatter, type SupportedCurrency } from '@/lib/currency';
+import { ArrowLeftIcon, PrinterIcon, CheckCircleIcon, EnvelopeIcon, EyeIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
 interface PayrollPeriod {
@@ -52,27 +53,11 @@ export default function PayrollPeriodDetailPage({ params }: { params: Promise<{ 
 
   const fetchPeriodDetails = async (id: string) => {
     try {
-      // Fetch payroll period
-      const { data: periodData, error: periodError } = await supabase
-        .from('payroll_periods')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (periodError) throw periodError;
-      setPeriod(periodData);
-
-      // Fetch payslips with employee details
-      const { data: payslipsData, error: payslipsError } = await supabase
-        .from('payslips')
-        .select(`
-          *,
-          employee:employees(first_name, last_name, employee_number, job_title)
-        `)
-        .eq('payroll_period_id', id);
-
-      if (payslipsError) throw payslipsError;
-      setPayslips(payslipsData || []);
+      const res = await fetch(`/api/payroll/periods/${id}`);
+      if (!res.ok) throw new Error('Failed to load payroll period');
+      const result = await res.json();
+      setPeriod(result.data || result);
+      setPayslips(result.data?.payslips || result.payslips || []);
     } catch (error) {
       console.error('Error fetching payroll details:', error);
       toast.error('Failed to load payroll details');

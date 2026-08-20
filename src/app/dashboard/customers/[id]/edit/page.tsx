@@ -3,7 +3,6 @@
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { CurrencySelect } from '@/components/ui';
 import {
   ArrowLeftIcon,
@@ -25,6 +24,7 @@ export default function EditCustomerPage({ params }: PageProps) {
 
   const [formData, setFormData] = useState({
     name: '',
+    company_name: '',
     email: '',
     email_2: '',
     email_3: '',
@@ -43,7 +43,6 @@ export default function EditCustomerPage({ params }: PageProps) {
     notes: '',
     is_active: true,
   });
-
   useEffect(() => {
     loadCustomer();
   }, [id]);
@@ -51,17 +50,22 @@ export default function EditCustomerPage({ params }: PageProps) {
   const loadCustomer = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
+      const [res, settingsRes] = await Promise.all([
+        fetch(`/api/customers/${id}`),
+        fetch('/api/settings').catch(() => null),
+      ]);
+      if (!res.ok) throw new Error('Failed to load customer');
+      const { data } = await res.json();
+      let baseCurrency = 'USD';
+      try {
+        const settingsData = settingsRes ? await settingsRes.json() : null;
+        if (settingsData?.base_currency) baseCurrency = settingsData.base_currency;
+      } catch {}
 
       if (data) {
         setFormData({
           name: data.name || '',
+          company_name: data.company_name || '',
           email: data.email || '',
           email_2: data.email_2 || '',
           email_3: data.email_3 || '',
@@ -70,10 +74,10 @@ export default function EditCustomerPage({ params }: PageProps) {
           address_line1: data.address_line1 || '',
           address_line2: data.address_line2 || '',
           city: data.city || '',
-          state: data.state || 'MA',
+          state: data.state || '',
           zip_code: data.zip_code || '',
-          country: data.country || 'USA',
-          currency: data.currency || 'USD',
+          country: data.country || 'Uganda',
+          currency: data.currency || baseCurrency,
           tax_id: data.tax_id || '',
           payment_terms: data.payment_terms || 30,
           credit_limit: data.credit_limit || 0,
@@ -205,6 +209,21 @@ export default function EditCustomerPage({ params }: PageProps) {
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
                 placeholder="Enter customer name"
               />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Company Name (Optional)
+              </label>
+              <input
+                type="text"
+                name="company_name"
+                value={formData.company_name}
+                onChange={handleChange}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+                placeholder="Leave blank for an individual customer"
+              />
+              <p className="text-xs text-gray-500 mt-1">Set this if the customer is a business, not an individual</p>
             </div>
 
             <div>
@@ -437,7 +456,7 @@ export default function EditCustomerPage({ params }: PageProps) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Credit Limit ($)
+                Credit Limit ({formData.currency})
               </label>
               <input
                 type="number"

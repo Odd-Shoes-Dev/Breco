@@ -7,7 +7,7 @@ import {
   ArrowLeftIcon,
   CubeIcon,
 } from '@heroicons/react/24/outline';
-import { supabase } from '@/lib/supabase/client';
+
 import { type SupportedCurrency } from '@/lib/currency';
 import { CurrencySelect } from '@/components/ui/currency-select';
 
@@ -69,12 +69,8 @@ export default function EditInventoryItemPage() {
 
   const fetchCategories = async () => {
     try {
-      const { data, error } = await supabase
-        .from('product_categories')
-        .select('id, name, description')
-        .order('name');
-
-      if (error) throw error;
+      const res = await fetch('/api/product-categories');
+      const data = await res.json();
       setCategories(data || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -84,14 +80,17 @@ export default function EditInventoryItemPage() {
   const loadItem = async () => {
     try {
       setLoading(true);
-
-      const { data, error: itemError } = await supabase
-        .from('products')
-        .select('*')
-        .eq('id', params.id)
-        .single();
-
-      if (itemError) throw itemError;
+      const [res, settingsRes] = await Promise.all([
+        fetch(`/api/inventory/${params.id}`),
+        fetch('/api/settings').catch(() => null),
+      ]);
+      if (!res.ok) throw new Error('Failed to load item');
+      const data = await res.json();
+      let baseCurrency = 'USD';
+      try {
+        const settingsData = settingsRes ? await settingsRes.json() : null;
+        if (settingsData?.base_currency) baseCurrency = settingsData.base_currency;
+      } catch {}
 
       setItem(data);
       setFormData({
@@ -102,7 +101,7 @@ export default function EditInventoryItemPage() {
         unit_of_measure: data.unit_of_measure,
         unit_cost: parseFloat(data.cost_price),
         selling_price: parseFloat(data.unit_price),
-        currency: data.currency || 'USD',
+        currency: data.currency || baseCurrency,
         quantity_on_hand: data.quantity_on_hand,
         reorder_point: data.reorder_point || 10,
         reorder_quantity: data.reorder_quantity || 50,
@@ -151,12 +150,15 @@ export default function EditInventoryItemPage() {
         is_active: formData.is_active,
       };
 
-      const { error: updateError } = await supabase
-        .from('products')
-        .update(payload)
-        .eq('id', params.id);
-
-      if (updateError) throw updateError;
+      const updateRes = await fetch(`/api/inventory/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!updateRes.ok) {
+        const errData = await updateRes.json();
+        throw new Error(errData.error || 'Failed to update item');
+      }
 
       router.push(`/dashboard/inventory/${params.id}`);
     } catch (err) {

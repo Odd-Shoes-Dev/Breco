@@ -1,40 +1,61 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/vendors - List vendors
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-    
+
     const search = searchParams.get('search');
     const active = searchParams.get('active');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
 
-    let query = supabase
-      .from('vendors')
-      .select('*', { count: 'exact' })
-      .order('name');
+    let data;
+    let countRows;
 
-    if (search) {
-      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,company_name.ilike.%${search}%`);
-    }
-
-    if (active === 'true') {
-      query = query.eq('is_active', true);
+    if (search && active === 'true') {
+      const s = `%${search}%`;
+      data = await sql`
+        SELECT * FROM vendors
+        WHERE (name ILIKE ${s} OR email ILIKE ${s})
+          AND is_active = true
+        ORDER BY name
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) AS count FROM vendors WHERE (name ILIKE ${s} OR email ILIKE ${s}) AND is_active = true`;
+    } else if (search && active === 'false') {
+      const s = `%${search}%`;
+      data = await sql`
+        SELECT * FROM vendors
+        WHERE (name ILIKE ${s} OR email ILIKE ${s})
+          AND is_active = false
+        ORDER BY name
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) AS count FROM vendors WHERE (name ILIKE ${s} OR email ILIKE ${s}) AND is_active = false`;
+    } else if (search) {
+      const s = `%${search}%`;
+      data = await sql`
+        SELECT * FROM vendors
+        WHERE name ILIKE ${s} OR email ILIKE ${s}
+        ORDER BY name
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      countRows = await sql`SELECT COUNT(*) AS count FROM vendors WHERE name ILIKE ${s} OR email ILIKE ${s}`;
+    } else if (active === 'true') {
+      data = await sql`SELECT * FROM vendors WHERE is_active = true ORDER BY name LIMIT ${limit} OFFSET ${offset}`;
+      countRows = await sql`SELECT COUNT(*) AS count FROM vendors WHERE is_active = true`;
     } else if (active === 'false') {
-      query = query.eq('is_active', false);
+      data = await sql`SELECT * FROM vendors WHERE is_active = false ORDER BY name LIMIT ${limit} OFFSET ${offset}`;
+      countRows = await sql`SELECT COUNT(*) AS count FROM vendors WHERE is_active = false`;
+    } else {
+      data = await sql`SELECT * FROM vendors ORDER BY name LIMIT ${limit} OFFSET ${offset}`;
+      countRows = await sql`SELECT COUNT(*) AS count FROM vendors`;
     }
 
-    query = query.range(offset, offset + limit - 1);
-
-    const { data, count, error } = await query;
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const count = parseInt(countRows[0]?.count || '0');
 
     return NextResponse.json({
       data,
@@ -42,7 +63,7 @@ export async function GET(request: NextRequest) {
         page,
         limit,
         total: count,
-        totalPages: Math.ceil((count || 0) / limit),
+        totalPages: Math.ceil(count / limit),
       },
     });
   } catch (error: any) {
@@ -53,10 +74,8 @@ export async function GET(request: NextRequest) {
 // POST /api/vendors - Create vendor
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
-    // Validate required fields
     if (!body.name) {
       return NextResponse.json(
         { error: 'Vendor name is required' },
@@ -65,44 +84,39 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate vendor number using database function
-    const { data: numberData, error: numberError } = await supabase
-      .rpc('generate_vendor_number');
+    const numberRows = await sql`SELECT generate_vendor_number() AS vendor_number`;
 
-    if (numberError) {
+    if (!numberRows[0]) {
       return NextResponse.json(
-        { error: 'Failed to generate vendor number: ' + numberError.message },
+        { error: 'Failed to generate vendor number' },
         { status: 500 }
       );
     }
 
-    const { data, error } = await supabase
-      .from('vendors')
-      .insert({
-        vendor_number: numberData,
-        name: body.name,
-        company_name: body.company_name || null,
-        email: body.email || null,
-        phone: body.phone || null,
-        tax_id: body.tax_id || null,
-        address_line1: body.address_line1 || null,
-        address_line2: body.address_line2 || null,
-        city: body.city || null,
-        state: body.state || null,
-        zip_code: body.postal_code || null,
-        country: body.country || 'USA',
-        payment_terms: body.payment_terms || 30,
-        default_expense_account_id: body.default_expense_account_id || null,
-        notes: body.notes || null,
-        is_active: body.is_active !== false,
-      })
-      .select()
-      .single();
+    const vendorNumber = numberRows[0].vendor_number;
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const rows = await sql`
+      INSERT INTO vendors (
+        vendor_number, name, company_name, email, phone,
+        address_line1, address_line2, city, state, zip_code, country,
+        tax_id, is_1099_vendor, default_expense_account_id,
+        payment_terms, currency, notes, is_active
+      ) VALUES (
+        ${vendorNumber}, ${body.name}, ${body.company_name || null},
+        ${body.email || null}, ${body.phone || null},
+        ${body.address_line1 ?? body.address ?? null}, ${body.address_line2 || null},
+        ${body.city || null}, ${body.state || null}, ${body.zip_code || null},
+        ${body.country || 'Uganda'},
+        ${body.tax_id || null}, ${body.is_1099_vendor ?? false},
+        ${body.default_expense_account_id || null},
+        ${body.payment_terms || 30},
+        ${body.currency || 'USD'}, ${body.notes || null},
+        ${body.is_active !== false}
+      )
+      RETURNING *
+    `;
 
-    return NextResponse.json({ data }, { status: 201 });
+    return NextResponse.json({ data: rows[0] }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

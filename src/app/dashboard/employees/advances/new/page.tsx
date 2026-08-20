@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
@@ -32,14 +31,10 @@ export default function NewSalaryAdvancePage() {
 
   const fetchEmployees = async () => {
     try {
-      const { data, error } = await supabase
-        .from('employees')
-        .select('id, first_name, last_name, employee_number')
-        .eq('is_active', true)
-        .order('first_name');
-
-      if (error) throw error;
-      setEmployees(data || []);
+      const res = await fetch('/api/employees');
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to load employees');
+      setEmployees(result.data || []);
     } catch (error) {
       console.error('Error fetching employees:', error);
       toast.error('Failed to load employees');
@@ -51,22 +46,20 @@ export default function NewSalaryAdvancePage() {
     setLoading(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { error } = await supabase
-        .from('salary_advances')
-        .insert({
+      const res = await fetch('/api/employees/advances', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           employee_id: formData.employee_id,
           advance_date: formData.advance_date,
           amount: parseFloat(formData.amount),
           reason: formData.reason || null,
           repayment_months: parseInt(formData.repayment_months),
-          status: 'pending',
-          created_by: user.id,
-        });
+        }),
+      });
 
-      if (error) throw error;
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to create salary advance');
 
       toast.success('Salary advance request created successfully');
       router.push('/dashboard/employees/advances');

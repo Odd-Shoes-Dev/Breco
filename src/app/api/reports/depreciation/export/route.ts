@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCompanySettings } from '@/lib/company-settings';
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
+function makeCurrencyFormatter(currency: string): (amount: number) => string {
+  const formatter = new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(amount);
+  });
+  return (amount: number) => formatter.format(amount);
 }
 
 function formatDate(dateString: string): string {
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
 
     const data = JSON.parse(dataParam);
     const companySettings = await getCompanySettings();
+    const formatCurrency = makeCurrencyFormatter(data.currency || companySettings.base_currency || 'USD');
     const origin = request.nextUrl.origin;
 
     const printHTML = `
@@ -162,9 +164,10 @@ export async function GET(request: NextRequest) {
               <h1>${companySettings.name}</h1>
               <div class="address">${companySettings.address_line1}${companySettings.address_line2 ? ', ' + companySettings.address_line2 : ''}, ${companySettings.city}, ${companySettings.state} ${companySettings.zip_code}</div>
               <div class="address">Phone: ${companySettings.phone}</div>
+              ${(companySettings as any).duns_number ? `<div class="address">DUNS: ${(companySettings as any).duns_number}</div>` : ''}
             </div>
           </div>
-          
+
           <div class="report-header">
             <h2>Asset Depreciation Schedule</h2>
             <div class="period">

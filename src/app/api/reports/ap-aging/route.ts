@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { convertCurrency, SupportedCurrency } from '@/lib/currency';
+import { getCompanySettings } from '@/lib/company-settings';
 
 interface VendorAging {
   vendorId: string;
@@ -22,61 +23,45 @@ interface VendorAging {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const searchParams = request.nextUrl.searchParams;
     const reportDate = searchParams.get('reportDate') || new Date().toISOString().split('T')[0];
     const vendorType = searchParams.get('vendorType') || 'all';
     const sortBy = searchParams.get('sortBy') || 'totalAmount';
     const showCriticalOnly = searchParams.get('showCriticalOnly') === 'true';
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency as SupportedCurrency;
 
     // Fetch bills from database
-    const { data: bills, error } = await supabase
-      .from('bills')
-      .select(`
-        id,
-        bill_number,
-        bill_date,
-        due_date,
-        total,
-        amount_paid,
-        currency,
-        status,
-        payment_terms,
-        vendor:vendors(
-          id,
-          name,
-          company_name
-        )
-      `)
-      .in('status', ['pending_approval', 'approved', 'partial'])
-      .order('vendor_id');
-
-    if (error) {
-      console.error('Error fetching bills:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    const bills = await sql`
+      SELECT
+        b.id, b.bill_number, b.bill_date, b.due_date, b.total,
+        b.amount_paid, b.currency, b.status, b.payment_terms,
+        json_build_object('id', v.id, 'name', v.name) AS vendor
+      FROM bills b
+      LEFT JOIN vendors v ON v.id = b.vendor_id
+      WHERE b.status IN ('pending_approval', 'approved', 'partial')
+      ORDER BY b.vendor_id
+    `;
 
     // Group bills by vendor and calculate aging
     const vendorMap = new Map<string, VendorAging>();
     const reportDateObj = new Date(reportDate);
 
     // Process bills with currency conversion
-    for (const bill of bills || []) {
+    for (const bill of bills) {
       if (!bill.vendor) continue;
 
       const vendor: any = bill.vendor;
       const vendorId = vendor.id;
       const balance = parseFloat(bill.total) - parseFloat(bill.amount_paid || 0);
-      
+
       if (balance <= 0) continue; // Skip fully paid bills
 
-      // Convert balance to USD for reporting
-      const balanceUSD = await convertCurrency(
-        supabase,
-        balance,
-        (bill.currency || 'USD') as SupportedCurrency,
-        'USD' as SupportedCurrency
-      ) || balance;
+      // Convert balance to the company base currency for reporting
+      const billCurrency = (bill.currency || baseCurrency) as SupportedCurrency;
+      const balanceUSD = billCurrency === baseCurrency
+        ? balance
+        : (await convertCurrency(balance, billCurrency, baseCurrency) || balance);
 
       const dueDate = new Date(bill.due_date);
       const daysOverdue = Math.floor((reportDateObj.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -84,7 +69,7 @@ export async function GET(request: NextRequest) {
       if (!vendorMap.has(vendorId)) {
         vendorMap.set(vendorId, {
           vendorId: vendorId,
-          vendorName: vendor.company_name || vendor.name,
+          vendorName: vendor.name,
           vendorType: 'Supplier',
           totalAmount: 0,
           current: 0,
@@ -165,8 +150,8 @@ export async function GET(request: NextRequest) {
       days61to90Total: vendors.reduce((sum, v) => sum + v.days61to90, 0),
       over90Total: vendors.reduce((sum, v) => sum + v.over90, 0),
       criticalVendors: vendors.filter(v => v.over90 > 0 || v.days61to90 > 0).length,
-      averageDaysOverdue: vendors.length > 0 
-        ? vendors.reduce((sum, v) => sum + v.averagePaymentDays, 0) / vendors.length 
+      averageDaysOverdue: vendors.length > 0
+        ? vendors.reduce((sum, v) => sum + v.averagePaymentDays, 0) / vendors.length
         : 0,
     };
 
@@ -182,6 +167,7 @@ export async function GET(request: NextRequest) {
 
     const response = {
       reportDate,
+      currency: baseCurrency,
       summary,
       agingDistribution,
       vendors,

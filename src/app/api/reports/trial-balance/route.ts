@@ -1,37 +1,33 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/reports/trial-balance
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-    
+
     const asOfDate = searchParams.get('as_of_date') || new Date().toISOString().split('T')[0];
 
-    // Get all accounts
-    const { data: accounts } = await supabase
-      .from('accounts')
-      .select('id, code, name, account_type, normal_balance')
-      .eq('is_active', true)
-      .order('code');
+    // Get all active accounts
+    const accounts = await sql`
+      SELECT id, code, name, account_type, normal_balance FROM accounts
+      WHERE is_active = true
+      ORDER BY code
+    `;
 
     // Get all posted journal entry lines up to the date
-    const { data: entries } = await supabase
-      .from('journal_lines')
-      .select(`
-        account_id,
-        debit,
-        credit,
-        journal_entry:journal_entries!inner (entry_date, status)
-      `)
-      .eq('journal_entry.status', 'posted')
-      .lte('journal_entry.entry_date', asOfDate);
+    const entries = await sql`
+      SELECT jl.account_id, jl.debit, jl.credit
+      FROM journal_lines jl
+      JOIN journal_entries je ON je.id = jl.journal_entry_id
+      WHERE je.status = 'posted'
+        AND je.entry_date <= ${asOfDate}
+    `;
 
     // Calculate balances by account
     const accountTotals: Record<string, { debit: number; credit: number }> = {};
-    
-    entries?.forEach((entry: any) => {
+
+    entries.forEach((entry: any) => {
       if (!accountTotals[entry.account_id]) {
         accountTotals[entry.account_id] = { debit: 0, credit: 0 };
       }
@@ -44,11 +40,10 @@ export async function GET(request: NextRequest) {
     let totalDebits = 0;
     let totalCredits = 0;
 
-    accounts?.forEach((account) => {
+    accounts.forEach((account: any) => {
       const totals = accountTotals[account.id] || { debit: 0, credit: 0 };
       const netDebit = totals.debit - totals.credit;
-      
-      // Skip accounts with no activity
+
       if (totals.debit === 0 && totals.credit === 0) return;
 
       let debitBalance = 0;

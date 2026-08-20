@@ -1,32 +1,52 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { getCompanySettings } from '@/lib/company-settings';
+
+async function convertCurrencyDB(amount: number, from: string, to: string, date: string): Promise<number> {
+  if (from === to) return amount;
+  try {
+    const rows = await sql`SELECT convert_currency(${amount}, ${from}, ${to}, ${date}) AS result`;
+    return Number(rows[0]?.result ?? amount);
+  } catch {
+    return amount;
+  }
+}
 
 // GET /api/bank-accounts - List bank accounts
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-    
     const active = searchParams.get('active');
 
-    let query = supabase
-      .from('bank_accounts')
-      .select('*')
-      .order('name');
-
+    let rows;
     if (active === 'true') {
-      query = query.eq('is_active', true);
+      rows = await sql`SELECT * FROM bank_accounts WHERE is_active = true ORDER BY account_name`;
     } else if (active === 'false') {
-      query = query.eq('is_active', false);
+      rows = await sql`SELECT * FROM bank_accounts WHERE is_active = false ORDER BY account_name`;
+    } else {
+      rows = await sql`SELECT * FROM bank_accounts ORDER BY account_name`;
     }
 
-    const { data, error } = await query;
+    // Convert each account's balance to the company base currency before summing
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency;
+    const today = new Date().toISOString().split('T')[0];
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    let totalBalanceInBase = 0;
+    const data = [] as any[];
+    for (const account of rows as any[]) {
+      const balance = Number(account.current_balance) || 0;
+      const accountCurrency = account.currency || baseCurrency;
+      const balanceInBase = await convertCurrencyDB(balance, accountCurrency, baseCurrency, today);
+      totalBalanceInBase += balanceInBase;
+      data.push({ ...account, balance_in_base: balanceInBase });
     }
 
-    return NextResponse.json({ data });
+    return NextResponse.json({
+      data,
+      total_balance_in_base: totalBalanceInBase,
+      currency: baseCurrency,
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -35,45 +55,34 @@ export async function GET(request: NextRequest) {
 // POST /api/bank-accounts - Create bank account
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
     // Validate required fields
-    if (!body.name || !body.bank_name) {
+    if (!body.account_name || !body.bank_name) {
       return NextResponse.json(
         { error: 'Account name and bank name are required' },
         { status: 400 }
       );
     }
 
-    // If this is marked as primary, unset other primary accounts
-    if (body.is_primary) {
-      await supabase
-        .from('bank_accounts')
-        .update({ is_primary: false })
-        .eq('is_primary', true);
-    }
+    const rows = await sql`
+      INSERT INTO bank_accounts (
+        account_name, bank_name, account_number, bank_branch,
+        swift_code, currency, gl_account_id, is_active
+      ) VALUES (
+        ${body.account_name},
+        ${body.bank_name},
+        ${body.account_number || null},
+        ${body.bank_branch || null},
+        ${body.swift_code || null},
+        ${body.currency || 'USD'},
+        ${body.gl_account_id || null},
+        ${body.is_active !== false}
+      )
+      RETURNING *
+    `;
 
-    const { data, error } = await supabase
-      .from('bank_accounts')
-      .insert({
-        name: body.name,
-        bank_name: body.bank_name,
-        account_number_encrypted: null, // Would need encryption in production
-        routing_number: body.routing_number || null,
-        account_type: body.account_type || 'checking',
-        currency: body.currency || 'USD',
-        is_primary: body.is_primary || false,
-        is_active: body.is_active !== false,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    return NextResponse.json({ data }, { status: 201 });
+    return NextResponse.json({ data: rows[0] }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

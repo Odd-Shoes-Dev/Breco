@@ -13,7 +13,7 @@ import {
   ArrowTrendingDownIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
-import { supabase } from '@/lib/supabase/client';
+
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 
 interface Product {
@@ -75,32 +75,9 @@ export default function InventoryDetailPage() {
   const loadItemDetails = async () => {
     try {
       setLoading(true);
-
-      const { data, error} = await supabase
-        .from('products')
-        .select(`
-          *,
-          product_category:category_id (
-            id,
-            name
-          ),
-          revenue_account:revenue_account_id (
-            name,
-            code
-          ),
-          cogs_account:cogs_account_id (
-            name,
-            code
-          ),
-          inventory_account:inventory_account_id (
-            name,
-            code
-          )
-        `)
-        .eq('id', params.id)
-        .single();
-
-      if (error) throw error;
+      const res = await fetch(`/api/inventory/${params.id}`);
+      if (!res.ok) throw new Error('Failed to load item');
+      const data = await res.json();
       setItem(data);
     } catch (error) {
       console.error('Failed to load item:', error);
@@ -116,13 +93,11 @@ export default function InventoryDetailPage() {
 
     setActionLoading(true);
     try {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', params.id);
-
-      if (error) throw error;
-
+      const res = await fetch(`/api/inventory/${params.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to delete item');
+      }
       router.push('/dashboard/inventory');
     } catch (error) {
       console.error('Failed to delete item:', error);

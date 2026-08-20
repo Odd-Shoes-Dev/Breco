@@ -1,38 +1,66 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/fleet - List all vehicles with optional filters
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-    
+
     const searchQuery = searchParams.get('search');
     const status = searchParams.get('status');
     const vehicleType = searchParams.get('vehicle_type');
 
-    let query = supabase
-      .from('vehicles')
-      .select('*')
-      .order('registration_number', { ascending: true });
+    let data;
 
-    // Apply filters
-    if (searchQuery) {
-      query = query.or(`registration_number.ilike.%${searchQuery}%,make.ilike.%${searchQuery}%,model.ilike.%${searchQuery}%`);
-    }
-
-    if (status && status !== 'all') {
-      query = query.eq('status', status);
-    }
-
-    if (vehicleType && vehicleType !== 'all') {
-      query = query.eq('vehicle_type', vehicleType);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    if (searchQuery && status && status !== 'all' && vehicleType && vehicleType !== 'all') {
+      const q = `%${searchQuery}%`;
+      data = await sql`
+        SELECT * FROM vehicles
+        WHERE (registration_number ILIKE ${q} OR make ILIKE ${q} OR model ILIKE ${q})
+          AND status = ${status}
+          AND vehicle_type = ${vehicleType}
+        ORDER BY registration_number ASC
+      `;
+    } else if (searchQuery && status && status !== 'all') {
+      const q = `%${searchQuery}%`;
+      data = await sql`
+        SELECT * FROM vehicles
+        WHERE (registration_number ILIKE ${q} OR make ILIKE ${q} OR model ILIKE ${q})
+          AND status = ${status}
+        ORDER BY registration_number ASC
+      `;
+    } else if (searchQuery && vehicleType && vehicleType !== 'all') {
+      const q = `%${searchQuery}%`;
+      data = await sql`
+        SELECT * FROM vehicles
+        WHERE (registration_number ILIKE ${q} OR make ILIKE ${q} OR model ILIKE ${q})
+          AND vehicle_type = ${vehicleType}
+        ORDER BY registration_number ASC
+      `;
+    } else if (status && status !== 'all' && vehicleType && vehicleType !== 'all') {
+      data = await sql`
+        SELECT * FROM vehicles
+        WHERE status = ${status} AND vehicle_type = ${vehicleType}
+        ORDER BY registration_number ASC
+      `;
+    } else if (searchQuery) {
+      const q = `%${searchQuery}%`;
+      data = await sql`
+        SELECT * FROM vehicles
+        WHERE registration_number ILIKE ${q} OR make ILIKE ${q} OR model ILIKE ${q}
+        ORDER BY registration_number ASC
+      `;
+    } else if (status && status !== 'all') {
+      data = await sql`
+        SELECT * FROM vehicles WHERE status = ${status} ORDER BY registration_number ASC
+      `;
+    } else if (vehicleType && vehicleType !== 'all') {
+      data = await sql`
+        SELECT * FROM vehicles WHERE vehicle_type = ${vehicleType} ORDER BY registration_number ASC
+      `;
+    } else {
+      data = await sql`SELECT * FROM vehicles ORDER BY registration_number ASC`;
     }
 
     return NextResponse.json({ data }, { status: 200 });
@@ -44,30 +72,27 @@ export async function GET(request: NextRequest) {
 // POST /api/fleet - Create a new vehicle
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
     // Validate required fields
-    if (!body.registration_number || !body.make || !body.model || !body.vehicle_type) {
+    if (!body.vehicle_number || !body.registration_number || !body.make || !body.model) {
       return NextResponse.json(
-        { error: 'Missing required fields: registration_number, make, model, vehicle_type' },
+        { error: 'Missing required fields: vehicle_number, registration_number, make, model' },
         { status: 400 }
       );
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Check for duplicate registration number
-    const { data: existing } = await supabase
-      .from('vehicles')
-      .select('id')
-      .eq('registration_number', body.registration_number)
-      .single();
+    const existing = await sql`
+      SELECT id FROM vehicles WHERE registration_number = ${body.registration_number}
+    `;
 
-    if (existing) {
+    if (existing.length > 0) {
       return NextResponse.json(
         { error: 'Vehicle with this registration number already exists' },
         { status: 409 }
@@ -75,18 +100,29 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the vehicle
-    const { data, error } = await supabase
-      .from('vehicles')
-      .insert({
-        ...body,
-        created_by: user.id,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const rows = await sql`
+      INSERT INTO vehicles (
+        vehicle_number, registration_number, make, model, vehicle_type, year, color, status,
+        fuel_type, transmission, seating_capacity, luggage_capacity, features,
+        purchase_date, purchase_price, current_value, insurance_expiry,
+        daily_rate_usd, daily_rate_ugx, weekly_rate_usd, mileage_rate,
+        current_mileage, last_service_date, next_service_mileage,
+        location, notes, is_active
+      ) VALUES (
+        ${body.vehicle_number}, ${body.registration_number}, ${body.make}, ${body.model},
+        ${body.vehicle_type || null}, ${body.year || null}, ${body.color || null}, ${body.status || 'available'},
+        ${body.fuel_type || null}, ${body.transmission || null},
+        ${body.seating_capacity ?? 4}, ${body.luggage_capacity || null}, ${body.features ?? null},
+        ${body.purchase_date || null}, ${body.purchase_price || null}, ${body.current_value || null},
+        ${body.insurance_expiry || null},
+        ${body.daily_rate_usd || null}, ${body.daily_rate_ugx || null}, ${body.weekly_rate_usd || null},
+        ${body.mileage_rate || null},
+        ${body.current_mileage ?? 0}, ${body.last_service_date || null}, ${body.next_service_mileage || null},
+        ${body.location || null}, ${body.notes || null}, ${body.is_active ?? true}
+      )
+      RETURNING *
+    `;
+    const data = rows[0];
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error: any) {

@@ -3,7 +3,6 @@
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import {
   ArrowLeftIcon,
   TruckIcon,
@@ -24,6 +23,7 @@ export default function EditVendorPage({ params }: PageProps) {
 
   const [formData, setFormData] = useState({
     name: '',
+    company_name: '',
     email: '',
     phone: '',
     address_line1: '',
@@ -46,17 +46,15 @@ export default function EditVendorPage({ params }: PageProps) {
   const loadVendor = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('vendors')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
+      const res = await fetch(`/api/vendors/${id}`);
+      if (!res.ok) throw new Error('Failed to load vendor');
+      const result = await res.json();
+      const data = result.data || result;
 
       if (data) {
         setFormData({
           name: data.name || '',
+          company_name: data.company_name || '',
           email: data.email || '',
           phone: data.phone || '',
           address_line1: data.address_line1 || '',
@@ -194,6 +192,21 @@ export default function EditVendorPage({ params }: PageProps) {
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
                 placeholder="Enter vendor name"
               />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Company Name (Optional)
+              </label>
+              <input
+                type="text"
+                name="company_name"
+                value={formData.company_name}
+                onChange={handleChange}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+                placeholder="Leave blank for an individual vendor"
+              />
+              <p className="text-xs text-gray-500 mt-1">Set this if the vendor is a business, not an individual</p>
             </div>
 
             <div>

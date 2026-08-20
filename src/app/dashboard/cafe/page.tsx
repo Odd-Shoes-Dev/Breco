@@ -14,8 +14,7 @@ import {
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline';
-import { supabase } from '@/lib/supabase/client';
-import { formatCurrency } from '@/lib/currency';
+import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import { ScaledNumber } from '@/components/ui/scaled-number';
 
 interface CafeStats {
@@ -52,6 +51,7 @@ export default function CafeDashboardPage() {
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
   const [expenseBreakdown, setExpenseBreakdown] = useState<ExpenseBreakdown[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currency, setCurrency] = useState('USD');
 
   useEffect(() => {
     loadCafeData();
@@ -66,43 +66,23 @@ export default function CafeDashboardPage() {
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-      // Fetch cafe revenue accounts (42xx)
-      const { data: cafeAccounts } = await supabase
-        .from('accounts')
-        .select('id')
-        .like('code', '42%');
+      const cafeStatsRes = await fetch(`/api/cafe/sales?start_date=${monthStart.toISOString().split('T')[0]}&end_date=${monthEnd.toISOString().split('T')[0]}`);
+      const cafeStats = cafeStatsRes.ok ? await cafeStatsRes.json() : {};
+      const revenue = cafeStats.revenue || 0;
 
-      const cafeAccountIds = cafeAccounts?.map(a => a.id) || [];
+      const expensesRes = await fetch(`/api/expenses?department=Cafe&start_date=${monthStart.toISOString().split('T')[0]}&end_date=${monthEnd.toISOString().split('T')[0]}`);
+      const expensesResult = expensesRes.ok ? await expensesRes.json() : { data: [] };
+      const expensesArr = expensesResult.data || [];
+      // Amounts are converted to the company base currency server-side
+      const expenses = expensesArr.reduce((sum: number, exp: any) => sum + Number(exp.total_in_base ?? exp.total ?? 0), 0);
+      if (expensesResult.currency) setCurrency(expensesResult.currency);
 
-      // Fetch cafe revenue from journal lines
-      const { data: revenueData } = await supabase
-        .from('journal_lines')
-        .select('credit')
-        .in('account_id', cafeAccountIds)
-        .gte('created_at', monthStart.toISOString())
-        .lte('created_at', monthEnd.toISOString())
-        .gt('credit', 0);
-
-      const revenue = revenueData?.reduce((sum, entry) => sum + Number(entry.credit || 0), 0) || 0;
-
-      // Fetch cafe expenses (department = 'Cafe')
-      const { data: expensesData } = await supabase
-        .from('expenses')
-        .select('total')
-        .eq('department', 'Cafe')
-        .gte('expense_date', monthStart.toISOString())
-        .lte('expense_date', monthEnd.toISOString());
-
-      const expenses = expensesData?.reduce((sum, exp) => sum + Number(exp.total || 0), 0) || 0;
-
-      // Fetch cafe employees
-      const { data: employeesData, count: employeeCount } = await supabase
-        .from('employees')
-        .select('id, basic_salary', { count: 'exact' })
-        .eq('department', 'Cafe')
-        .eq('employment_status', 'active');
-
-      const totalPayroll = employeesData?.reduce((sum, emp) => sum + Number(emp.basic_salary || 0), 0) || 0;
+      const employeesRes = await fetch('/api/employees?department=Cafe&status=active');
+      const employeesResult = employeesRes.ok ? await employeesRes.json() : { data: [] };
+      const employeesData = employeesResult.data || [];
+      const employeeCount = employeesData.length;
+      const totalPayroll = employeesData.reduce((sum: number, emp: any) => sum + Number(emp.salary_in_base ?? emp.basic_salary ?? 0), 0);
+      if (employeesResult.currency) setCurrency(employeesResult.currency);
 
       const profit = revenue - expenses;
       const profitMargin = revenue > 0 ? (profit / revenue) * 100 : 0;
@@ -138,34 +118,13 @@ export default function CafeDashboardPage() {
       const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
       const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59);
 
-      // Fetch cafe account IDs (42xx)
-      const { data: cafeAccounts } = await supabase
-        .from('accounts')
-        .select('id')
-        .like('code', '42%');
+      const cafeRes = await fetch(`/api/cafe/sales?start_date=${monthStart.toISOString().split('T')[0]}&end_date=${monthEnd.toISOString().split('T')[0]}`);
+      const cafeResult = cafeRes.ok ? await cafeRes.json() : {};
+      const revenue = cafeResult.revenue || 0;
 
-      const cafeAccountIds = cafeAccounts?.map(a => a.id) || [];
-
-      // Revenue
-      const { data: revenueData } = await supabase
-        .from('journal_lines')
-        .select('credit')
-        .in('account_id', cafeAccountIds)
-        .gte('created_at', monthStart.toISOString())
-        .lte('created_at', monthEnd.toISOString())
-        .gt('credit', 0);
-
-      const revenue = revenueData?.reduce((sum, entry) => sum + Number(entry.credit || 0), 0) || 0;
-
-      // Expenses
-      const { data: expensesData } = await supabase
-        .from('expenses')
-        .select('total')
-        .eq('department', 'Cafe')
-        .gte('expense_date', monthStart.toISOString())
-        .lte('expense_date', monthEnd.toISOString());
-
-      const expenses = expensesData?.reduce((sum, exp) => sum + Number(exp.total || 0), 0) || 0;
+      const expRes = await fetch(`/api/expenses?department=Cafe&start_date=${monthStart.toISOString().split('T')[0]}&end_date=${monthEnd.toISOString().split('T')[0]}`);
+      const expResult = expRes.ok ? await expRes.json() : { data: [] };
+      const expenses = (expResult.data || []).reduce((sum: number, exp: any) => sum + Number(exp.total_in_base ?? exp.total ?? 0), 0);
 
       months.push({
         month: monthDate.toLocaleDateString('en-US', { month: 'short' }),
@@ -179,12 +138,9 @@ export default function CafeDashboardPage() {
   };
 
   const loadExpenseBreakdown = async (monthStart: Date, monthEnd: Date, totalExpenses: number) => {
-    const { data: expenses } = await supabase
-      .from('expenses')
-      .select('category, total')
-      .eq('department', 'Cafe')
-      .gte('expense_date', monthStart.toISOString())
-      .lte('expense_date', monthEnd.toISOString());
+    const expBkRes = await fetch(`/api/expenses?department=Cafe&start_date=${monthStart.toISOString().split('T')[0]}&end_date=${monthEnd.toISOString().split('T')[0]}`);
+    const expBkResult = expBkRes.ok ? await expBkRes.json() : { data: [] };
+    const expenses = expBkResult.data || [];
 
     if (!expenses || expenses.length === 0) {
       setExpenseBreakdown([]);
@@ -193,9 +149,9 @@ export default function CafeDashboardPage() {
 
     // Group by category
     const categoryTotals: Record<string, number> = {};
-    expenses.forEach(exp => {
+    expenses.forEach((exp: any) => {
       const category = exp.category || 'Other';
-      categoryTotals[category] = (categoryTotals[category] || 0) + Number(exp.total || 0);
+      categoryTotals[category] = (categoryTotals[category] || 0) + Number(exp.total_in_base ?? exp.total ?? 0);
     });
 
     // Add payroll to breakdown
@@ -210,6 +166,8 @@ export default function CafeDashboardPage() {
     breakdown.sort((a, b) => b.amount - a.amount);
     setExpenseBreakdown(breakdown);
   };
+
+  const formatCurrency = (amount: number) => currencyFormatter(amount, currency as any);
 
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('en-US', {

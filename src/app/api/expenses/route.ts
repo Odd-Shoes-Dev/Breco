@@ -1,14 +1,25 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { createExpenseJournalEntry, getAccountByCode } from '@/lib/accounting/journal-entry-helpers';
+import { createExpenseJournalEntry } from '@/lib/accounting/journal-entry-helpers';
 import { validatePeriodLock } from '@/lib/accounting/period-lock';
+import { getCompanySettings } from '@/lib/company-settings';
+
+async function convertCurrencyDB(amount: number, from: string, to: string, date: string): Promise<number> {
+  if (from === to) return amount;
+  try {
+    const rows = await sql`SELECT convert_currency(${amount}, ${from}, ${to}, ${date}) AS result`;
+    return Number(rows[0]?.result ?? amount);
+  } catch {
+    return amount;
+  }
+}
 
 // GET /api/expenses - List expenses
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
-    
+
     const status = searchParams.get('status');
     const vendorId = searchParams.get('vendor_id');
     const accountId = searchParams.get('account_id');
@@ -18,51 +29,51 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
 
-    let query = supabase
-      .from('expenses')
-      .select(`
-        *,
-        vendors (id, name),
-        accounts:expense_account_id (id, name, code),
-        bank_accounts (id, name)
-      `, { count: 'exact' })
-      .order('expense_date', { ascending: false });
+    const rows = await sql`
+      SELECT
+        e.*,
+        json_build_object('id', v.id, 'name', v.name) AS vendors,
+        json_build_object('id', a.id, 'name', a.name, 'code', a.code) AS accounts,
+        json_build_object('id', ba.id, 'name', ba.account_name) AS bank_accounts
+      FROM expenses e
+      LEFT JOIN vendors v ON v.id = e.vendor_id
+      LEFT JOIN accounts a ON a.id = e.account_id
+      LEFT JOIN bank_accounts ba ON ba.id = e.bank_account_id
+      ORDER BY e.expense_date DESC
+    `;
 
-    if (status && status !== 'all') {
-      query = query.eq('status', status);
-    }
+    let data = rows as any[];
 
-    if (vendorId) {
-      query = query.eq('vendor_id', vendorId);
-    }
+    if (status && status !== 'all') data = data.filter((e: any) => e.status === status);
+    if (vendorId) data = data.filter((e: any) => e.vendor_id === vendorId);
+    if (accountId) data = data.filter((e: any) => e.account_id === accountId);
+    if (startDate) data = data.filter((e: any) => e.expense_date >= startDate);
+    if (endDate) data = data.filter((e: any) => e.expense_date <= endDate);
 
-    if (accountId) {
-      query = query.eq('expense_account_id', accountId);
-    }
+    const total = data.length;
+    const paged = data.slice(offset, offset + limit);
 
-    if (startDate) {
-      query = query.gte('expense_date', startDate);
-    }
+    // Convert each expense's total to the company base currency (per-record, own date)
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency;
+    const today = new Date().toISOString().split('T')[0];
 
-    if (endDate) {
-      query = query.lte('expense_date', endDate);
-    }
-
-    query = query.range(offset, offset + limit - 1);
-
-    const { data, count, error } = await query;
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    const converted = [] as any[];
+    for (const expense of paged) {
+      const amount = Number(expense.total ?? expense.amount) || 0;
+      const expenseCurrency = expense.currency || baseCurrency;
+      const totalInBase = await convertCurrencyDB(amount, expenseCurrency, baseCurrency, expense.expense_date || today);
+      converted.push({ ...expense, total_in_base: totalInBase });
     }
 
     return NextResponse.json({
-      data,
+      data: converted,
+      currency: baseCurrency,
       pagination: {
         page,
         limit,
-        total: count,
-        totalPages: Math.ceil((count || 0) / limit),
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     });
   } catch (error: any) {
@@ -73,79 +84,58 @@ export async function GET(request: NextRequest) {
 // POST /api/expenses - Create expense
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
-    if (!body.expense_date || !body.amount || !body.expense_account_id) {
+    if (!body.expense_date || !body.amount || !body.account_id) {
       return NextResponse.json(
-        { error: 'Missing required fields: expense_date, amount, expense_account_id' },
+        { error: 'Missing required fields: expense_date, amount, account_id' },
         { status: 400 }
       );
     }
 
-    // Check if period is closed
-    const periodError = await validatePeriodLock(supabase, body.expense_date);
+    const periodError = await validatePeriodLock(body.expense_date);
     if (periodError) {
       return NextResponse.json({ error: periodError }, { status: 403 });
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getSession();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Generate expense reference
     const date = new Date();
     const ref = `EXP-${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}${date.getDate().toString().padStart(2, '0')}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
 
-    const { data: expense, error: expenseError } = await supabase
-      .from('expenses')
-      .insert({
-        expense_number: body.reference || ref,
-        reference: body.reference || ref,
-        expense_date: body.expense_date,
-        vendor_id: body.vendor_id || null,
-        expense_account_id: body.expense_account_id,
-        payment_account_id: body.bank_account_id || body.expense_account_id,
-        amount: body.amount,
-        tax_amount: body.tax_amount || 0,
-        total: (body.amount || 0) + (body.tax_amount || 0),
-        currency: body.currency || 'USD',
-        description: body.description || null,
-        category: body.category || null,
-        department: body.department || null,
-        payment_method: body.payment_method || 'cash',
-        bank_account_id: body.bank_account_id || null,
-        receipt_url: body.receipt_url || null,
-        is_billable: body.is_billable || false,
-        customer_id: body.customer_id || null,
-        status: body.status || 'pending',
-        created_by: user.id,
-      })
-      .select()
-      .single();
-
-    if (expenseError) {
-      return NextResponse.json({ error: expenseError.message }, { status: 400 });
-    }
+    const insertedRows = await sql`
+      INSERT INTO expenses (
+        expense_number, expense_date, vendor_id, account_id,
+        bank_account_id, amount, tax_amount, currency, description,
+        payment_method, receipt_url, status, created_by
+      ) VALUES (
+        ${ref},
+        ${body.expense_date}, ${body.vendor_id ?? null}, ${body.account_id},
+        ${body.bank_account_id ?? null},
+        ${body.amount}, ${body.tax_amount || 0},
+        ${body.currency || 'USD'}, ${body.description ?? null},
+        ${body.payment_method || 'cash'},
+        ${body.receipt_url ?? null}, ${body.status || 'pending'}, ${user.id}
+      )
+      RETURNING *
+    `;
+    const expense = (insertedRows as any[])[0];
 
     // Create journal entry if expense is paid
     if (body.status === 'paid') {
-      // Get account code for the expense account
-      const { data: expenseAccount } = await supabase
-        .from('accounts')
-        .select('code')
-        .eq('id', body.expense_account_id)
-        .single();
+      const acctRows = await sql`SELECT code FROM accounts WHERE id = ${body.account_id} LIMIT 1`;
+      const expenseAccount = (acctRows as any[])[0];
 
       if (expenseAccount) {
         const journalResult = await createExpenseJournalEntry(
-          supabase,
           {
             id: expense.id,
             expense_number: expense.expense_number,
             expense_date: expense.expense_date,
-            amount: expense.total,
+            amount: expense.amount,
             account_code: expenseAccount.code,
             description: expense.description || 'Expense',
             bank_account_id: body.bank_account_id,
@@ -155,7 +145,6 @@ export async function POST(request: NextRequest) {
 
         if (!journalResult.success) {
           console.error('Failed to create journal entry for expense:', journalResult.error);
-          // Don't fail expense creation, just log the error
         }
       }
     }

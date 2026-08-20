@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 
 export default function LoginPage() {
@@ -18,23 +17,19 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (error) throw error;
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to sign in');
 
-      // Get redirect path from URL or default to dashboard
       const urlParams = new URLSearchParams(window.location.search);
       const redirectTo = urlParams.get('redirectTo') || '/dashboard';
-      
+
       toast.success('Welcome back!');
-      
-      // Wait a bit longer for cookies to be set properly
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Force a full page reload with the redirect
       window.location.href = redirectTo;
     } catch (error: any) {
       toast.error(error.message || 'Failed to sign in');

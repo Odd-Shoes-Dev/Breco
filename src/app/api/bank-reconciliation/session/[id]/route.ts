@@ -1,44 +1,45 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/bank-reconciliation/session/[id] - Get reconciliation details
 export async function GET(request: NextRequest, context: any) {
   const { params } = context || {};
   try {
-    const supabase = await createClient();
+    const reconRows = await sql`
+      SELECT
+        br.*,
+        json_build_object('id', ba.id, 'account_name', ba.account_name, 'account_number', ba.account_number, 'current_balance', ba.current_balance, 'currency', ba.currency) AS bank_account,
+        json_build_object('id', cu.id, 'full_name', cu.full_name, 'email', cu.email) AS completed_by_user,
+        json_build_object('id', cru.id, 'full_name', cru.full_name, 'email', cru.email) AS created_by_user
+      FROM bank_reconciliations br
+      LEFT JOIN bank_accounts ba ON ba.id = br.bank_account_id
+      LEFT JOIN users cu ON cu.id = br.completed_by
+      LEFT JOIN users cru ON cru.id = br.created_by
+      WHERE br.id = ${params.id}
+    `;
 
-    const { data: reconciliation, error: reconError } = await supabase
-      .from('bank_reconciliations')
-      .select(`
-        *,
-        bank_account:bank_accounts(id, account_name, account_number, current_balance, currency),
-        completed_by_user:user_profiles!bank_reconciliations_completed_by_fkey(id, full_name, email),
-        created_by_user:user_profiles!bank_reconciliations_created_by_fkey(id, full_name, email)
-      `)
-      .eq('id', params.id)
-      .single();
-
-    if (reconError) {
+    if (reconRows.length === 0) {
       return NextResponse.json({ error: 'Reconciliation not found' }, { status: 404 });
     }
 
+    const reconciliation = reconRows[0];
+
     // Get matched transactions
-    const { data: matchedTransactions } = await supabase
-      .from('bank_reconciliation_items')
-      .select(`
-        *,
-        transaction:bank_transactions(*)
-      `)
-      .eq('reconciliation_id', params.id);
+    const matchedTransactions = await sql`
+      SELECT bri.*, row_to_json(bt.*) AS transaction
+      FROM bank_reconciliation_items bri
+      LEFT JOIN bank_transactions bt ON bt.id = bri.bank_transaction_id
+      WHERE bri.reconciliation_id = ${params.id}
+    `;
 
     // Get unmatched transactions for this bank account
-    const { data: unmatchedTransactions } = await supabase
-      .from('bank_transactions')
-      .select('*')
-      .eq('bank_account_id', reconciliation.bank_account_id)
-      .eq('is_reconciled', false)
-      .lte('transaction_date', reconciliation.statement_date)
-      .order('transaction_date', { ascending: false });
+    const unmatchedTransactions = await sql`
+      SELECT * FROM bank_transactions
+      WHERE bank_account_id = ${reconciliation.bank_account_id}
+        AND is_reconciled = false
+        AND transaction_date <= ${reconciliation.statement_date}
+      ORDER BY transaction_date DESC
+    `;
 
     return NextResponse.json({
       data: {
@@ -56,39 +57,44 @@ export async function GET(request: NextRequest, context: any) {
 export async function PATCH(request: NextRequest, context: any) {
   const { params } = context || {};
   try {
-    const supabase = await createClient();
     const body = await request.json();
 
     // Get existing reconciliation
-    const { data: existing } = await supabase
-      .from('bank_reconciliations')
-      .select('status')
-      .eq('id', params.id)
-      .single();
+    const existing = await sql`SELECT status FROM bank_reconciliations WHERE id = ${params.id}`;
 
-    if (!existing) {
+    if (existing.length === 0) {
       return NextResponse.json({ error: 'Reconciliation not found' }, { status: 404 });
     }
 
-    if (existing.status === 'completed') {
+    if (existing[0].status === 'completed') {
       return NextResponse.json(
         { error: 'Cannot update completed reconciliation' },
         { status: 400 }
       );
     }
 
-    const { data, error } = await supabase
-      .from('bank_reconciliations')
-      .update(body)
-      .eq('id', params.id)
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    const allowed = [
+      'statement_date', 'statement_ending_balance', 'statement_starting_balance',
+      'book_balance', 'reconciliation_date',
+    ];
+    if (!allowed.some((key) => body[key] !== undefined)) {
+      return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
     }
 
-    return NextResponse.json({ data });
+    const rows = await sql`
+      UPDATE bank_reconciliations
+      SET
+        statement_date = COALESCE(${body.statement_date ?? null}, statement_date),
+        statement_ending_balance = COALESCE(${body.statement_ending_balance ?? null}, statement_ending_balance),
+        statement_starting_balance = COALESCE(${body.statement_starting_balance ?? null}, statement_starting_balance),
+        book_balance = COALESCE(${body.book_balance ?? null}, book_balance),
+        reconciliation_date = COALESCE(${body.reconciliation_date ?? null}, reconciliation_date),
+        updated_at = NOW()
+      WHERE id = ${params.id}
+      RETURNING *
+    `;
+
+    return NextResponse.json({ data: rows[0] });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -98,41 +104,27 @@ export async function PATCH(request: NextRequest, context: any) {
 export async function DELETE(request: NextRequest, context: any) {
   const { params } = context || {};
   try {
-    const supabase = await createClient();
-
     // Get reconciliation
-    const { data: reconciliation } = await supabase
-      .from('bank_reconciliations')
-      .select('status')
-      .eq('id', params.id)
-      .single();
+    const reconciliation = await sql`
+      SELECT status FROM bank_reconciliations WHERE id = ${params.id}
+    `;
 
-    if (!reconciliation) {
+    if (reconciliation.length === 0) {
       return NextResponse.json({ error: 'Reconciliation not found' }, { status: 404 });
     }
 
-    if (reconciliation.status === 'completed') {
+    if (reconciliation[0].status === 'completed') {
       return NextResponse.json(
         { error: 'Cannot delete completed reconciliation' },
         { status: 400 }
       );
     }
 
-    // Delete reconciliation items first (cascade should handle this, but being explicit)
-    await supabase
-      .from('bank_reconciliation_items')
-      .delete()
-      .eq('reconciliation_id', params.id);
+    // Delete reconciliation items first
+    await sql`DELETE FROM bank_reconciliation_items WHERE reconciliation_id = ${params.id}`;
 
     // Delete reconciliation
-    const { error } = await supabase
-      .from('bank_reconciliations')
-      .delete()
-      .eq('id', params.id);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    await sql`DELETE FROM bank_reconciliations WHERE id = ${params.id}`;
 
     return NextResponse.json({ message: 'Reconciliation cancelled successfully' });
   } catch (error: any) {

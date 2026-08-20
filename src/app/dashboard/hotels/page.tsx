@@ -40,10 +40,20 @@ export default function HotelsPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [destinationFilter, setDestinationFilter] = useState<string>('all');
+  const [defaultCurrency, setDefaultCurrency] = useState('USD');
 
   useEffect(() => {
     fetchHotels();
     fetchDestinations();
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.base_currency) setDefaultCurrency(data.base_currency);
+      })
+      .catch(() => {});
   }, []);
 
   const fetchHotels = async () => {
@@ -150,7 +160,7 @@ export default function HotelsPage() {
     if (!amount) return '-';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: defaultCurrency,
       minimumFractionDigits: 0,
     }).format(amount);
   };

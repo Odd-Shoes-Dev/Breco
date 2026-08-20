@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import { ScaledNumber } from '@/components/ui/scaled-number';
 import {
@@ -21,6 +20,7 @@ export default function BankPage() {
   const [stats, setStats] = useState({
     totalBalance: 0,
     unreconciledCount: 0,
+    currency: 'USD',
   });
 
   useEffect(() => {
@@ -32,42 +32,28 @@ export default function BankPage() {
       setLoading(true);
 
       // Load bank accounts
-      const { data: accountsData, error: accountsError } = await supabase
-        .from('bank_accounts')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
+      const accountsRes = await fetch('/api/bank-accounts?active=true');
+      const accountsResult = await accountsRes.json();
+      const accountsData = accountsResult.data || [];
+      setAccounts(accountsData);
 
-      if (accountsError) throw accountsError;
-      setAccounts(accountsData || []);
-
-      // Calculate total balance from all bank accounts (convert to USD for now)
-      const totalBalance = accountsData?.reduce((sum, account) => {
-        return sum + (account.current_balance || 0);
-      }, 0) || 0;
+      // Total balance is converted to base currency server-side
+      const totalBalance = Number(accountsResult.total_balance_in_base) || 0;
+      const baseCurrency = accountsResult.currency || 'USD';
 
       // Load recent transactions
-      const { data: transactionsData, error: transactionsError } = await supabase
-        .from('bank_transactions')
-        .select(`
-          *,
-          bank_accounts (name, currency)
-        `)
-        .order('transaction_date', { ascending: false })
-        .limit(10);
+      const txRes = await fetch('/api/bank-transactions?limit=10');
+      const txResult = await txRes.json();
+      setRecentTransactions(txResult.data || []);
 
-      if (transactionsError) throw transactionsError;
-      setRecentTransactions(transactionsData || []);
-
-      // Count unreconciled
-      const { count } = await supabase
-        .from('bank_transactions')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_reconciled', false);
+      // Get stats for unreconciled count
+      const statsRes = await fetch('/api/bank-transactions/stats?reconciled=unreconciled');
+      const statsResult = await statsRes.json();
 
       setStats({
         totalBalance,
-        unreconciledCount: count || 0,
+        unreconciledCount: statsResult.unreconciledCount || 0,
+        currency: baseCurrency,
       });
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -120,7 +106,7 @@ export default function BankPage() {
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Total Cash Balance</p>
-            <ScaledNumber value={formatCurrency(stats.totalBalance)} className="mt-1" />
+            <ScaledNumber value={formatCurrency(stats.totalBalance, stats.currency)} className="mt-1" />
             <p className="text-sm text-gray-500 mt-2">Across {accounts.length} accounts</p>
           </div>
         </div>

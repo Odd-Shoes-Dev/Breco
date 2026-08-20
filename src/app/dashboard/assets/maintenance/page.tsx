@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import {
   PlusIcon,
@@ -33,32 +32,30 @@ export default function AssetMaintenancePage() {
   const [maintenances, setMaintenances] = useState<Maintenance[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('scheduled');
+  const [defaultCurrency, setDefaultCurrency] = useState('USD');
 
   useEffect(() => {
     loadMaintenances();
   }, [statusFilter]);
 
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.base_currency) setDefaultCurrency(data.base_currency);
+      })
+      .catch(() => {});
+  }, []);
+
   const loadMaintenances = async () => {
     try {
       setLoading(true);
 
-      let query = supabase
-        .from('asset_maintenance')
-        .select(`
-          *,
-          fixed_assets (asset_name, asset_tag),
-          vendors (name, company_name)
-        `)
-        .order('scheduled_date', { ascending: true });
-
-      if (statusFilter) {
-        query = query.eq('status', statusFilter);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setMaintenances(data || []);
+      const params = new URLSearchParams();
+      if (statusFilter) params.set('status', statusFilter);
+      const res = await fetch(`/api/asset-maintenance?${params}`);
+      const result = await res.json();
+      setMaintenances(result.data || result || []);
     } catch (error) {
       console.error('Failed to load maintenances:', error);
       toast.error('Failed to load maintenances');
@@ -74,16 +71,17 @@ export default function AssetMaintenancePage() {
       const cost = prompt('Enter actual cost:');
       if (cost === null) return;
 
-      const { error } = await supabase
-        .from('asset_maintenance')
-        .update({
+      const res = await fetch(`/api/asset-maintenance`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: maintenanceId,
           status: 'completed',
           completed_date: new Date().toISOString(),
           cost: parseFloat(cost) || 0,
-        })
-        .eq('id', maintenanceId);
-
-      if (error) throw error;
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to complete maintenance');
 
       toast.success('Maintenance marked as completed');
       loadMaintenances();
@@ -181,7 +179,7 @@ export default function AssetMaintenancePage() {
             <div className="text-2xl font-bold text-gray-900 mt-1">
               {new Intl.NumberFormat('en-US', {
                 style: 'currency',
-                currency: 'USD',
+                currency: defaultCurrency,
               }).format(
                 maintenances
                   .filter(m => m.status === 'completed')
@@ -304,7 +302,7 @@ export default function AssetMaintenancePage() {
                         <td>
                           {new Intl.NumberFormat('en-US', {
                             style: 'currency',
-                            currency: 'USD',
+                            currency: defaultCurrency,
                           }).format(maintenance.cost)}
                         </td>
                         <td>

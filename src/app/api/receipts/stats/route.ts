@@ -1,23 +1,29 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { getCompanySettings } from '@/lib/company-settings';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customer_id');
 
-    let query = supabase
-      .from('invoices')
-      .select('total, amount_paid, currency, invoice_date, status, document_type');
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency;
 
+    let receipts;
     if (customerId) {
-      query = query.eq('customer_id', customerId);
+      receipts = await sql`
+        SELECT total, amount_paid, currency, invoice_date, status, document_type
+        FROM invoices
+        WHERE customer_id = ${customerId} AND status != 'void'
+      `;
+    } else {
+      receipts = await sql`
+        SELECT total, amount_paid, currency, invoice_date, status, document_type
+        FROM invoices
+        WHERE status != 'void'
+      `;
     }
-
-    const { data: receipts, error } = await query.neq('status', 'void');
-
-    if (error) throw error;
 
     let totalAmount = 0;
     let thisMonthCount = 0;
@@ -25,27 +31,23 @@ export async function GET(request: NextRequest) {
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    for (const receipt of receipts || []) {
-      // Only count receipts (document_type === 'receipt')
+    for (const receipt of receipts) {
       if (receipt.document_type !== 'receipt') continue;
 
       const amountPaid = parseFloat(receipt.amount_paid) || parseFloat(receipt.total) || 0;
-      let amountUSD = amountPaid;
+      let amountInBase = amountPaid;
 
-      // Convert to USD if not already
-      if (receipt.currency && receipt.currency !== 'USD') {
-        const { data: converted } = await supabase.rpc('convert_currency', {
-          p_amount: amountPaid,
-          p_from_currency: receipt.currency,
-          p_to_currency: 'USD',
-          p_date: receipt.invoice_date,
-        });
-        amountUSD = converted || amountPaid;
+      if (receipt.currency && receipt.currency !== baseCurrency) {
+        try {
+          const res = await sql`SELECT convert_currency(${amountPaid}, ${receipt.currency}, ${baseCurrency}, ${receipt.invoice_date}) AS val`;
+          amountInBase = Number(res[0]?.val ?? amountPaid);
+        } catch {
+          amountInBase = amountPaid;
+        }
       }
 
-      totalAmount += amountUSD;
+      totalAmount += amountInBase;
 
-      // Count this month receipts
       const receiptDate = new Date(receipt.invoice_date);
       if (receiptDate >= firstDayOfMonth) {
         thisMonthCount++;
@@ -54,8 +56,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       totalAmount,
-      totalCount: receipts?.filter(r => r.document_type === 'receipt').length || 0,
+      totalCount: receipts.filter((r: any) => r.document_type === 'receipt').length,
       thisMonthCount,
+      currency: baseCurrency,
     });
   } catch (error) {
     console.error('Error calculating receipts stats:', error);

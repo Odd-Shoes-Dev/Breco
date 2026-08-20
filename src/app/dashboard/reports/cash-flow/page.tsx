@@ -39,6 +39,7 @@ interface CashFlowData {
 
 export default function CashFlowPage() {
   const [data, setData] = useState<CashFlowData | null>(null);
+  const [companySettings, setCompanySettings] = useState<any>(null);
   const [startDate, setStartDate] = useState(
     new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]
   );
@@ -49,6 +50,13 @@ export default function CashFlowPage() {
     fetchReport();
   }, [startDate, endDate]);
 
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((settings) => settings && setCompanySettings(settings))
+      .catch((error) => console.error('Failed to fetch company settings:', error));
+  }, []);
+
   const fetchReport = async () => {
     setIsLoading(true);
     try {
@@ -56,6 +64,10 @@ export default function CashFlowPage() {
         `/api/reports/cash-flow?startDate=${startDate}&endDate=${endDate}`
       );
       const result = await response.json();
+      if (!response.ok) {
+        console.error('Cash flow API error:', result.error);
+        return;
+      }
       setData(result);
     } catch (error) {
       console.error('Failed to fetch cash flow:', error);
@@ -183,9 +195,10 @@ export default function CashFlowPage() {
               <div class="address">Kampala Road Plot 14 Eagen House, Russel Street, P.O.Box 144011, Kampala, Uganda</div>
               <div class="address">Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com</div>
               <div class="address">URA TIN: 1014756280 • URSB Reg. No: 80020001634842</div>
+              ${companySettings?.duns_number ? `<div class="address">DUNS: ${companySettings.duns_number}</div>` : ''}
             </div>
           </div>
-          
+
           <div class="report-title">
             <h2>Statement of Cash Flow</h2>
             <div class="period">

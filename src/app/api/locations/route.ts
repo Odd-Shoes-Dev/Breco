@@ -1,35 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { sql } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
-
 export async function GET(request: NextRequest) {
   try {
-    const supabase = getSupabase();
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type');
 
-    let query = supabase
-      .from('locations')
-      .select('*')
-      .order('name');
-
+    let rows: any[];
     if (type) {
-      query = query.eq('type', type);
+      rows = await sql`
+        SELECT *, location_code AS code, address_line1 AS address, zip_code AS postal_code
+        FROM inventory_locations WHERE type = ${type} ORDER BY name`;
+    } else {
+      rows = await sql`
+        SELECT *, location_code AS code, address_line1 AS address, zip_code AS postal_code
+        FROM inventory_locations ORDER BY name`;
     }
 
-    const { data, error } = await query;
-
-    if (error) throw error;
-
-    return NextResponse.json(data);
+    return NextResponse.json(rows);
   } catch (error: any) {
     console.error('Error fetching locations:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -38,7 +28,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = getSupabase();
     const body = await request.json();
     const {
       name,
@@ -62,28 +51,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
-      .from('locations')
-      .insert({
-        name,
-        code,
-        type,
-        address,
-        city,
-        state,
-        postal_code,
-        country,
-        phone,
-        email,
-        manager_name,
-        is_active: is_active ?? true,
-      })
-      .select()
-      .single();
+    const rows = await sql`
+      INSERT INTO inventory_locations (
+        name, location_code, type, address_line1, city, state, zip_code,
+        country, phone, is_active
+      ) VALUES (
+        ${name}, ${code}, ${type}, ${address ?? null}, ${city ?? null},
+        ${state ?? null}, ${postal_code ?? null}, ${country ?? 'Uganda'},
+        ${phone ?? null}, ${is_active ?? true}
+      )
+      RETURNING *, location_code AS code, address_line1 AS address, zip_code AS postal_code
+    `;
 
-    if (error) throw error;
-
-    return NextResponse.json(data);
+    return NextResponse.json(rows[0]);
   } catch (error: any) {
     console.error('Error creating location:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

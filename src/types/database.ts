@@ -52,7 +52,6 @@ export interface CompanySettings {
   base_currency: string;
   fiscal_year_start_month: number;
   inventory_method: InventoryMethod;
-  default_payment_terms: number;
   sales_tax_rate: number;
   created_at: string;
   updated_at: string;
@@ -164,8 +163,9 @@ export interface Customer {
   email_3: string | null;
   email_4: string | null;
   phone: string | null;
-  address_line1: string | null;
-  address_line2: string | null;
+  address: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
   city: string | null;
   state: string | null;
   zip_code: string | null;
@@ -245,8 +245,12 @@ export interface Product {
   description: string | null;
   category_id: string | null;
   product_type: 'inventory' | 'non_inventory' | 'service';
-  unit_price: number;
-  cost_price: number;
+  selling_price: number;
+  purchase_price: number;
+  /** @deprecated alias of selling_price, returned by the API for backward compatibility */
+  unit_price?: number;
+  /** @deprecated alias of purchase_price, returned by the API for backward compatibility */
+  cost_price?: number;
   currency: string;
   track_inventory: boolean;
   quantity_on_hand: number;
@@ -255,8 +259,8 @@ export interface Product {
   reorder_point: number | null;
   reorder_quantity: number | null;
   unit_of_measure: string;
-  revenue_account_id: string | null;
-  cogs_account_id: string | null;
+  income_account_id: string | null;
+  expense_account_id: string | null;
   inventory_account_id: string | null;
   is_taxable: boolean;
   tax_rate: number | null;
@@ -562,9 +566,12 @@ export interface FixedAsset {
 export interface DepreciationEntry {
   id: string;
   asset_id: string;
-  period_id: string | null;
-  depreciation_date: string;
-  amount: number;
+  entry_date: string;
+  period_start: string;
+  period_end: string;
+  depreciation_amount: number;
+  accumulated_depreciation: number;
+  book_value: number;
   journal_entry_id: string | null;
   created_at: string;
 }

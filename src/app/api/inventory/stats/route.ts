@@ -1,18 +1,20 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextResponse } from 'next/server';
+import { getCompanySettings } from '@/lib/company-settings';
 
 export async function GET() {
   try {
-    const supabase = await createClient();
+    const settings = await getCompanySettings();
+    const baseCurrency = settings.base_currency;
 
-    const { data: allItems, error } = await supabase
-      .from('products')
-      .select('quantity_on_hand, cost_price, currency, reorder_point')
-      .eq('track_inventory', true);
+    const allItems = await sql`
+      SELECT p.purchase_price, p.reorder_point, p.currency,
+             COALESCE((SELECT SUM(im.quantity) FROM inventory_movements im WHERE im.product_id = p.id), 0) AS quantity_on_hand
+      FROM products p
+      WHERE p.track_inventory = true
+    `;
 
-    if (error) throw error;
-
-    if (!allItems) {
+    if (!allItems || allItems.length === 0) {
       return NextResponse.json({
         totalItems: 0,
         totalValue: 0,
@@ -24,47 +26,39 @@ export async function GET() {
     const totalItems = allItems.length;
     let totalValue = 0;
 
-    // Convert each item's value to USD
+    // Convert each item's value to the company's base currency
     for (const item of allItems) {
-      const quantity = item.quantity_on_hand || 0;
-      const cost = item.cost_price || 0;
-      const itemValue = quantity * cost;
+      const quantity = Number(item.quantity_on_hand) || 0;
+      const cost = Number(item.purchase_price) || 0;
+      let itemValue = quantity * cost;
+
+      const itemCurrency = item.currency || baseCurrency;
+      if (itemValue !== 0 && itemCurrency !== baseCurrency) {
+        try {
+          const converted = await sql`SELECT convert_currency(${itemValue}, ${itemCurrency}, ${baseCurrency}, ${new Date().toISOString().split('T')[0]}) AS val`;
+          itemValue = Number(converted[0]?.val ?? itemValue);
+        } catch {
+          // fall back to unconverted value if conversion fails
+        }
+      }
 
       if (itemValue > 0) {
-        let valueInUSD = itemValue;
-
-        // Convert to USD if not already
-        if (item.currency && item.currency !== 'USD') {
-          const { data: converted, error: conversionError } = await supabase.rpc('convert_currency', {
-            p_amount: itemValue,
-            p_from_currency: item.currency,
-            p_to_currency: 'USD',
-            p_date: new Date().toISOString().split('T')[0],
-          });
-
-          if (conversionError) {
-            console.error('Currency conversion error:', conversionError);
-            valueInUSD = itemValue; // Fallback
-          } else {
-            valueInUSD = converted || itemValue;
-          }
-        }
-
-        totalValue += valueInUSD;
+        totalValue += itemValue;
       }
     }
 
     const lowStock = allItems.filter(
-      item => (item.quantity_on_hand || 0) <= (item.reorder_point || 0) && (item.quantity_on_hand || 0) > 0
+      (item: any) => (item.quantity_on_hand || 0) <= (item.reorder_point || 0) && (item.quantity_on_hand || 0) > 0
     ).length;
-    
-    const outOfStock = allItems.filter(item => (item.quantity_on_hand || 0) === 0).length;
+
+    const outOfStock = allItems.filter((item: any) => (item.quantity_on_hand || 0) === 0).length;
 
     return NextResponse.json({
       totalItems,
       totalValue,
       lowStock,
       outOfStock,
+      currency: baseCurrency,
     });
   } catch (error) {
     console.error('Error calculating inventory stats:', error);

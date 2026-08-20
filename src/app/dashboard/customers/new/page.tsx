@@ -1,9 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { CurrencySelect } from '@/components/ui';
 import {
   ArrowLeftIcon,
@@ -17,6 +16,7 @@ export default function NewCustomerPage() {
 
   const [formData, setFormData] = useState({
     name: '',
+    company_name: '',
     email: '',
     email_2: '',
     email_3: '',
@@ -34,8 +34,21 @@ export default function NewCustomerPage() {
     credit_limit: 0,
     notes: '',
   });
+  const currencyTouched = useRef(false);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.base_currency && !currencyTouched.current) {
+          setFormData((prev) => ({ ...prev, currency: data.base_currency }));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    if (e.target.name === 'currency') currencyTouched.current = true;
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -112,6 +125,21 @@ export default function NewCustomerPage() {
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
                 placeholder="Enter customer name"
               />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Company Name (Optional)
+              </label>
+              <input
+                type="text"
+                name="company_name"
+                value={formData.company_name}
+                onChange={handleChange}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+                placeholder="Leave blank for an individual customer"
+              />
+              <p className="text-xs text-gray-500 mt-1">Set this if the customer is a business, not an individual</p>
             </div>
 
             <div className="md:col-span-2">
@@ -332,7 +360,7 @@ export default function NewCustomerPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Credit Limit ($)
+                Credit Limit ({formData.currency})
               </label>
               <input
                 type="number"

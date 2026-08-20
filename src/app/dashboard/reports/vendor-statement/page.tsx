@@ -61,6 +61,20 @@ export default function VendorStatementPage() {
   );
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [isLoading, setIsLoading] = useState(false);
+  const [companySettings, setCompanySettings] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchCompanySettings = async () => {
+      try {
+        const response = await fetch('/api/settings');
+        const result = await response.json();
+        setCompanySettings(result);
+      } catch (error) {
+        console.error('Failed to fetch company settings:', error);
+      }
+    };
+    fetchCompanySettings();
+  }, []);
 
   useEffect(() => {
     const loadVendors = async () => {
@@ -269,6 +283,7 @@ export default function VendorStatementPage() {
               <div class="address">Kampala Road Plot 14 Eagen House, Russel Street, P.O.Box 144011, Kampala, Uganda</div>
               <div class="address">Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com</div>
               <div class="address">URA TIN: 1014756280 • URSB Reg. No: 80020001634842</div>
+              ${companySettings?.duns_number ? `<div class="address">DUNS: ${companySettings.duns_number}</div>` : ''}
             </div>
           </div>
           

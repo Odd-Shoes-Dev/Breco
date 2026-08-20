@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import toast from 'react-hot-toast';
 import {
   ArrowLeftIcon,
@@ -53,48 +53,31 @@ function GoodsReceiptDetailPageClient({ grId }: { grId: string }) {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [inspectionNotes, setInspectionNotes] = useState('');
+  const [defaultCurrency, setDefaultCurrency] = useState('USD');
 
   useEffect(() => {
     loadGoodsReceipt();
   }, [grId]);
 
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.base_currency) setDefaultCurrency(data.base_currency);
+      })
+      .catch(() => {});
+  }, []);
+
   const loadGoodsReceipt = async () => {
     try {
       setLoading(true);
-
-      const { data: grData, error: grError } = await supabase
-        .from('goods_receipts')
-        .select(`
-          *,
-          purchase_orders (
-            po_number,
-            vendors (
-              name,
-              company_name
-            )
-          )
-        `)
-        .eq('id', grId)
-        .single();
-
-      if (grError) throw grError;
+      const res = await fetch(`/api/goods-receipts/${grId}`);
+      if (!res.ok) throw new Error('Failed to load goods receipt');
+      const result = await res.json();
+      const grData = result.goodsReceipt || result;
       setGoodsReceipt(grData);
       setInspectionNotes(grData.inspection_notes || '');
-
-      const { data: linesData, error: linesError } = await supabase
-        .from('goods_receipt_lines')
-        .select(`
-          *,
-          purchase_order_lines (
-            quantity_ordered,
-            quantity_received
-          )
-        `)
-        .eq('goods_receipt_id', grId)
-        .order('id');
-
-      if (linesError) throw linesError;
-      setLines(linesData || []);
+      setLines(result.lines || grData.lines || []);
     } catch (error) {
       console.error('Failed to load goods receipt:', error);
       toast.error('Failed to load goods receipt');
@@ -252,13 +235,13 @@ function GoodsReceiptDetailPageClient({ grId }: { grId: string }) {
                     <td className="text-right">
                       {new Intl.NumberFormat('en-US', {
                         style: 'currency',
-                        currency: 'USD',
+                        currency: defaultCurrency,
                       }).format(line.unit_cost)}
                     </td>
                     <td className="text-right">
                       {new Intl.NumberFormat('en-US', {
                         style: 'currency',
-                        currency: 'USD',
+                        currency: defaultCurrency,
                       }).format(line.line_total)}
                     </td>
                   </tr>
@@ -272,7 +255,7 @@ function GoodsReceiptDetailPageClient({ grId }: { grId: string }) {
                   <td className="text-right font-semibold">
                     {new Intl.NumberFormat('en-US', {
                       style: 'currency',
-                      currency: 'USD',
+                      currency: defaultCurrency,
                     }).format(total)}
                   </td>
                 </tr>

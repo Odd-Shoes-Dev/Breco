@@ -4,10 +4,11 @@ interface BillPDFData {
   bill: any;
   vendor: any;
   lines: any[];
+  companySettings?: { duns_number?: string };
 }
 
 export function generateBillHTML(data: BillPDFData): string {
-  const { bill, vendor, lines } = data;
+  const { bill, vendor, lines, companySettings } = data;
   
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -255,14 +256,13 @@ export function generateBillHTML(data: BillPDFData): string {
                 <p>Tel: +256 782 884 933, +256 772 891 729, +256 775 766 578</p>
                 <p>+256 746 757 53991, +256 702 834 511</p>
                 <p>Email: brecosafaris@gmail.com • Website: www.brecosafaris.com</p>
-                <p>URA TIN: 1014756280 • URSB Reg. No: 80020001634842</p>
+                <p>URA TIN: 1014756280 • URSB Reg. No: 80020001634842${companySettings?.duns_number ? ` • DUNS: ${companySettings.duns_number}` : ''}</p>
               </div>
             </div>
           </div>
           <div class="bill-title">
             <h1>BILL</h1>
             <p class="bill-number">${bill.bill_number}</p>
-            ${bill.vendor_invoice_number ? `<p class="bill-number" style="margin-top: 4px;">Vendor Invoice: ${bill.vendor_invoice_number}</p>` : ''}
             <span class="status-badge status-${bill.status}">${bill.status.replace('_', ' ')}</span>
           </div>
         </div>
@@ -270,9 +270,8 @@ export function generateBillHTML(data: BillPDFData): string {
         <div class="info-section">
           <div class="info-block">
             <h3>Vendor</h3>
-            <p><strong>${vendor.company_name || vendor.name}</strong></p>
-            ${vendor.address_line1 ? `<p>${vendor.address_line1}</p>` : ''}
-            ${vendor.address_line2 ? `<p>${vendor.address_line2}</p>` : ''}
+            <p><strong>${vendor.name}</strong></p>
+            ${vendor.address ? `<p>${vendor.address}</p>` : ''}
             ${vendor.city || vendor.state || vendor.zip_code ? `<p>${vendor.city}${vendor.city && vendor.state ? ', ' : ''}${vendor.state} ${vendor.zip_code || ''}</p>` : ''}
             ${vendor.country && vendor.country !== 'USA' ? `<p>${vendor.country}</p>` : ''}
             ${vendor.email ? `<p>${vendor.email}</p>` : ''}

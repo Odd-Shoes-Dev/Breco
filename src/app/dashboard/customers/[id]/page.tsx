@@ -3,7 +3,6 @@
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import type { Customer as CustomerType } from '@/types/database';
 import {
@@ -42,39 +41,19 @@ export default function CustomerDetailPage({ params }: PageProps) {
 
   useEffect(() => {
     loadCustomer();
-    loadInvoices();
   }, [id]);
 
   const loadCustomer = async () => {
     try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
+      const res = await fetch(`/api/customers/${id}`);
+      if (!res.ok) throw new Error('Failed to load customer');
+      const { data } = await res.json();
       setCustomer(data);
+      setInvoices(data?.recent_invoices || []);
     } catch (error) {
       console.error('Failed to load customer:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadInvoices = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('id, invoice_number, invoice_date, due_date, total, currency, status')
-        .eq('customer_id', id)
-        .order('invoice_date', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-      setInvoices(data || []);
-    } catch (error) {
-      console.error('Failed to load invoices:', error);
     }
   };
 
@@ -85,12 +64,11 @@ export default function CustomerDetailPage({ params }: PageProps) {
 
     try {
       setDeleting(true);
-      const { error } = await supabase
-        .from('customers')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch(`/api/customers/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to delete customer');
+      }
 
       alert('Customer deleted successfully');
       router.push('/dashboard/customers');
@@ -256,7 +234,7 @@ export default function CustomerDetailPage({ params }: PageProps) {
           <div className="space-y-3 sm:space-y-4">
             <div>
               <p className="text-xs sm:text-sm text-gray-500">Current Balance</p>
-              <p className="text-xl sm:text-2xl font-bold text-gray-900">{formatCurrency(customer.current_balance || 0)}</p>
+              <p className="text-xl sm:text-2xl font-bold text-gray-900">{formatCurrency(customer.current_balance || 0, customer.currency || 'USD')}</p>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:gap-4 pt-3 sm:pt-4 border-t border-gray-200">
               <div>

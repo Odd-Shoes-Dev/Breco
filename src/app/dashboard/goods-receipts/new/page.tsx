@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import toast from 'react-hot-toast';
 import {
   ArrowLeftIcon,
@@ -72,30 +72,9 @@ export default function NewGoodsReceiptPage() {
 
   const loadApprovedPOs = async () => {
     try {
-      const { data, error } = await supabase
-        .from('purchase_orders')
-        .select(`
-          id,
-          po_number,
-          order_date,
-          vendor_id,
-          vendors (
-            name,
-            company_name
-          )
-        `)
-        .in('status', ['approved', 'partial'])
-        .order('order_date', { ascending: false });
-
-      if (error) throw error;
-      
-      // Transform vendors from array to single object
-      const transformedData = (data || []).map(po => ({
-        ...po,
-        vendors: Array.isArray(po.vendors) ? po.vendors[0] : po.vendors
-      }));
-      
-      setPurchaseOrders(transformedData);
+      const res = await fetch('/api/purchase-orders?status=approved,partial');
+      const result = await res.json();
+      setPurchaseOrders(result.data || result || []);
     } catch (error) {
       console.error('Failed to load POs:', error);
       toast.error('Failed to load purchase orders');
@@ -105,30 +84,14 @@ export default function NewGoodsReceiptPage() {
   const loadPODetails = async (po_id: string) => {
     try {
       setLoadingPO(true);
-      const { data: poData, error: poError } = await supabase
-        .from('purchase_orders')
-        .select(`
-          *,
-          vendors (
-            name,
-            company_name
-          )
-        `)
-        .eq('id', po_id)
-        .single();
+      const res = await fetch(`/api/purchase-orders/${po_id}`);
+      if (!res.ok) throw new Error('Failed to load PO');
+      const poData = await res.json();
 
-      if (poError) throw poError;
       setSelectedPO(poData);
 
-      const { data: linesData, error: linesError } = await supabase
-        .from('purchase_order_lines')
-        .select('*')
-        .eq('purchase_order_id', po_id)
-        .order('line_number');
-
-      if (linesError) throw linesError;
-
-      const linesWithRemaining = (linesData || []).map(line => ({
+      const linesData = poData.lines || [];
+      const linesWithRemaining = linesData.map((line: any) => ({
         ...line,
         quantity_remaining: line.quantity_ordered - (line.quantity_received || 0),
       }));
@@ -137,8 +100,8 @@ export default function NewGoodsReceiptPage() {
 
       // Auto-populate GR lines with remaining quantities
       const grLines = linesWithRemaining
-        .filter(line => line.quantity_remaining > 0)
-        .map(line => ({
+        .filter((line: any) => line.quantity_remaining > 0)
+        .map((line: any) => ({
           id: Math.random().toString(),
           po_line_id: line.id,
           product_id: line.product_id,

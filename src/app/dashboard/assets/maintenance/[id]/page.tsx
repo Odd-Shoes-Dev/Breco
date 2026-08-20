@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import {
   ArrowLeftIcon,
@@ -56,20 +55,10 @@ function MaintenanceDetailPageClient({ maintenanceId }: { maintenanceId: string 
     try {
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from('asset_maintenance')
-        .select(
-          `
-          *,
-          assets (id, name, asset_tag),
-          employees:performed_by_employee_id (first_name, last_name, employee_number)
-        `
-        )
-        .eq('id', maintenanceId)
-        .single();
-
-      if (error) throw error;
-      setMaintenance(data);
+      const res = await fetch(`/api/asset-maintenance?id=${maintenanceId}`);
+      const result = await res.json();
+      const data = result.data || result;
+      setMaintenance(Array.isArray(data) ? data[0] : data);
     } catch (error) {
       console.error('Failed to load maintenance:', error);
       toast.error('Failed to load maintenance record');
@@ -84,15 +73,16 @@ function MaintenanceDetailPageClient({ maintenanceId }: { maintenanceId: string 
     try {
       setUpdating(true);
 
-      const { error } = await supabase
-        .from('asset_maintenance')
-        .update({
+      const res = await fetch(`/api/asset-maintenance`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: maintenanceId,
           status: 'completed',
           performed_date: new Date().toISOString().split('T')[0],
-        })
-        .eq('id', maintenanceId);
-
-      if (error) throw error;
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to update maintenance');
 
       toast.success('Maintenance marked as completed');
       loadMaintenance();

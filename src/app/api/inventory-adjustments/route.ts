@@ -1,64 +1,63 @@
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 
+// GET /api/inventory-adjustments - List inventory movements (backed by inventory_movements)
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const user = await getSession();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get('product_id');
-    const reason = searchParams.get('reason');
+    const type = searchParams.get('type');
+    const search = searchParams.get('search');
     const startDate = searchParams.get('start_date');
     const endDate = searchParams.get('end_date');
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const offset = (page - 1) * limit;
 
-    let query = supabase
-      .from('inventory_adjustments')
-      .select(
-        `
-        *,
-        products (id, name, sku, unit)
-      `
-      )
-      .order('adjustment_date', { ascending: false });
+    const conditions: string[] = ['1=1'];
+    const esc = (v: string) => v.replace(/'/g, "''");
+    if (productId) conditions.push(`im.product_id = '${esc(productId)}'`);
+    if (type && type !== 'all') conditions.push(`im.movement_type = '${esc(type)}'`);
+    if (search) conditions.push(`(p.name ILIKE '%${esc(search)}%' OR p.sku ILIKE '%${esc(search)}%')`);
+    if (startDate) conditions.push(`im.created_at >= '${esc(startDate)}'`);
+    if (endDate) conditions.push(`im.created_at <= '${esc(endDate)}'`);
+    const where = conditions.join(' AND ');
 
-    if (productId) {
-      query = query.eq('product_id', productId);
-    }
+    const countRows = await sql`
+      SELECT COUNT(*) AS count
+      FROM inventory_movements im
+      LEFT JOIN products p ON p.id = im.product_id
+      WHERE ${sql.unsafe(where)}
+    `;
+    const total = parseInt((countRows as any[])[0]?.count || '0');
 
-    if (reason) {
-      query = query.eq('reason', reason);
-    }
+    const rows = await sql`
+      SELECT im.*, json_build_object('id', p.id, 'name', p.name, 'sku', p.sku, 'unit', p.unit_of_measure) AS products
+      FROM inventory_movements im
+      LEFT JOIN products p ON p.id = im.product_id
+      WHERE ${sql.unsafe(where)}
+      ORDER BY im.created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
 
-    if (startDate) {
-      query = query.gte('adjustment_date', startDate);
-    }
-
-    if (endDate) {
-      query = query.lte('adjustment_date', endDate);
-    }
-
-    const { data, error } = await query;
-
-    if (error) throw error;
-
-    return NextResponse.json(data);
+    return NextResponse.json({ data: rows, total });
   } catch (error: any) {
     console.error('Error fetching inventory adjustments:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
+// POST /api/inventory-adjustments - Record a manual adjustment movement
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const user = await getSession();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -81,40 +80,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create adjustment
-    const { data, error } = await supabase
-      .from('inventory_adjustments')
-      .insert({
-        product_id,
-        adjustment_date,
-        quantity_change,
-        reason,
-        reference_type: reference_type || null,
-        reference_id: reference_id || null,
-        notes: notes || null,
-      })
-      .select()
-      .single();
+    // Record adjustment as an inventory movement (stock is computed from inventory_movements)
+    const rows = await sql`
+      INSERT INTO inventory_movements (
+        product_id, movement_type, quantity,
+        reference_type, reference_id, notes, created_by
+      ) VALUES (
+        ${product_id}, 'adjustment', ${quantity_change},
+        ${reference_type || 'manual_adjustment'}, ${reference_id || null},
+        ${notes ? `${reason}: ${notes}` : reason}, ${user.id}
+      )
+      RETURNING *
+    `;
 
-    if (error) throw error;
-
-    // Update product stock
-    const { data: currentProduct, error: getError } = await supabase
-      .from('products')
-      .select('current_stock')
-      .eq('id', product_id)
-      .single();
-
-    if (getError) throw getError;
-
-    const { error: stockError } = await supabase
-      .from('products')
-      .update({ current_stock: (currentProduct.current_stock || 0) + quantity_change })
-      .eq('id', product_id);
-
-    if (stockError) throw stockError;
-
-    return NextResponse.json(data, { status: 201 });
+    return NextResponse.json(rows[0], { status: 201 });
   } catch (error: any) {
     console.error('Error creating inventory adjustment:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -12,7 +12,7 @@ import {
   ArrowTrendingUpIcon,
   BuildingOfficeIcon,
 } from '@heroicons/react/24/outline';
-import { formatCurrency, formatDate, cn } from '@/lib/utils';
+import { formatCurrency as formatCurrencyBase, formatDate, cn } from '@/lib/utils';
 
 interface CustomerSale {
   customerId: string;
@@ -32,6 +32,7 @@ interface CustomerSale {
 }
 
 interface SalesByCustomerData {
+  currency?: string;
   reportPeriod: {
     startDate: string;
     endDate: string;
@@ -56,6 +57,7 @@ interface SalesByCustomerData {
 
 export default function SalesByCustomerPage() {
   const [data, setData] = useState<SalesByCustomerData | null>(null);
+  const [companySettings, setCompanySettings] = useState<any>(null);
   const [startDate, setStartDate] = useState(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
   );
@@ -82,6 +84,21 @@ export default function SalesByCustomerPage() {
   useEffect(() => {
     fetchSalesByCustomer();
   }, [startDate, endDate, customerType, sortBy]);
+
+  useEffect(() => {
+    const loadCompanySettings = async () => {
+      try {
+        const response = await fetch('/api/settings');
+        const result = await response.json();
+        setCompanySettings(result);
+      } catch (error) {
+        console.error('Failed to load company settings:', error);
+      }
+    };
+    loadCompanySettings();
+  }, []);
+
+  const formatCurrency = (amount: number) => formatCurrencyBase(amount, data?.currency || 'USD');
 
   const exportToPDF = () => {
     if (!data) return;
@@ -216,9 +233,10 @@ export default function SalesByCustomerPage() {
               <div class="address">Kampala Road Plot 14 Eagen House, Russel Street, P.O.Box 144011, Kampala, Uganda</div>
               <div class="address">Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com</div>
               <div class="address">URA TIN: 1014756280 • URSB Reg. No: 80020001634842</div>
+              ${companySettings?.duns_number ? `<div class="address">DUNS: ${companySettings.duns_number}</div>` : ''}
             </div>
           </div>
-          
+
           <div class="report-header">
             <h2>Sales by Customer Report</h2>
             <div class="period">

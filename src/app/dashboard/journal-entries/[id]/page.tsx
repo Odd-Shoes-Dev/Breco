@@ -12,7 +12,6 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { formatCurrency, cn } from '@/lib/utils';
-import { supabase } from '@/lib/supabase/client';
 
 interface LineItem {
   id: string;
@@ -56,14 +55,10 @@ export default function EditJournalEntryPage() {
     const loadData = async () => {
       try {
         // Load accounts
-        const { data: accountsData, error: accountsError } = await supabase
-          .from('accounts')
-          .select('id, code, name, account_type')
-          .eq('is_active', true)
-          .order('code');
-        
-        if (accountsData && !accountsError) {
-          setAccounts(accountsData);
+        const accountsRes = await fetch('/api/accounts');
+        if (accountsRes.ok) {
+          const accountsResult = await accountsRes.json();
+          setAccounts(accountsResult.data || accountsResult || []);
         }
 
         // Load journal entry

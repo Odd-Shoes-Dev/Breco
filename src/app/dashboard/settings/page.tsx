@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase/client';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import Image from 'next/image';
@@ -28,6 +27,7 @@ interface CompanyFormData {
   name: string;
   legal_name: string;
   ein: string;
+  duns_number: string;
   address_line1: string;
   address_line2: string;
   city: string;
@@ -41,7 +41,6 @@ interface CompanyFormData {
 
 interface FinancialFormData {
   fiscal_year_start_month: number;
-  default_payment_terms: number;
   sales_tax_rate: number;
   base_currency: string;
 }
@@ -63,12 +62,9 @@ export default function SettingsPage() {
   const loadSettings = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('company_settings')
-        .select('*')
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
+      const res = await fetch('/api/settings');
+      if (!res.ok) return;
+      const data = await res.json();
 
       if (data) {
         setSettings(data);
@@ -76,6 +72,7 @@ export default function SettingsPage() {
           name: data.name,
           legal_name: data.legal_name || '',
           ein: data.ein || '',
+          duns_number: data.duns_number || '',
           address_line1: data.address_line1 || '',
           address_line2: data.address_line2 || '',
           city: data.city || '',
@@ -88,8 +85,7 @@ export default function SettingsPage() {
         });
         financialForm.reset({
           fiscal_year_start_month: data.fiscal_year_start_month || 1,
-          default_payment_terms: data.default_payment_terms || 30,
-          sales_tax_rate: (Number(data.sales_tax_rate) || 0.18) * 100,
+          sales_tax_rate: (data.sales_tax_rate != null ? Number(data.sales_tax_rate) : 0.18) * 100,
           base_currency: data.base_currency || 'UGX',
         });
       }
@@ -103,14 +99,13 @@ export default function SettingsPage() {
   const onSaveCompany = async (data: CompanyFormData) => {
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('company_settings')
-        .upsert({
-          id: settings?.id,
-          ...data,
-        });
-
-      if (error) throw error;
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to save settings');
       toast.success('Company settings saved!');
       loadSettings();
     } catch (error: any) {
@@ -123,17 +118,17 @@ export default function SettingsPage() {
   const onSaveFinancial = async (data: FinancialFormData) => {
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('company_settings')
-        .upsert({
-          id: settings?.id,
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           fiscal_year_start_month: data.fiscal_year_start_month,
-          default_payment_terms: data.default_payment_terms,
-          sales_tax_rate: (data.sales_tax_rate || 0) / 100,
+          sales_tax_rate: (data.sales_tax_rate ?? 0) / 100,
           base_currency: data.base_currency,
-        });
-
-      if (error) throw error;
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to save settings');
       toast.success('Financial settings saved!');
       loadSettings();
     } catch (error: any) {
@@ -263,6 +258,18 @@ export default function SettingsPage() {
                       placeholder="XX-XXXXXXX"
                     />
                   </div>
+                  <div className="form-group">
+                    <label className="label">DUNS Number</label>
+                    <input
+                      type="text"
+                      {...companyForm.register('duns_number')}
+                      className="input"
+                      placeholder="XX-XXX-XXXX"
+                    />
+                    <p className="text-sm text-gray-500 mt-1">
+                      Dun & Bradstreet identifier — appears on all exported documents when set
+                    </p>
+                  </div>
                 </div>
 
                 <hr />
@@ -338,7 +345,7 @@ export default function SettingsPage() {
                 <div className="form-group">
                   <label className="label">Website</label>
                   <input
-                    type="url"
+                    type="text"
                     {...companyForm.register('website')}
                     className="input"
                     placeholder="https://"
@@ -381,14 +388,6 @@ export default function SettingsPage() {
                       <option value={12}>December</option>
                     </select>
                   </div>
-                  <div className="form-group">
-                    <label className="label">Default Payment Terms (days)</label>
-                    <input
-                      type="number"
-                      {...financialForm.register('default_payment_terms', { valueAsNumber: true })}
-                      className="input"
-                    />
-                  </div>
                 </div>
 
                 <div className="form-group">
@@ -400,7 +399,7 @@ export default function SettingsPage() {
                     className="input max-w-xs"
                   />
                   <p className="text-sm text-gray-500 mt-1">
-                    Enter the percentage value (e.g. 18 for 18% Uganda VAT)
+                    Enter the percentage value (e.g. 18 for 18% Uganda VAT). Use 0 if no tax applies.
                   </p>
                 </div>
 

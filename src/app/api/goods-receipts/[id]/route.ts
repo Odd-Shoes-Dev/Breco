@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/goods-receipts/[id] - Get goods receipt details
@@ -7,38 +7,47 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { id } = await context.params;
 
-    const { data, error } = await supabase
-      .from('goods_receipts')
-      .select(`
-        *,
-        purchase_order:purchase_orders(
-          id,
-          po_number,
-          vendor:vendors(id, name, email)
-        ),
-        goods_receipt_lines(
-          *,
-          purchase_order_line:purchase_order_lines(
-            id,
-            description,
-            quantity,
-            unit_price,
-            unit
+    const rows = await sql`
+      SELECT
+        gr.*,
+        json_build_object('id', po.id, 'po_number', po.po_number,
+          'vendor', json_build_object('id', v.id, 'name', v.name, 'email', v.email)
+        ) AS purchase_order,
+        json_build_object('id', up.id, 'full_name', up.full_name) AS received_by_user,
+        json_agg(
+          json_build_object(
+            'id', grl.id,
+            'goods_receipt_id', grl.gr_id,
+            'purchase_order_line_id', grl.po_line_id,
+            'quantity_received', grl.quantity_received,
+            'unit_cost', grl.unit_cost,
+            'description', grl.description,
+            'product_id', grl.product_id,
+            'purchase_order_line', json_build_object(
+              'id', pol.id, 'description', pol.description,
+              'quantity', pol.quantity, 'unit_price', pol.unit_price
+            )
           )
-        ),
-        received_by_user:user_profiles!goods_receipts_received_by_fkey(id, full_name)
-      `)
-      .eq('id', id)
-      .single();
+        ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
+      FROM goods_receipts gr
+      LEFT JOIN purchase_orders po ON po.id = gr.po_id
+      LEFT JOIN vendors v ON v.id = po.vendor_id
+      LEFT JOIN goods_receipt_lines grl ON grl.gr_id = gr.id
+      LEFT JOIN purchase_order_lines pol ON pol.id = grl.po_line_id
+      LEFT JOIN users up ON up.id = gr.created_by
+      WHERE gr.id = ${id}
+      GROUP BY gr.id, po.id, po.po_number, v.id, v.name, v.email, up.id, up.full_name
+    `;
 
-    if (error || !data) {
+    if (rows.length === 0) {
       return NextResponse.json({ error: 'Goods receipt not found' }, { status: 404 });
     }
 
-    return NextResponse.json(data);
+    const gr = rows[0] as any;
+    // The detail page reads `lines`; keep goods_receipt_lines for compatibility
+    return NextResponse.json({ ...gr, lines: gr.goods_receipt_lines || [] });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -50,36 +59,25 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
     const { id } = await context.params;
     const body = await request.json();
 
-    const { data: existing } = await supabase
-      .from('goods_receipts')
-      .select('status')
-      .eq('id', id)
-      .single();
-
-    if (!existing) {
+    const existing = await sql`SELECT status FROM goods_receipts WHERE id = ${id}`;
+    if (existing.length === 0) {
       return NextResponse.json({ error: 'Goods receipt not found' }, { status: 404 });
     }
 
-    const { data, error } = await supabase
-      .from('goods_receipts')
-      .update({
-        status: body.status,
-        notes: body.notes,
-      })
-      .eq('id', id)
-      .select(`
-        *,
-        purchase_order:purchase_orders(id, po_number)
-      `)
-      .single();
+    const rows = await sql`
+      UPDATE goods_receipts
+      SET status = ${body.status}, notes = ${body.notes ?? null}
+      WHERE id = ${id}
+      RETURNING *
+    `;
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    const gr = rows[0];
+
+    const poRows = await sql`SELECT id, po_number FROM purchase_orders WHERE id = ${gr.po_id}`;
+    const data = { ...gr, purchase_order: poRows[0] || null };
 
     return NextResponse.json(data);
   } catch (error: any) {

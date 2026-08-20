@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 
@@ -50,25 +49,14 @@ export default function NewAssetMaintenancePage() {
     try {
       setLoading(true);
 
-      // Load assets
-      const { data: assetsData, error: assetsError } = await supabase
-        .from('assets')
-        .select('id, name, asset_tag, category_id')
-        .eq('status', 'active')
-        .order('name');
-
-      if (assetsError) throw assetsError;
-      setAssets(assetsData || []);
-
-      // Load employees
-      const { data: employeesData, error: employeesError } = await supabase
-        .from('employees')
-        .select('id, first_name, last_name, employee_number, department')
-        .eq('status', 'active')
-        .order('first_name');
-
-      if (employeesError) throw employeesError;
-      setEmployees(employeesData || []);
+      const [assetsRes, employeesRes] = await Promise.all([
+        fetch('/api/assets?status=active'),
+        fetch('/api/employees?status=active'),
+      ]);
+      const assetsResult = await assetsRes.json();
+      const employeesResult = await employeesRes.json();
+      setAssets(assetsResult.data || assetsResult || []);
+      setEmployees(employeesResult.data || employeesResult || []);
     } catch (error) {
       console.error('Failed to load data:', error);
       toast.error('Failed to load data');
@@ -107,11 +95,15 @@ export default function NewAssetMaintenancePage() {
         next_maintenance_date: formData.next_maintenance_date || null,
       };
 
-      const { error } = await supabase
-        .from('asset_maintenance')
-        .insert(dataToSave);
-
-      if (error) throw error;
+      const res = await fetch('/api/asset-maintenance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dataToSave),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to schedule maintenance');
+      }
 
       toast.success('Maintenance scheduled successfully');
       router.push('/dashboard/assets/maintenance');

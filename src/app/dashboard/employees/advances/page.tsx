@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { PlusIcon, CheckCircleIcon, XCircleIcon, ClockIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
@@ -41,23 +40,13 @@ export default function SalaryAdvancesPage() {
 
   const fetchAdvances = async () => {
     try {
-      let query = supabase
-        .from('salary_advances')
-        .select(`
-          *,
-          employee:employees(first_name, last_name, employee_number),
-          approver:user_profiles!approved_by(full_name)
-        `)
-        .order('advance_date', { ascending: false });
+      const params = new URLSearchParams();
+      if (statusFilter !== 'all') params.set('status', statusFilter);
 
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setAdvances(data || []);
+      const res = await fetch(`/api/employees/advances?${params.toString()}`);
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to load salary advances');
+      setAdvances(result.data || []);
     } catch (error) {
       console.error('Error fetching salary advances:', error);
       toast.error('Failed to load salary advances');
@@ -68,19 +57,11 @@ export default function SalaryAdvancesPage() {
 
   const handleApprove = async (advanceId: string) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { error } = await supabase
-        .from('salary_advances')
-        .update({
-          status: 'approved',
-          approved_by: user.id,
-          approved_at: new Date().toISOString(),
-        })
-        .eq('id', advanceId);
-
-      if (error) throw error;
+      const res = await fetch(`/api/employees/advances/${advanceId}/approve`, {
+        method: 'POST',
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to approve advance');
 
       toast.success('Salary advance approved');
       fetchAdvances();
@@ -92,19 +73,11 @@ export default function SalaryAdvancesPage() {
 
   const handleReject = async (advanceId: string) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { error } = await supabase
-        .from('salary_advances')
-        .update({
-          status: 'rejected',
-          approved_by: user.id,
-          approved_at: new Date().toISOString(),
-        })
-        .eq('id', advanceId);
-
-      if (error) throw error;
+      const res = await fetch(`/api/employees/advances/${advanceId}/reject`, {
+        method: 'POST',
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to reject advance');
 
       toast.success('Salary advance rejected');
       fetchAdvances();

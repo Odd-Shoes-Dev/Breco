@@ -1,23 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const user = await getSession();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data, error } = await supabase
-      .from('product_categories')
-      .select('*')
-      .order('name');
+    const rows = await sql`
+      SELECT pc.*, CASE WHEN pc.parent_id IS NOT NULL THEN json_build_object('id', p.id, 'name', p.name) END AS parent
+      FROM product_categories pc
+      LEFT JOIN product_categories p ON p.id = pc.parent_id
+      ORDER BY pc.name`;
 
-    if (error) throw error;
-
-    return NextResponse.json(data);
+    return NextResponse.json(rows);
   } catch (error: any) {
     console.error('Error fetching product categories:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -26,15 +24,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const user = await getSession();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
-    const { name, description } = body;
+    const { name, description, parent_id } = body;
 
     // Validate required fields
     if (!name) {
@@ -44,18 +40,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
-      .from('product_categories')
-      .insert({
-        name,
-        description: description || null,
-      })
-      .select()
-      .single();
+    const rows = await sql`
+      INSERT INTO product_categories (name, description, parent_id)
+      VALUES (${name}, ${description || null}, ${parent_id || null})
+      RETURNING *
+    `;
 
-    if (error) throw error;
-
-    return NextResponse.json(data, { status: 201 });
+    return NextResponse.json(rows[0], { status: 201 });
   } catch (error: any) {
     console.error('Error creating product category:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

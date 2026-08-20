@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import {
   ArrowLeftIcon,
@@ -46,49 +46,17 @@ export default function StockMovementsPage() {
   const loadMovements = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('inventory_movements')
-        .select(`
-          *,
-          products (
-            name,
-            sku
-          )
-        `, { count: 'exact' })
-        .order('created_at', { ascending: false });
+      const params = new URLSearchParams({
+        page: String(currentPage),
+        limit: String(pageSize),
+      });
+      if (searchQuery) params.set('search', searchQuery);
+      if (typeFilter !== 'all') params.set('type', typeFilter);
 
-      if (typeFilter !== 'all') {
-        query = query.eq('movement_type', typeFilter);
-      }
-
-      if (searchQuery) {
-        // Search by product name through the join
-        const { data: products } = await supabase
-          .from('products')
-          .select('id')
-          .or(`name.ilike.%${searchQuery}%,sku.ilike.%${searchQuery}%`);
-        
-        if (products && products.length > 0) {
-          const productIds = products.map(p => p.id);
-          query = query.in('product_id', productIds);
-        } else {
-          // No products found, return empty
-          setMovements([]);
-          setTotalCount(0);
-          setLoading(false);
-          return;
-        }
-      }
-
-      const from = (currentPage - 1) * pageSize;
-      const to = from + pageSize - 1;
-      query = query.range(from, to);
-
-      const { data, count, error } = await query;
-      if (error) throw error;
-
-      setMovements(data || []);
-      setTotalCount(count || 0);
+      const res = await fetch(`/api/inventory-adjustments?${params}`);
+      const result = await res.json();
+      setMovements(result.data || result || []);
+      setTotalCount(result.total || result.count || 0);
     } catch (error) {
       console.error('Failed to load movements:', error);
     } finally {

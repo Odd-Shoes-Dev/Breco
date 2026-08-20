@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 
 export default function SignUpPage() {
@@ -47,27 +46,19 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-        },
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, fullName }),
       });
 
-      if (error) throw error;
-
-      if (data.user && !data.session) {
-        // Email confirmation required
-        toast.success('Check your email to confirm your account!');
-        router.push('/login');
-      } else {
-        // Auto-confirmed (for development)
-        toast.success('Account created successfully!');
-        router.push('/dashboard');
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to create account');
       }
+
+      toast.success('Account created successfully!');
+      router.push('/dashboard');
     } catch (error: any) {
       toast.error(error.message || 'Failed to create account');
     } finally {

@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
@@ -7,21 +7,17 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
 
     // Get all bills for this vendor
-    const { data: bills, error: billsError } = await supabase
-      .from('bills')
-      .select('total, amount_paid, currency, bill_date, status')
-      .eq('vendor_id', id);
-
-    if (billsError) throw billsError;
+    const bills = await sql`
+      SELECT total, amount_paid, currency, bill_date, status
+      FROM bills
+      WHERE vendor_id = ${id}
+    `;
 
     let totalOutstanding = 0;
 
-    // Convert each bill's outstanding balance to USD
-    for (const bill of bills || []) {
-      // Skip paid/void bills
+    for (const bill of bills) {
       if (bill.status === 'paid' || bill.status === 'void') continue;
 
       const total = parseFloat(bill.total) || 0;
@@ -32,22 +28,9 @@ export async function GET(
 
       let remainingInUSD = remaining;
 
-      // Convert to USD if not already
       if (bill.currency && bill.currency !== 'USD') {
-        const { data: converted, error: conversionError } = await supabase.rpc('convert_currency', {
-          p_amount: remaining,
-          p_from_currency: bill.currency,
-          p_to_currency: 'USD',
-          p_date: bill.bill_date,
-        });
-
-        if (conversionError) {
-          console.error('Currency conversion error:', conversionError);
-          // Fall back to original amount if conversion fails
-          remainingInUSD = remaining;
-        } else {
-          remainingInUSD = converted || remaining;
-        }
+        const res = await sql`SELECT convert_currency(${remaining}, ${bill.currency}, 'USD', ${bill.bill_date}) AS val`;
+        remainingInUSD = res[0]?.val ?? remaining;
       }
 
       totalOutstanding += remainingInUSD;

@@ -9,7 +9,7 @@ import {
   CalendarIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
-import { formatCurrency, formatDate, cn } from '@/lib/utils';
+import { formatCurrency as formatCurrencyBase, formatDate, cn } from '@/lib/utils';
 
 interface AgingBucket {
   label: string;
@@ -30,6 +30,7 @@ interface CustomerAging {
 
 interface ARAgingData {
   asOfDate: string;
+  currency?: string;
   summary: {
     totalReceivables: number;
     buckets: AgingBucket[];
@@ -41,23 +42,33 @@ export default function ARAgingPage() {
   const [data, setData] = useState<ARAgingData | null>(null);
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().split('T')[0]);
   const [isLoading, setIsLoading] = useState(true);
+  const [companySettings, setCompanySettings] = useState<any>(null);
 
   useEffect(() => {
     fetchReport();
   }, [asOfDate]);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => setCompanySettings(data))
+      .catch((error) => console.error('Failed to fetch company settings:', error));
+  }, []);
 
   const fetchReport = async () => {
     setIsLoading(true);
     try {
       const response = await fetch(`/api/reports/ar-aging?asOfDate=${asOfDate}`);
       const result = await response.json();
-      setData(result);
+      setData(result.data || result);
     } catch (error) {
       console.error('Failed to fetch AR aging:', error);
     } finally {
       setIsLoading(false);
     }
   };
+
+  const formatCurrency = (amount: number) => formatCurrencyBase(amount, data?.currency || 'USD');
 
   const exportToPDF = () => {
     if (!data) return;
@@ -188,6 +199,7 @@ export default function ARAgingPage() {
               <div class="address">Kampala Road Plot 14 Eagen House, Russel Street, P.O.Box 144011, Kampala, Uganda</div>
               <div class="address">Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com</div>
               <div class="address">URA TIN: 1014756280 • URSB Reg. No: 80020001634842</div>
+              ${companySettings?.duns_number ? `<div class="address">DUNS: ${companySettings.duns_number}</div>` : ''}
             </div>
           </div>
           

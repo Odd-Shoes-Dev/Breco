@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
+
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import { ScaledNumber } from '@/components/ui/scaled-number';
 import {
@@ -32,6 +32,7 @@ export default function AssetsPage() {
     totalCost: 0,
     totalBookValue: 0,
     totalDepreciation: 0,
+    currency: 'USD',
   });
   const pageSize = 20;
 
@@ -43,31 +44,13 @@ export default function AssetsPage() {
   const loadAssets = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('fixed_assets')
-        .select(`
-          *,
-          asset_categories (name)
-        `, { count: 'exact' })
-        .order('purchase_date', { ascending: false });
-
-      if (searchQuery) {
-        query = query.or(`name.ilike.%${searchQuery}%,asset_number.ilike.%${searchQuery}%,serial_number.ilike.%${searchQuery}%`);
-      }
-
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
-
-      const from = (currentPage - 1) * pageSize;
-      const to = from + pageSize - 1;
-      query = query.range(from, to);
-
-      const { data, count, error } = await query;
-      if (error) throw error;
-
-      setAssets(data || []);
-      setTotalCount(count || 0);
+      const params = new URLSearchParams({ page: String(currentPage), limit: String(pageSize) });
+      if (searchQuery) params.set('search', searchQuery);
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      const res = await fetch(`/api/assets?${params}`);
+      const result = await res.json();
+      setAssets(result.data || result || []);
+      setTotalCount(result.total || result.count || 0);
     } catch (error) {
       console.error('Failed to load assets:', error);
     } finally {
@@ -87,8 +70,8 @@ export default function AssetsPage() {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return currencyFormatter(amount, 'USD');
+  const formatCurrency = (amount: number, currency: string = 'USD') => {
+    return currencyFormatter(amount, currency as any);
   };
 
   const formatDate = (dateString: string) => {
@@ -138,15 +121,15 @@ export default function AssetsPage() {
         </div>
         <div className="card p-3 sm:p-4 lg:p-6">
           <p className="text-sm text-gray-500">Total Cost</p>
-          <ScaledNumber value={formatCurrency(stats.totalCost)} className="text-gray-900 mt-0.5" />
+          <ScaledNumber value={formatCurrency(stats.totalCost, stats.currency)} className="text-gray-900 mt-0.5" />
         </div>
         <div className="card p-3 sm:p-4 lg:p-6">
           <p className="text-sm text-gray-500">Accumulated Depreciation</p>
-          <ScaledNumber value={formatCurrency(stats.totalDepreciation)} className="text-amber-600 mt-0.5" />
+          <ScaledNumber value={formatCurrency(stats.totalDepreciation, stats.currency)} className="text-amber-600 mt-0.5" />
         </div>
         <div className="card p-3 sm:p-4 lg:p-6">
           <p className="text-sm text-gray-500">Net Book Value</p>
-          <ScaledNumber value={formatCurrency(stats.totalBookValue)} className="text-green-600 mt-0.5" />
+          <ScaledNumber value={formatCurrency(stats.totalBookValue, stats.currency)} className="text-green-600 mt-0.5" />
         </div>
       </div>
 
@@ -238,12 +221,12 @@ export default function AssetsPage() {
                     </td>
                     <td>{asset.asset_categories?.name || '-'}</td>
                     <td className="whitespace-nowrap">{formatDate(asset.purchase_date)}</td>
-                    <td className="text-right">{formatCurrency(asset.purchase_price)}</td>
+                    <td className="text-right">{formatCurrency(asset.purchase_price, (asset as any).currency)}</td>
                     <td className="text-right text-amber-600">
-                      ({formatCurrency(asset.accumulated_depreciation)})
+                      ({formatCurrency(asset.accumulated_depreciation, (asset as any).currency)})
                     </td>
                     <td className="text-right font-medium">
-                      {formatCurrency(asset.book_value)}
+                      {formatCurrency((asset as any).current_book_value, (asset as any).currency)}
                     </td>
                     <td>
                       <span className={`badge ${getStatusBadge(asset.status)}`}>
@@ -283,18 +266,18 @@ export default function AssetsPage() {
                   <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                     <div className="bg-gray-50 rounded-lg p-2">
                       <p className="text-xs text-gray-500">Cost</p>
-                      <p className="font-semibold text-sm">{formatCurrency(asset.purchase_price)}</p>
+                      <p className="font-semibold text-sm">{formatCurrency(asset.purchase_price, (asset as any).currency)}</p>
                     </div>
                     <div className="bg-gray-50 rounded-lg p-2">
                       <p className="text-xs text-gray-500">Depreciation</p>
                       <p className="font-semibold text-sm text-amber-600">
-                        {formatCurrency(asset.accumulated_depreciation)}
+                        {formatCurrency(asset.accumulated_depreciation, (asset as any).currency)}
                       </p>
                     </div>
                     <div className="bg-gray-50 rounded-lg p-2">
                       <p className="text-xs text-gray-500">Book Value</p>
                       <p className="font-semibold text-sm text-green-600">
-                        {formatCurrency(asset.book_value)}
+                        {formatCurrency((asset as any).current_book_value, (asset as any).currency)}
                       </p>
                     </div>
                   </div>

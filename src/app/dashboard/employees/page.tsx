@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
 import type { Employee } from '@/types/breco';
 import { CurrencySelect } from '@/components/ui';
 import {
@@ -34,6 +33,7 @@ export default function EmployeesPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [departmentFilter, setDepartmentFilter] = useState<string>(searchParams.get('department') || 'all');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [payrollTotal, setPayrollTotal] = useState({ amount: 0, currency: 'UGX' });
 
   // Form state
   const [formData, setFormData] = useState({
@@ -72,6 +72,10 @@ export default function EmployeesPage() {
       
       const result = await response.json();
       setEmployees(result.data || []);
+      setPayrollTotal({
+        amount: Number(result.total_salary_in_base) || 0,
+        currency: result.currency || 'UGX',
+      });
     } catch (error) {
       console.error('Error fetching employees:', error);
       toast.error('Failed to load employees');
@@ -280,12 +284,7 @@ export default function EmployeesPage() {
         </div>
         <div className="card p-4">
           <p className="text-2xl font-bold text-breco-navy">
-            {formatCurrency(
-              employees
-                .filter(e => e.is_active)
-                .reduce((sum, e) => sum + (e.basic_salary || 0), 0),
-              'UGX'
-            )}
+            {formatCurrency(payrollTotal.amount, payrollTotal.currency)}
           </p>
           <p className="text-sm text-gray-500">Monthly Payroll</p>
         </div>

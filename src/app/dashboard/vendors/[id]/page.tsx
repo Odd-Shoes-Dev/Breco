@@ -3,7 +3,6 @@
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import {
   ArrowLeftIcon,
@@ -78,14 +77,10 @@ export default function VendorDetailPage({ params }: PageProps) {
 
   const loadVendor = async () => {
     try {
-      const { data, error } = await supabase
-        .from('vendors')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
-      setVendor(data);
+      const res = await fetch(`/api/vendors/${id}`);
+      if (!res.ok) throw new Error('Failed to load vendor');
+      const result = await res.json();
+      setVendor(result.data || result);
     } catch (error) {
       console.error('Failed to load vendor:', error);
     } finally {
@@ -95,15 +90,10 @@ export default function VendorDetailPage({ params }: PageProps) {
 
   const loadBills = async () => {
     try {
-      const { data, error } = await supabase
-        .from('bills')
-        .select('id, bill_number, bill_date, due_date, total, amount_paid, currency, status')
-        .eq('vendor_id', id)
-        .order('bill_date', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-      setBills(data || []);
+      const res = await fetch(`/api/bills?vendor_id=${id}&limit=10`);
+      if (!res.ok) throw new Error('Failed to load bills');
+      const result = await res.json();
+      setBills(result.data || []);
     } catch (error) {
       console.error('Failed to load bills:', error);
     }
@@ -128,12 +118,8 @@ export default function VendorDetailPage({ params }: PageProps) {
 
     try {
       setDeleting(true);
-      const { error } = await supabase
-        .from('vendors')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch(`/api/vendors/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
 
       alert('Vendor deleted successfully');
       router.push('/dashboard/vendors');

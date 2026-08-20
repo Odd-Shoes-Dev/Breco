@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
@@ -7,46 +7,31 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
 
-    // Get all invoices for this customer
-    const { data: invoices, error: invoicesError } = await supabase
-      .from('invoices')
-      .select('total, amount_paid, currency, invoice_date, status')
-      .eq('customer_id', id);
-
-    if (invoicesError) throw invoicesError;
+    const invoiceRows = await sql`
+      SELECT total, amount_paid, currency, invoice_date, status
+      FROM invoices
+      WHERE customer_id = ${id}
+    `;
 
     let totalOutstanding = 0;
+    const today = new Date().toISOString().split('T')[0];
 
-    // Convert each invoice's outstanding balance to USD
-    for (const invoice of invoices || []) {
-      // Skip paid/void/cancelled invoices
-      if (invoice.status === 'paid' || invoice.status === 'void' || invoice.status === 'cancelled') continue;
+    for (const invoice of invoiceRows as any[]) {
+      if (['paid', 'void', 'cancelled'].includes(invoice.status)) continue;
 
-      const total = parseFloat(invoice.total) || 0;
-      const paid = parseFloat(invoice.amount_paid) || 0;
-      const remaining = total - paid;
-
+      const remaining = (parseFloat(invoice.total) || 0) - (parseFloat(invoice.amount_paid) || 0);
       if (remaining <= 0) continue;
 
       let remainingInUSD = remaining;
-
-      // Convert to USD if not already
       if (invoice.currency && invoice.currency !== 'USD') {
-        const { data: converted, error: conversionError } = await supabase.rpc('convert_currency', {
-          p_amount: remaining,
-          p_from_currency: invoice.currency,
-          p_to_currency: 'USD',
-          p_date: invoice.invoice_date,
-        });
-
-        if (conversionError) {
-          console.error('Currency conversion error:', conversionError);
-          // Fall back to original amount if conversion fails
-          remainingInUSD = remaining;
-        } else {
-          remainingInUSD = converted || remaining;
+        try {
+          const convRows = await sql`
+            SELECT convert_currency(${remaining}, ${invoice.currency}, 'USD', ${invoice.invoice_date || today}) AS result
+          `;
+          remainingInUSD = Number(convRows[0]?.result ?? remaining);
+        } catch {
+          // fallback to unconverted
         }
       }
 

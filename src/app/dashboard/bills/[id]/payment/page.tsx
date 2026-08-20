@@ -8,7 +8,6 @@ import {
   ArrowLeftIcon,
   CreditCardIcon,
 } from '@heroicons/react/24/outline';
-import { supabase } from '@/lib/supabase/client';
 
 interface Bill {
   id: string;
@@ -44,35 +43,26 @@ export default function RecordBillPaymentPage() {
 
   const fetchBill = async () => {
     try {
-      const { data, error } = await supabase
-        .from('bills')
-        .select(`
-          id,
-          bill_number,
-          total,
-          amount_paid,
-          status,
-          vendor:vendors(name)
-        `)
-        .eq('id', params.id)
-        .single();
+      const res = await fetch(`/api/bills/${params.id}`);
+      if (!res.ok) throw new Error('Failed to load bill');
+      const result = await res.json();
+      const data = result.data || result;
 
-      if (error) throw error;
-
-      const vendorData = (data as any).vendor;
+      const vendorData = data.vendors;
       setBill({
         id: data.id,
         bill_number: data.bill_number,
-        total: parseFloat(data.total as any),
-        amount_paid: parseFloat(data.amount_paid as any),
+        total: parseFloat(data.total),
+        amount_paid: parseFloat(data.amount_paid),
         status: data.status,
+        currency: data.currency,
         vendor: Array.isArray(vendorData)
           ? vendorData[0] ?? null
           : vendorData ?? null,
       });
 
       // Pre-fill with balance due
-      const balanceDue = parseFloat(data.total as any) - parseFloat(data.amount_paid as any);
+      const balanceDue = parseFloat(data.total) - parseFloat(data.amount_paid);
       setFormData((prev) => ({
         ...prev,
         amount: balanceDue.toFixed(2),
@@ -104,13 +94,11 @@ export default function RecordBillPaymentPage() {
       }
 
       // Get bank accounts for payment
-      const { data: bankAccounts } = await supabase
-        .from('bank_accounts')
-        .select('id')
-        .eq('is_active', true)
-        .limit(1);
+      const bankRes = await fetch('/api/bank-accounts?active=true&limit=1');
+      const bankResult = await bankRes.json();
+      const bankAccounts = bankResult.data || [];
 
-      if (!bankAccounts || bankAccounts.length === 0) {
+      if (bankAccounts.length === 0) {
         throw new Error('No active bank account found. Please set up a bank account first.');
       }
 

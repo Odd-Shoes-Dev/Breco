@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase/client';
+
 import toast from 'react-hot-toast';
 import {
   PlusIcon,
@@ -33,12 +33,8 @@ export default function ProductCategoriesPage() {
 
   const loadCategories = async () => {
     try {
-      const { data, error } = await supabase
-        .from('product_categories')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
+      const res = await fetch('/api/product-categories');
+      const data = await res.json();
       setCategories(data || []);
     } catch (error) {
       console.error('Failed to load categories:', error);
@@ -53,25 +49,20 @@ export default function ProductCategoriesPage() {
 
     try {
       if (editingCategory) {
-        const { error } = await supabase
-          .from('product_categories')
-          .update({
-            name: formData.name,
-            description: formData.description || null,
-          })
-          .eq('id', editingCategory.id);
-
-        if (error) throw error;
+        const res = await fetch(`/api/product-categories/${editingCategory.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: formData.name, description: formData.description || null }),
+        });
+        if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
         toast.success('Category updated successfully');
       } else {
-        const { error } = await supabase
-          .from('product_categories')
-          .insert({
-            name: formData.name,
-            description: formData.description || null,
-          });
-
-        if (error) throw error;
+        const res = await fetch('/api/product-categories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: formData.name, description: formData.description || null }),
+        });
+        if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
         toast.success('Category created successfully');
       }
 
@@ -100,13 +91,8 @@ export default function ProductCategoriesPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from('product_categories')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
+      const res = await fetch(`/api/product-categories/${id}`, { method: 'DELETE' });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
       toast.success('Category deleted successfully');
       loadCategories();
     } catch (error: any) {

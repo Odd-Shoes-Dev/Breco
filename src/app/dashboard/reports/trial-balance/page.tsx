@@ -35,10 +35,24 @@ export default function TrialBalancePage() {
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().split('T')[0]);
   const [isLoading, setIsLoading] = useState(true);
   const [showZeroBalances, setShowZeroBalances] = useState(false);
+  const [companySettings, setCompanySettings] = useState<any>(null);
 
   useEffect(() => {
     fetchReport();
   }, [asOfDate]);
+
+  useEffect(() => {
+    const fetchCompanySettings = async () => {
+      try {
+        const response = await fetch('/api/settings');
+        const result = await response.json();
+        setCompanySettings(result);
+      } catch (error) {
+        console.error('Failed to fetch company settings:', error);
+      }
+    };
+    fetchCompanySettings();
+  }, []);
 
   const fetchReport = async () => {
     setIsLoading(true);
@@ -184,9 +198,10 @@ export default function TrialBalancePage() {
               <div class="address">Kampala Road Plot 14 Eagen House, Russel Street, P.O.Box 144011, Kampala, Uganda</div>
               <div class="address">Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com</div>
               <div class="address">URA TIN: 1014756280 • URSB Reg. No: 80020001634842</div>
+              ${companySettings?.duns_number ? `<div class="address">DUNS: ${companySettings.duns_number}</div>` : ''}
             </div>
           </div>
-          
+
           <div class="report-title">
             <h2>Trial Balance</h2>
             <div class="date">As of ${new Date(data.asOfDate).toLocaleDateString()}</div>

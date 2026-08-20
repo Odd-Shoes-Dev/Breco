@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import { ScaledNumber } from '@/components/ui/scaled-number';
 import {
@@ -32,6 +31,7 @@ export default function BillsPage() {
     dueThisWeek: 0,
     overdue: 0,
     paidThisMonth: 0,
+    currency: 'USD',
   });
   const pageSize = 20;
 
@@ -43,31 +43,17 @@ export default function BillsPage() {
   const loadBills = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('bills')
-        .select(`
-          *,
-          vendors (name)
-        `, { count: 'exact' })
-        .order('bill_date', { ascending: false });
+      const params = new URLSearchParams();
+      if (searchQuery) params.append('search', searchQuery);
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+      params.append('page', String(currentPage));
+      params.append('pageSize', String(pageSize));
 
-      if (searchQuery) {
-        query = query.or(`bill_number.ilike.%${searchQuery}%,reference.ilike.%${searchQuery}%`);
-      }
+      const res = await fetch(`/api/bills?${params.toString()}`);
+      const result = await res.json();
 
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
-
-      const from = (currentPage - 1) * pageSize;
-      const to = from + pageSize - 1;
-      query = query.range(from, to);
-
-      const { data, count, error } = await query;
-      if (error) throw error;
-
-      setBills(data || []);
-      setTotalCount(count || 0);
+      setBills(result.data || []);
+      setTotalCount(result.count || 0);
     } catch (error) {
       console.error('Failed to load bills:', error);
     } finally {
@@ -137,25 +123,25 @@ export default function BillsPage() {
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Total Unpaid</p>
-            <ScaledNumber value={formatCurrency(stats.totalUnpaid)} className="text-gray-900 mt-1" />
+            <ScaledNumber value={formatCurrency(stats.totalUnpaid, stats.currency)} className="text-gray-900 mt-1" />
           </div>
         </div>
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Due This Week</p>
-            <ScaledNumber value={formatCurrency(stats.dueThisWeek)} className="text-amber-600 mt-1" />
+            <ScaledNumber value={formatCurrency(stats.dueThisWeek, stats.currency)} className="text-amber-600 mt-1" />
           </div>
         </div>
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Overdue</p>
-            <ScaledNumber value={formatCurrency(stats.overdue)} className="text-red-600 mt-1" />
+            <ScaledNumber value={formatCurrency(stats.overdue, stats.currency)} className="text-red-600 mt-1" />
           </div>
         </div>
         <div className="card">
           <div className="card-body">
             <p className="text-sm text-gray-500">Paid This Month</p>
-            <ScaledNumber value={formatCurrency(stats.paidThisMonth)} className="text-green-600 mt-1" />
+            <ScaledNumber value={formatCurrency(stats.paidThisMonth, stats.currency)} className="text-green-600 mt-1" />
           </div>
         </div>
       </div>

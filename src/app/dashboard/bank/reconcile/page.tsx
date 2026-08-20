@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase/client';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import {
   ArrowLeftIcon,
@@ -50,17 +49,10 @@ export default function ReconcilePage() {
 
   const loadBankAccounts = async () => {
     try {
-      const { data, error } = await supabase
-        .from('bank_accounts')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-
-      if (error) {
-        console.error('Supabase error:', error);
-        throw error;
-      }
-      setBankAccounts(data || []);
+      const res = await fetch('/api/bank-accounts?active=true');
+      if (!res.ok) throw new Error('Failed to load bank accounts');
+      const result = await res.json();
+      setBankAccounts(result.data || []);
     } catch (error) {
       console.error('Failed to load bank accounts:', error);
     }
@@ -69,15 +61,10 @@ export default function ReconcilePage() {
   const loadTransactions = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('bank_transactions')
-        .select('*')
-        .eq('bank_account_id', selectedAccount)
-        .eq('is_reconciled', false)
-        .order('transaction_date', { ascending: false });
-
-      if (error) throw error;
-      setTransactions(data || []);
+      const res = await fetch(`/api/bank-transactions?bank_account_id=${selectedAccount}&reconciled=false`);
+      if (!res.ok) throw new Error('Failed to load transactions');
+      const result = await res.json();
+      setTransactions(result.data || []);
     } catch (error) {
       console.error('Failed to load transactions:', error);
     } finally {
@@ -121,15 +108,18 @@ export default function ReconcilePage() {
     try {
       setLoading(true);
 
-      // Mark selected transactions as reconciled
-      const { error } = await supabase
-        .from('bank_transactions')
-        .update({ 
-          is_reconciled: true
-        })
-        .in('id', Array.from(selectedTransactions));
+      // Mark selected transactions as reconciled via API
+      const reconcileRes = await fetch(`/api/bank-reconciliation/${selectedAccount}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transaction_ids: Array.from(selectedTransactions),
+          statement_balance: statementBalance,
+          statement_date: statementDate,
+        }),
+      });
 
-      if (error) throw error;
+      if (!reconcileRes.ok) throw new Error('Failed to reconcile');
 
       alert('Reconciliation completed successfully!');
       setSelectedTransactions(new Set());
