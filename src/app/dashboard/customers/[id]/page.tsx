@@ -41,29 +41,19 @@ export default function CustomerDetailPage({ params }: PageProps) {
 
   useEffect(() => {
     loadCustomer();
-    loadInvoices();
   }, [id]);
 
   const loadCustomer = async () => {
     try {
       const res = await fetch(`/api/customers/${id}`);
       if (!res.ok) throw new Error('Failed to load customer');
-      const data = await res.json();
+      const { data } = await res.json();
       setCustomer(data);
+      setInvoices(data?.recent_invoices || []);
     } catch (error) {
       console.error('Failed to load customer:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadInvoices = async () => {
-    try {
-      const res = await fetch(`/api/customers/${id}/balance`);
-      if (!res.ok) return;
-      // invoices are not returned by the balance endpoint; skip for now
-    } catch (error) {
-      console.error('Failed to load invoices:', error);
     }
   };
 
@@ -244,7 +234,7 @@ export default function CustomerDetailPage({ params }: PageProps) {
           <div className="space-y-3 sm:space-y-4">
             <div>
               <p className="text-xs sm:text-sm text-gray-500">Current Balance</p>
-              <p className="text-xl sm:text-2xl font-bold text-gray-900">{formatCurrency(customer.current_balance || 0)}</p>
+              <p className="text-xl sm:text-2xl font-bold text-gray-900">{formatCurrency(customer.current_balance || 0, customer.currency || 'USD')}</p>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:gap-4 pt-3 sm:pt-4 border-t border-gray-200">
               <div>
