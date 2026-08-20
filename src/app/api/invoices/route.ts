@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     if (status && status !== 'all' && customerId && search) {
       const q = `%${search}%`;
       rows = await sql`
-        SELECT i.*, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        SELECT i.*, (i.total - i.amount_paid) AS balance_due, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
         FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
         WHERE i.status = ${status} AND i.customer_id = ${customerId} AND i.invoice_number ILIKE ${q}
         ORDER BY i.invoice_date DESC LIMIT ${limit} OFFSET ${offset}
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       `;
     } else if (status && status !== 'all' && customerId) {
       rows = await sql`
-        SELECT i.*, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        SELECT i.*, (i.total - i.amount_paid) AS balance_due, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
         FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
         WHERE i.status = ${status} AND i.customer_id = ${customerId}
         ORDER BY i.invoice_date DESC LIMIT ${limit} OFFSET ${offset}
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     } else if (status && status !== 'all' && search) {
       const q = `%${search}%`;
       rows = await sql`
-        SELECT i.*, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        SELECT i.*, (i.total - i.amount_paid) AS balance_due, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
         FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
         WHERE i.status = ${status} AND i.invoice_number ILIKE ${q}
         ORDER BY i.invoice_date DESC LIMIT ${limit} OFFSET ${offset}
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     } else if (customerId && search) {
       const q = `%${search}%`;
       rows = await sql`
-        SELECT i.*, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        SELECT i.*, (i.total - i.amount_paid) AS balance_due, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
         FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
         WHERE i.customer_id = ${customerId} AND i.invoice_number ILIKE ${q}
         ORDER BY i.invoice_date DESC LIMIT ${limit} OFFSET ${offset}
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
       countRows = await sql`SELECT COUNT(*) FROM invoices WHERE customer_id = ${customerId} AND invoice_number ILIKE ${`%${search}%`}`;
     } else if (status && status !== 'all') {
       rows = await sql`
-        SELECT i.*, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        SELECT i.*, (i.total - i.amount_paid) AS balance_due, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
         FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
         WHERE i.status = ${status}
         ORDER BY i.invoice_date DESC LIMIT ${limit} OFFSET ${offset}
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
       countRows = await sql`SELECT COUNT(*) FROM invoices WHERE status = ${status}`;
     } else if (customerId) {
       rows = await sql`
-        SELECT i.*, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        SELECT i.*, (i.total - i.amount_paid) AS balance_due, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
         FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
         WHERE i.customer_id = ${customerId}
         ORDER BY i.invoice_date DESC LIMIT ${limit} OFFSET ${offset}
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
     } else if (search) {
       const q = `%${search}%`;
       rows = await sql`
-        SELECT i.*, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        SELECT i.*, (i.total - i.amount_paid) AS balance_due, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
         FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
         WHERE i.invoice_number ILIKE ${q}
         ORDER BY i.invoice_date DESC LIMIT ${limit} OFFSET ${offset}
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
       countRows = await sql`SELECT COUNT(*) FROM invoices WHERE invoice_number ILIKE ${`%${search}%`}`;
     } else {
       rows = await sql`
-        SELECT i.*, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
+        SELECT i.*, (i.total - i.amount_paid) AS balance_due, json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customers
         FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
         ORDER BY i.invoice_date DESC LIMIT ${limit} OFFSET ${offset}
       `;

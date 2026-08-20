@@ -9,7 +9,7 @@ export async function GET(request: NextRequest, context: any) {
     const rows = await sql`
       SELECT pr.*,
         row_to_json(c.*) AS customer,
-        row_to_json(a.*) AS deposit_account,
+        row_to_json(ba.*) AS deposit_account,
         row_to_json(je.*) AS journal_entry,
         (
           SELECT json_agg(json_build_object(
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest, context: any) {
         ) AS payment_applications
       FROM payments_received pr
       LEFT JOIN customers c ON c.id = pr.customer_id
-      LEFT JOIN accounts a ON a.id = pr.deposit_to_account_id
+      LEFT JOIN bank_accounts ba ON ba.id = pr.bank_account_id
       LEFT JOIN journal_entries je ON je.id = pr.journal_entry_id
       WHERE pr.id = ${params.id}
     `;
