@@ -129,7 +129,7 @@ export async function PATCH(request: NextRequest, context: any) {
         payment_terms = COALESCE(${updateData.payment_terms ?? null}, payment_terms),
         po_number = CASE WHEN ${updateData.po_number !== undefined}::boolean THEN ${updateData.po_number ?? null}::text ELSE po_number END,
         notes = CASE WHEN ${updateData.notes !== undefined}::boolean THEN ${updateData.notes ?? null}::text ELSE notes END,
-        status = COALESCE(${updateData.status ?? null}::text, status)
+        status = COALESCE(${updateData.status ?? null}::invoice_status, status)
       WHERE id = ${resolvedParams.id}
       RETURNING *
     `;
