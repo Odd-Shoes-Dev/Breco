@@ -434,9 +434,9 @@ export default function InvoiceDetailPage() {
             </thead>
             <tbody>
               ${lineItems.map(item => {
-                const lineSubtotal = Number(item.line_total);
+                const lineTotal = Number(item.line_total);
                 const lineTaxAmt = Number(item.tax_amount);
-                const lineTotal = lineSubtotal + lineTaxAmt;
+                const lineSubtotal = lineTotal - lineTaxAmt;
                 const taxPct = (item.tax_rate || 0) * 100;
                 const taxPctLabel = taxPct > 0 ? `${taxPct % 1 === 0 ? taxPct : taxPct.toFixed(2)}%` : '—';
                 return `
@@ -851,9 +851,9 @@ export default function InvoiceDetailPage() {
                   </thead>
                   <tbody>
                     {lineItems.map((item) => {
-                      const lineSubtotal = Number(item.line_total);
+                      const lineTotal = Number(item.line_total);
                       const lineTaxAmt = Number(item.tax_amount);
-                      const lineTotal = lineSubtotal + lineTaxAmt;
+                      const lineSubtotal = lineTotal - lineTaxAmt;
                       const taxPct = (item.tax_rate || 0) * 100;
                       return (
                       <tr key={item.id} className="border-b">
