@@ -45,7 +45,7 @@ export async function PATCH(request: NextRequest, context: any) {
 
     // Get existing bill with lines
     const existingRows = await sql`
-      SELECT b.*, json_agg(bl.*) AS bill_lines
+      SELECT b.*, json_agg(bl.* ORDER BY bl.line_number) AS bill_lines
       FROM bills b
       LEFT JOIN bill_lines bl ON bl.bill_id = b.id
       WHERE b.id = ${params.id}
