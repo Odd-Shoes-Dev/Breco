@@ -114,10 +114,23 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
       setDefaultTaxRate(0);
       setInvoice(invoiceData);
 
+      // Convert to YYYY-MM-DD using local date parts — the API returns DATE
+      // columns as full ISO timestamps (parsed in the server's timezone),
+      // which a native <input type="date"> won't accept as-is and a naive
+      // UTC split would show the wrong calendar day.
+      const toDateInputValue = (value: string) => {
+        if (!value) return '';
+        const d = new Date(value);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
       const formData = {
         customer_id: invoiceData.customer_id,
-        invoice_date: invoiceData.invoice_date,
-        due_date: invoiceData.due_date,
+        invoice_date: toDateInputValue(invoiceData.invoice_date),
+        due_date: toDateInputValue(invoiceData.due_date),
         payment_terms: invoiceData.payment_terms,
         po_number: invoiceData.po_number || '',
         notes: invoiceData.notes || '',

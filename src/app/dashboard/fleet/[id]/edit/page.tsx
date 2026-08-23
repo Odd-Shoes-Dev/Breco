@@ -13,6 +13,15 @@ import {
   InformationCircleIcon,
 } from '@heroicons/react/24/outline';
 
+const toDateInputValue = (value: string) => {
+  if (!value) return '';
+  const d = new Date(value);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 interface VehicleFormData {
   vehicle_number: string;
   registration_number: string;
@@ -117,17 +126,17 @@ export default function EditVehiclePage() {
         seating_capacity: vehicleData.seating_capacity || 7,
         luggage_capacity: vehicleData.luggage_capacity || '',
         features: featuresString,
-        purchase_date: vehicleData.purchase_date || '',
+        purchase_date: toDateInputValue(vehicleData.purchase_date),
         purchase_price: vehicleData.purchase_price || 0,
         current_value: vehicleData.current_value || 0,
-        insurance_expiry: vehicleData.insurance_expiry || '',
+        insurance_expiry: toDateInputValue(vehicleData.insurance_expiry),
         daily_rate_usd: vehicleData.daily_rate_usd || 0,
         daily_rate_ugx: vehicleData.daily_rate_ugx || 0,
         weekly_rate_usd: vehicleData.weekly_rate_usd || 0,
         mileage_rate: vehicleData.mileage_rate || 0,
         status: vehicleData.status || 'available',
         current_mileage: vehicleData.current_mileage || 0,
-        last_service_date: vehicleData.last_service_date || '',
+        last_service_date: toDateInputValue(vehicleData.last_service_date),
         next_service_mileage: vehicleData.next_service_mileage || 0,
         location: vehicleData.location || '',
         notes: vehicleData.notes || '',

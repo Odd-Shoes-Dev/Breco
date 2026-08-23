@@ -11,6 +11,15 @@ import {
   TrashIcon,
 } from '@heroicons/react/24/outline';
 
+const toDateInputValue = (value: string) => {
+  if (!value) return '';
+  const d = new Date(value);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 interface Vendor {
   id: string;
   name: string;
@@ -93,8 +102,8 @@ export default function EditBillPage() {
       setBill(billData);
       setFormData({
         vendor_id: billData.vendor_id,
-        bill_date: billData.bill_date,
-        due_date: billData.due_date,
+        bill_date: toDateInputValue(billData.bill_date),
+        due_date: toDateInputValue(billData.due_date),
         vendor_invoice_number: billData.vendor_invoice_number || '',
         notes: billData.notes || '',
       });

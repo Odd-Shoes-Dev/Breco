@@ -38,6 +38,15 @@ interface Expense {
   is_billable: boolean;
 }
 
+const toDateInputValue = (value: string) => {
+  if (!value) return '';
+  const d = new Date(value);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function EditExpensePage() {
   const params = useParams();
   const router = useRouter();
@@ -122,7 +131,7 @@ export default function EditExpensePage() {
       setFormData({
         vendor_id: data.vendor_id || '',
         payee: data.payee || '',
-        expense_date: data.expense_date,
+        expense_date: toDateInputValue(data.expense_date),
         category: data.category || '',
         department: data.department || '',
         expense_account_id: data.expense_account_id,

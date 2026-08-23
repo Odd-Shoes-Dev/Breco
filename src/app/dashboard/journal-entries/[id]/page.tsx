@@ -13,6 +13,15 @@ import {
 } from '@heroicons/react/24/outline';
 import { formatCurrency, cn } from '@/lib/utils';
 
+const toDateInputValue = (value: string) => {
+  if (!value) return '';
+  const d = new Date(value);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 interface LineItem {
   id: string;
   accountCode: string;
@@ -79,7 +88,7 @@ export default function EditJournalEntryPage() {
         // Transform entry data to form format
         setFormData({
           entryNumber: entry.entry_number,
-          date: entry.entry_date,
+          date: toDateInputValue(entry.entry_date),
           reference: entry.reference || '',
           description: entry.description || '',
           type: entry.source || 'manual',
