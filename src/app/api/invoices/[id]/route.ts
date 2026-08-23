@@ -30,7 +30,7 @@ export async function GET(request: NextRequest, context: any) {
               'discount_percent', il.discount_percent, 'discount_amount', il.discount_amount,
               'tax_rate', il.tax_rate, 'tax_amount', il.tax_amount, 'line_total', il.line_total,
               'products', json_build_object('id', p.id, 'name', p.name, 'sku', p.sku)
-            )
+            ) ORDER BY il.line_number
           ) FILTER (WHERE il.id IS NOT NULL),
           '[]'
         ) AS invoice_lines
@@ -82,7 +82,7 @@ export async function PATCH(request: NextRequest, context: any) {
 
     // Get existing invoice with lines
     const existingRows = await sql`
-      SELECT i.*, COALESCE(json_agg(il.*) FILTER (WHERE il.id IS NOT NULL), '[]') AS invoice_lines
+      SELECT i.*, COALESCE(json_agg(il.* ORDER BY il.line_number) FILTER (WHERE il.id IS NOT NULL), '[]') AS invoice_lines
       FROM invoices i
       LEFT JOIN invoice_lines il ON il.invoice_id = i.id
       WHERE i.id = ${resolvedParams.id}
@@ -304,7 +304,7 @@ export async function DELETE(request: NextRequest, context: any) {
 
     // Get existing invoice with lines
     const existingRows = await sql`
-      SELECT i.*, COALESCE(json_agg(il.*) FILTER (WHERE il.id IS NOT NULL), '[]') AS invoice_lines
+      SELECT i.*, COALESCE(json_agg(il.* ORDER BY il.line_number) FILTER (WHERE il.id IS NOT NULL), '[]') AS invoice_lines
       FROM invoices i
       LEFT JOIN invoice_lines il ON il.invoice_id = i.id
       WHERE i.id = ${resolvedParams.id}
