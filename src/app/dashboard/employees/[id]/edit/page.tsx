@@ -7,6 +7,15 @@ import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 import { CurrencySelect } from '@/components/ui';
 
+const toDateInputValue = (value: string) => {
+  if (!value) return '';
+  const d = new Date(value);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function EmployeeEditPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -70,7 +79,7 @@ export default function EmployeeEditPage({ params }: { params: Promise<{ id: str
         national_id: employee.national_id || '',
         nssf_number: employee.nssf_number || '',
         tin: employee.tin || '',
-        date_of_birth: employee.date_of_birth || '',
+        date_of_birth: toDateInputValue(employee.date_of_birth),
         gender: employee.gender || '',
         nationality: employee.nationality || 'Ugandan',
         address: employee.address || '',
@@ -80,8 +89,8 @@ export default function EmployeeEditPage({ params }: { params: Promise<{ id: str
         department: employee.department || '',
         employment_type: employee.employment_type || 'full_time',
         employment_status: employee.employment_status || 'active',
-        hire_date: employee.hire_date || '',
-        termination_date: employee.termination_date || '',
+        hire_date: toDateInputValue(employee.hire_date),
+        termination_date: toDateInputValue(employee.termination_date),
         basic_salary: employee.basic_salary || 0,
         salary_currency: employee.salary_currency || 'UGX',
         pay_frequency: employee.pay_frequency || 'monthly',

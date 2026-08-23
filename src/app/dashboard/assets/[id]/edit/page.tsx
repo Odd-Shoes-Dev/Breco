@@ -26,6 +26,15 @@ interface FixedAsset {
   notes: string | null;
 }
 
+const toDateInputValue = (value: string) => {
+  if (!value) return '';
+  const d = new Date(value);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function EditAssetPage() {
   const params = useParams();
   const router = useRouter();
@@ -66,12 +75,12 @@ export default function EditAssetPage() {
         description: data.description || '',
         asset_number: data.asset_number,
         serial_number: data.serial_number || '',
-        purchase_date: data.purchase_date,
+        purchase_date: toDateInputValue(data.purchase_date),
         purchase_price: parseFloat(data.purchase_price),
         residual_value: parseFloat(data.residual_value),
         useful_life_years: Math.round(data.useful_life_months / 12),
         depreciation_method: data.depreciation_method,
-        depreciation_start_date: data.depreciation_start_date,
+        depreciation_start_date: toDateInputValue(data.depreciation_start_date),
         location: data.location || '',
         notes: data.notes || '',
       });

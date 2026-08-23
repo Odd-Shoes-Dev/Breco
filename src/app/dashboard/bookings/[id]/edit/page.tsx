@@ -19,6 +19,15 @@ import {
 import type { Customer } from '@/types/database';
 import type { TourPackage, Hotel, Vehicle, BookingStatus } from '@/types/breco';
 
+const toDateInputValue = (value: string) => {
+  if (!value) return '';
+  const d = new Date(value);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 interface BookingFormData {
   customer_id: string;
   booking_type: 'tour' | 'hotel' | 'car_hire' | 'custom';
@@ -200,9 +209,9 @@ export default function EditBookingPage({ params }: EditBookingPageProps) {
         rental_type: booking.rental_type || '',
         pickup_location: booking.pickup_location || '',
         dropoff_location: booking.dropoff_location || '',
-        booking_date: booking.booking_date ? new Date(booking.booking_date).toISOString().split('T')[0] : '',
-        travel_start_date: booking.travel_start_date ? new Date(booking.travel_start_date).toISOString().split('T')[0] : '',
-        travel_end_date: booking.travel_end_date ? new Date(booking.travel_end_date).toISOString().split('T')[0] : '',
+        booking_date: booking.booking_date ? toDateInputValue(booking.booking_date) : '',
+        travel_start_date: booking.travel_start_date ? toDateInputValue(booking.travel_start_date) : '',
+        travel_end_date: booking.travel_end_date ? toDateInputValue(booking.travel_end_date) : '',
         num_adults: booking.num_adults || 2,
         num_children: booking.num_children || 0,
         num_infants: booking.num_infants || 0,
