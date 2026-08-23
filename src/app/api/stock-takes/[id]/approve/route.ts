@@ -19,7 +19,7 @@ export async function POST(
     const stockTakeRows = await sql`
       SELECT st.*,
         (
-          SELECT json_agg(json_build_object('id', stl.id, 'product_id', stl.product_id, 'variance', stl.variance))
+          SELECT json_agg(json_build_object('id', stl.id, 'product_id', stl.product_id, 'variance', stl.variance) ORDER BY stl.created_at)
           FROM stock_take_items stl
           WHERE stl.stock_take_id = st.id
         ) AS stock_take_lines

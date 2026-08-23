@@ -13,18 +13,18 @@ export async function GET(
     const rows = await sql`
       SELECT tp.*,
         row_to_json(d.*) AS primary_destination,
-        (SELECT json_agg(tpi.*) FROM tour_package_images tpi WHERE tpi.tour_package_id = tp.id) AS images,
-        (SELECT json_agg(ti.*) FROM tour_itineraries ti WHERE ti.tour_package_id = tp.id) AS itineraries,
+        (SELECT json_agg(tpi.* ORDER BY tpi.display_order) FROM tour_package_images tpi WHERE tpi.tour_package_id = tp.id) AS images,
+        (SELECT json_agg(ti.* ORDER BY ti.day_number) FROM tour_itineraries ti WHERE ti.tour_package_id = tp.id) AS itineraries,
         (
           SELECT json_agg(json_build_object(
             'id', tpd.id, 'tour_package_id', tpd.tour_package_id, 'destination_id', tpd.destination_id,
             'destination', row_to_json(dest.*)
-          ))
+          ) ORDER BY tpd.visit_order)
           FROM tour_package_destinations tpd
           LEFT JOIN destinations dest ON dest.id = tpd.destination_id
           WHERE tpd.tour_package_id = tp.id
         ) AS destinations,
-        (SELECT json_agg(tsp.*) FROM tour_seasonal_pricing tsp WHERE tsp.tour_package_id = tp.id) AS seasonal_pricing
+        (SELECT json_agg(tsp.* ORDER BY tsp.start_date) FROM tour_seasonal_pricing tsp WHERE tsp.tour_package_id = tp.id) AS seasonal_pricing
       FROM tour_packages tp
       LEFT JOIN destinations d ON d.id = tp.primary_destination_id
       WHERE tp.id = ${id}

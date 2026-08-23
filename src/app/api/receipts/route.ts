@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
               'id', pa.id,
               'amount_applied', pa.amount_applied,
               'invoice', json_build_object('id', i.id, 'invoice_number', i.invoice_number, 'total', i.total)
-            ))
+            ) ORDER BY pa.applied_at)
             FROM payment_applications pa
             LEFT JOIN invoices i ON i.id = pa.invoice_id
             WHERE pa.payment_id = pr.id
@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
               'id', pa.id,
               'amount_applied', pa.amount_applied,
               'invoice', json_build_object('id', i.id, 'invoice_number', i.invoice_number, 'total', i.total)
-            ))
+            ) ORDER BY pa.applied_at)
             FROM payment_applications pa
             LEFT JOIN invoices i ON i.id = pa.invoice_id
             WHERE pa.payment_id = pr.id
@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
               'id', pa.id,
               'amount_applied', pa.amount_applied,
               'invoice', json_build_object('id', i.id, 'invoice_number', i.invoice_number, 'total', i.total)
-            ))
+            ) ORDER BY pa.applied_at)
             FROM payment_applications pa
             LEFT JOIN invoices i ON i.id = pa.invoice_id
             WHERE pa.payment_id = pr.id
@@ -140,7 +140,7 @@ export async function GET(request: NextRequest) {
               'id', pa.id,
               'amount_applied', pa.amount_applied,
               'invoice', json_build_object('id', i.id, 'invoice_number', i.invoice_number, 'total', i.total)
-            ))
+            ) ORDER BY pa.applied_at)
             FROM payment_applications pa
             LEFT JOIN invoices i ON i.id = pa.invoice_id
             WHERE pa.payment_id = pr.id
@@ -163,7 +163,7 @@ export async function GET(request: NextRequest) {
               'id', pa.id,
               'amount_applied', pa.amount_applied,
               'invoice', json_build_object('id', i.id, 'invoice_number', i.invoice_number, 'total', i.total)
-            ))
+            ) ORDER BY pa.applied_at)
             FROM payment_applications pa
             LEFT JOIN invoices i ON i.id = pa.invoice_id
             WHERE pa.payment_id = pr.id
@@ -186,7 +186,7 @@ export async function GET(request: NextRequest) {
               'id', pa.id,
               'amount_applied', pa.amount_applied,
               'invoice', json_build_object('id', i.id, 'invoice_number', i.invoice_number, 'total', i.total)
-            ))
+            ) ORDER BY pa.applied_at)
             FROM payment_applications pa
             LEFT JOIN invoices i ON i.id = pa.invoice_id
             WHERE pa.payment_id = pr.id
@@ -389,7 +389,7 @@ export async function POST(request: NextRequest) {
             'id', pa.id,
             'amount_applied', pa.amount_applied,
             'invoice', json_build_object('id', i.id, 'invoice_number', i.invoice_number, 'total', i.total)
-          ))
+          ) ORDER BY pa.applied_at)
           FROM payment_applications pa
           LEFT JOIN invoices i ON i.id = pa.invoice_id
           WHERE pa.payment_id = pr.id

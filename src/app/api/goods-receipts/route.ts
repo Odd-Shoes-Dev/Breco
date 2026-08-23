@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
                 'ordered_quantity', pol.quantity,
                 'unit_price', pol.unit_price
               )
-            )
+            ) ORDER BY grl.created_at
           ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
         FROM goods_receipts gr
         LEFT JOIN purchase_orders po ON po.id = gr.po_id
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
                 'ordered_quantity', pol.quantity,
                 'unit_price', pol.unit_price
               )
-            )
+            ) ORDER BY grl.created_at
           ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
         FROM goods_receipts gr
         LEFT JOIN purchase_orders po ON po.id = gr.po_id
@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
                 'ordered_quantity', pol.quantity,
                 'unit_price', pol.unit_price
               )
-            )
+            ) ORDER BY grl.created_at
           ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
         FROM goods_receipts gr
         LEFT JOIN purchase_orders po ON po.id = gr.po_id
@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
                 'ordered_quantity', pol.quantity,
                 'unit_price', pol.unit_price
               )
-            )
+            ) ORDER BY grl.created_at
           ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
         FROM goods_receipts gr
         LEFT JOIN purchase_orders po ON po.id = gr.po_id
@@ -274,7 +274,7 @@ export async function POST(request: NextRequest) {
             'description', grl.description,
             'product_id', grl.product_id,
             'purchase_order_line', row_to_json(pol.*)
-          )
+          ) ORDER BY grl.created_at
         ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
       FROM goods_receipts gr
       LEFT JOIN purchase_orders po ON po.id = gr.po_id

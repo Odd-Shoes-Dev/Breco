@@ -16,7 +16,7 @@ export async function POST(request: NextRequest, context: any) {
     // Get the quotation with lines
     const rows = await sql`
       SELECT i.*,
-        COALESCE(json_agg(row_to_json(il.*)) FILTER (WHERE il.id IS NOT NULL), '[]') AS invoice_lines
+        COALESCE(json_agg(row_to_json(il.*) ORDER BY il.line_number) FILTER (WHERE il.id IS NOT NULL), '[]') AS invoice_lines
       FROM invoices i
       LEFT JOIN invoice_lines il ON il.invoice_id = i.id
       WHERE i.id = ${params.id} AND i.document_type = 'quotation'

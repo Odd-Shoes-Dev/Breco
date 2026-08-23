@@ -107,7 +107,7 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
 
       const customersData = await customersRes.json();
       const productsData = await productsRes.json();
-      const invoiceData = await invoiceRes.json();
+      const { data: invoiceData } = await invoiceRes.json();
 
       setCustomers(customersData.data || []);
       setProducts(productsData.data || []);
@@ -122,7 +122,7 @@ export default function EditInvoicePage({ params }: { params: Promise<{ id: stri
         po_number: invoiceData.po_number || '',
         notes: invoiceData.notes || '',
         currency: invoiceData.currency || 'USD',
-        lines: (invoiceData.line_items || []).map((line: InvoiceLine) => ({
+        lines: (invoiceData.invoice_lines || []).map((line: InvoiceLine) => ({
           id: line.id,
           product_id: line.product_id || '',
           description: line.description,

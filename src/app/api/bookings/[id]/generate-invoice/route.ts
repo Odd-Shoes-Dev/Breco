@@ -150,7 +150,7 @@ export async function POST(
       SELECT
         i.*,
         json_build_object('id', c.id, 'name', c.name, 'email', c.email) AS customer,
-        json_agg(il.*) AS invoice_lines
+        json_agg(il.* ORDER BY il.line_number) AS invoice_lines
       FROM invoices i
       LEFT JOIN customers c ON c.id = i.customer_id
       LEFT JOIN invoice_lines il ON il.invoice_id = i.id
