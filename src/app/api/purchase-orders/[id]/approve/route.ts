@@ -47,7 +47,7 @@ export async function POST(
     const updatedRows = await sql`
       SELECT po.*,
         json_build_object('id', v.id, 'name', v.name, 'email', v.email) AS vendor,
-        COALESCE(json_agg(row_to_json(pol.*)) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
+        COALESCE(json_agg(row_to_json(pol.*) ORDER BY pol.line_number) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
       FROM purchase_orders po
       LEFT JOIN vendors v ON v.id = po.vendor_id
       LEFT JOIN purchase_order_lines pol ON pol.po_id = po.id

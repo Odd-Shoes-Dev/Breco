@@ -34,7 +34,7 @@ export async function GET(
                 'last_name', e.last_name,
                 'employee_id', e.employee_id
               )
-            )
+            ) ORDER BY ps.created_at
           ) FILTER (WHERE ps.id IS NOT NULL),
           '[]'
         ) AS payslips

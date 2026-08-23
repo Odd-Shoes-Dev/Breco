@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
             json_build_object(
               'id', pol.id, 'product_id', pol.product_id, 'description', pol.description,
               'quantity', pol.quantity, 'unit_price', pol.unit_price, 'line_total', pol.line_total
-            )
+            ) ORDER BY pol.line_number
           ) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
         FROM purchase_orders po
         LEFT JOIN vendors v ON v.id = po.vendor_id
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
             json_build_object(
               'id', pol.id, 'product_id', pol.product_id, 'description', pol.description,
               'quantity', pol.quantity, 'unit_price', pol.unit_price, 'line_total', pol.line_total
-            )
+            ) ORDER BY pol.line_number
           ) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
         FROM purchase_orders po
         LEFT JOIN vendors v ON v.id = po.vendor_id
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
             json_build_object(
               'id', pol.id, 'product_id', pol.product_id, 'description', pol.description,
               'quantity', pol.quantity, 'unit_price', pol.unit_price, 'line_total', pol.line_total
-            )
+            ) ORDER BY pol.line_number
           ) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
         FROM purchase_orders po
         LEFT JOIN vendors v ON v.id = po.vendor_id
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
             json_build_object(
               'id', pol.id, 'product_id', pol.product_id, 'description', pol.description,
               'quantity', pol.quantity, 'unit_price', pol.unit_price, 'line_total', pol.line_total
-            )
+            ) ORDER BY pol.line_number
           ) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
         FROM purchase_orders po
         LEFT JOIN vendors v ON v.id = po.vendor_id
@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
     const completeRows = await sql`
       SELECT po.*,
         json_build_object('id', v.id, 'name', v.name, 'email', v.email, 'phone', v.phone) AS vendor,
-        COALESCE(json_agg(row_to_json(pol.*)) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
+        COALESCE(json_agg(row_to_json(pol.*) ORDER BY pol.line_number) FILTER (WHERE pol.id IS NOT NULL), '[]') AS purchase_order_lines
       FROM purchase_orders po
       LEFT JOIN vendors v ON v.id = po.vendor_id
       LEFT JOIN purchase_order_lines pol ON pol.po_id = po.id

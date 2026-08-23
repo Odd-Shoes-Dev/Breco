@@ -13,10 +13,10 @@ export async function GET(
     const rows = await sql`
       SELECT
         e.*,
-        COALESCE((SELECT json_agg(a.*) FROM employee_allowances a WHERE a.employee_id = e.id), '[]') AS allowances,
-        COALESCE((SELECT json_agg(d.*) FROM employee_deductions d WHERE d.employee_id = e.id), '[]') AS deductions,
-        COALESCE((SELECT json_agg(sa.*) FROM salary_advances sa WHERE sa.employee_id = e.id), '[]') AS advances,
-        COALESCE((SELECT json_agg(r.*) FROM employee_reimbursements r WHERE r.employee_id = e.id), '[]') AS reimbursements
+        COALESCE((SELECT json_agg(a.* ORDER BY a.created_at) FROM employee_allowances a WHERE a.employee_id = e.id), '[]') AS allowances,
+        COALESCE((SELECT json_agg(d.* ORDER BY d.created_at) FROM employee_deductions d WHERE d.employee_id = e.id), '[]') AS deductions,
+        COALESCE((SELECT json_agg(sa.* ORDER BY sa.created_at) FROM salary_advances sa WHERE sa.employee_id = e.id), '[]') AS advances,
+        COALESCE((SELECT json_agg(r.* ORDER BY r.created_at) FROM employee_reimbursements r WHERE r.employee_id = e.id), '[]') AS reimbursements
       FROM employees e
       WHERE e.id = ${id}
     `;

@@ -15,10 +15,16 @@ export async function GET(request: NextRequest, context: any) {
           'id', v.id, 'name', v.name,
           'email', v.email, 'phone', v.phone, 'address', v.address,
           'city', v.city, 'country', v.country
-        ) AS vendors
+        ) AS vendors,
+        COALESCE(
+          json_agg(bl.* ORDER BY bl.line_number) FILTER (WHERE bl.id IS NOT NULL),
+          '[]'
+        ) AS bill_lines
       FROM bills b
       LEFT JOIN vendors v ON v.id = b.vendor_id
+      LEFT JOIN bill_lines bl ON bl.bill_id = b.id
       WHERE b.id = ${params.id}
+      GROUP BY b.id, v.id, v.name, v.email, v.phone, v.address, v.city, v.country
     `;
 
     if (rows.length === 0) {

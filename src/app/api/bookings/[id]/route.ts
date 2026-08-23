@@ -17,9 +17,9 @@ export async function GET(
         json_build_object('id', tp.id, 'name', tp.name, 'package_code', tp.package_code, 'duration_days', tp.duration_days, 'price_per_person', tp.price_per_person) AS tour_package,
         json_build_object('id', h.id, 'name', h.name, 'star_rating', h.star_rating, 'address', h.address, 'phone', h.phone) AS hotel,
         json_build_object('id', v.id, 'registration_number', v.registration_number, 'vehicle_type', v.vehicle_type, 'seating_capacity', v.seating_capacity, 'daily_rate_usd', v.daily_rate_usd) AS vehicle,
-        COALESCE((SELECT json_agg(g.*) FROM booking_guests g WHERE g.booking_id = b.id), '[]') AS guests,
-        COALESCE((SELECT json_agg(a.*) FROM booking_activities a WHERE a.booking_id = b.id), '[]') AS activities,
-        COALESCE((SELECT json_agg(p.*) FROM booking_payments p WHERE p.booking_id = b.id), '[]') AS payments
+        COALESCE((SELECT json_agg(g.* ORDER BY g.created_at) FROM booking_guests g WHERE g.booking_id = b.id), '[]') AS guests,
+        COALESCE((SELECT json_agg(a.* ORDER BY a.created_at) FROM booking_activities a WHERE a.booking_id = b.id), '[]') AS activities,
+        COALESCE((SELECT json_agg(p.* ORDER BY p.payment_date) FROM booking_payments p WHERE p.booking_id = b.id), '[]') AS payments
       FROM bookings b
       LEFT JOIN customers c ON c.id = b.customer_id
       LEFT JOIN tour_packages tp ON tp.id = b.tour_package_id

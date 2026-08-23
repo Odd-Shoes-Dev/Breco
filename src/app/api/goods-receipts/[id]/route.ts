@@ -29,7 +29,7 @@ export async function GET(
               'id', pol.id, 'description', pol.description,
               'quantity', pol.quantity, 'unit_price', pol.unit_price
             )
-          )
+          ) ORDER BY grl.created_at
         ) FILTER (WHERE grl.id IS NOT NULL) AS goods_receipt_lines
       FROM goods_receipts gr
       LEFT JOIN purchase_orders po ON po.id = gr.po_id

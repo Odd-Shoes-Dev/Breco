@@ -20,7 +20,7 @@ export async function GET(request: NextRequest, context: any) {
               'invoice_date', i.invoice_date, 'total', i.total,
               'amount_paid', i.amount_paid, 'status', i.status
             )
-          ))
+          ) ORDER BY pa.applied_at)
           FROM payment_applications pa
           LEFT JOIN invoices i ON i.id = pa.invoice_id
           WHERE pa.payment_id = pr.id
@@ -50,7 +50,7 @@ export async function DELETE(request: NextRequest, context: any) {
     const paymentRows = await sql`
       SELECT pr.*,
         (
-          SELECT json_agg(json_build_object('id', pa.id, 'invoice_id', pa.invoice_id, 'amount_applied', pa.amount_applied))
+          SELECT json_agg(json_build_object('id', pa.id, 'invoice_id', pa.invoice_id, 'amount_applied', pa.amount_applied) ORDER BY pa.applied_at)
           FROM payment_applications pa
           WHERE pa.payment_id = pr.id
         ) AS payment_applications

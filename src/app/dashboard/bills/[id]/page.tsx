@@ -88,8 +88,9 @@ export default function BillDetailPage() {
       const billRes = await fetch(`/api/bills/${params.id}`);
       if (!billRes.ok) throw new Error('Failed to load bill');
       const billResult = await billRes.json();
-      setBill(billResult.data || billResult);
-      setLines(billResult.lines || []);
+      const billData = billResult.data || billResult;
+      setBill(billData);
+      setLines(billData.bill_lines || []);
 
       // Fetch bill payments
       const paymentsResponse = await fetch(`/api/bills/${params.id}/payments`);

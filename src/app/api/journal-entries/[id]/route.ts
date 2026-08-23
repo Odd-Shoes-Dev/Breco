@@ -26,7 +26,7 @@ export async function GET(
             'description', jl.description,
             'line_number', jl.line_number,
             'account', json_build_object('code', a.code, 'name', a.name)
-          )
+          ) ORDER BY jl.line_number
         ) FILTER (WHERE jl.id IS NOT NULL) AS lines
       FROM journal_entries je
       LEFT JOIN journal_lines jl ON jl.journal_entry_id = je.id
