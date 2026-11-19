@@ -339,12 +339,17 @@ export default function SettingsPage() {
                     </p>
                   </div>
                   <div className="form-group">
-                    <label className="label">Email</label>
+                    <label className="label">Email addresses</label>
                     <input
-                      type="email"
+                      type="text"
+                      inputMode="email"
+                      placeholder="Add an email address"
                       {...companyForm.register('email')}
                       className="input"
                     />
+                    <p className="text-xs text-gray-500 mt-1">
+                      For multiple addresses, separate them with commas.
+                    </p>
                   </div>
                 </div>
                 <div className="form-group">

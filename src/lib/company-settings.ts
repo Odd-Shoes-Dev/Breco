@@ -28,7 +28,7 @@ function getDefaultSettings(): CompanySettings {
     zip_code: 'P.O.Box 144011',
     country: 'Uganda',
     phone: null,
-    email: 'brecosafaris@gmail.com',
+    email: null,
     website: 'www.brecosafaris.com',
     logo_url: '/assets/logo.jpg',
     base_currency: 'UGX',

@@ -1,5 +1,9 @@
 import { sql } from '@/lib/db';
-import { normalizeCompanyPhoneNumbers } from '@/lib/pdf/company-details';
+import {
+  normalizeCompanyEmails,
+  normalizeCompanyPhoneNumbers,
+  parseCompanyEmails,
+} from '@/lib/pdf/company-details';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET() {
@@ -18,6 +22,17 @@ export async function GET() {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
+    const email = typeof body.email === 'string' ? normalizeCompanyEmails(body.email) : '';
+    const invalidEmail = parseCompanyEmails(email).find(
+      (address) => !/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(address)
+    );
+
+    if (invalidEmail) {
+      return NextResponse.json(
+        { error: `Invalid email address: ${invalidEmail}` },
+        { status: 400 }
+      );
+    }
 
     const rows = await sql`SELECT id FROM company_settings LIMIT 1`;
 
@@ -39,7 +54,7 @@ export async function PATCH(request: NextRequest) {
           ${body.zip_code || null},
           ${body.country || 'Uganda'},
           ${typeof body.phone === 'string' ? normalizeCompanyPhoneNumbers(body.phone) || null : null},
-          ${body.email || null},
+          ${email || null},
           ${body.website || null},
           ${body.base_currency || 'UGX'},
           ${body.fiscal_year_start_month || 1},
@@ -60,9 +75,15 @@ export async function PATCH(request: NextRequest) {
     const updates: Record<string, any> = {};
     for (const field of allowedFields) {
       if (field in body) {
-        updates[field] = field === 'phone'
-          ? (typeof body.phone === 'string' ? normalizeCompanyPhoneNumbers(body.phone) || null : null)
-          : body[field];
+        if (field === 'phone') {
+          updates[field] = typeof body.phone === 'string'
+            ? normalizeCompanyPhoneNumbers(body.phone) || null
+            : null;
+        } else if (field === 'email') {
+          updates[field] = typeof body.email === 'string' ? email || null : null;
+        } else {
+          updates[field] = body[field];
+        }
       }
     }
 
@@ -85,7 +106,7 @@ export async function PATCH(request: NextRequest) {
         zip_code = COALESCE(${updates.zip_code ?? null}, zip_code),
         country = COALESCE(${updates.country ?? null}, country),
         phone = CASE WHEN ${'phone' in updates} THEN ${updates.phone ?? null} ELSE phone END,
-        email = COALESCE(${updates.email ?? null}, email),
+        email = CASE WHEN ${'email' in updates} THEN ${updates.email ?? null} ELSE email END,
         website = COALESCE(${updates.website ?? null}, website),
         logo_url = COALESCE(${updates.logo_url ?? null}, logo_url),
         base_currency = COALESCE(${updates.base_currency ?? null}, base_currency),

@@ -49,6 +49,21 @@ export function formatCompanyPhoneNumbers(phone?: string | null): string {
   return parseCompanyPhoneNumbers(phone).join(' | ');
 }
 
+export function parseCompanyEmails(email?: string | null): string[] {
+  return (email || '')
+    .split(/[\r\n,]+/)
+    .map((address) => address.trim())
+    .filter(Boolean);
+}
+
+export function normalizeCompanyEmails(email?: string | null): string {
+  return parseCompanyEmails(email).join(', ');
+}
+
+export function formatCompanyEmails(email?: string | null): string {
+  return parseCompanyEmails(email).join(' | ');
+}
+
 function getAddressLines(settings?: CompanyDocumentSettings): string[] {
   const street = [value(settings?.address_line1), value(settings?.address_line2)]
     .filter(Boolean)
@@ -80,10 +95,11 @@ function getRegistrationLine(settings?: CompanyDocumentSettings): string {
 
 export function renderCompanyHeaderDetails(settings?: CompanyDocumentSettings): string {
   const phone = formatCompanyPhoneNumbers(settings?.phone);
+  const email = formatCompanyEmails(settings?.email);
   const details = [
     ...getAddressLines(settings),
     phone ? `Tel: ${value(phone)}` : '',
-    settings?.email ? `Email: ${value(settings.email)}` : '',
+    email ? `Email: ${value(email)}` : '',
     settings?.website ? `Website: ${value(settings.website)}` : '',
     getRegistrationLine(settings),
   ].filter(Boolean);
@@ -99,9 +115,10 @@ export function renderCompanyContactLine(
   className = 'address'
 ): string {
   const phone = formatCompanyPhoneNumbers(settings?.phone);
+  const email = formatCompanyEmails(settings?.email);
   const contact = [
     phone ? `Tel: ${value(phone)}` : '',
-    settings?.email ? `Email: ${value(settings.email)}` : '',
+    email ? `Email: ${value(email)}` : '',
     value(settings?.website),
   ]
     .filter(Boolean)
@@ -112,10 +129,11 @@ export function renderCompanyContactLine(
 
 export function renderCompanySenderDetails(settings?: CompanyDocumentSettings): string {
   const phone = formatCompanyPhoneNumbers(settings?.phone);
+  const email = formatCompanyEmails(settings?.email);
   const details = [
     ...getAddressLines(settings),
     phone ? `Tel: ${value(phone)}` : '',
-    settings?.email ? `Email: ${value(settings.email)}` : '',
+    email ? `Email: ${value(email)}` : '',
     settings?.website ? `Website: ${value(settings.website)}` : '',
   ].filter(Boolean);
 
@@ -125,12 +143,13 @@ export function renderCompanySenderDetails(settings?: CompanyDocumentSettings): 
 
 export function renderCompanyFooterDetails(settings?: CompanyDocumentSettings): string {
   const phone = formatCompanyPhoneNumbers(settings?.phone);
+  const email = formatCompanyEmails(settings?.email);
   const nameAndAddress = [getCompanyDisplayName(settings), ...getAddressLines(settings)]
     .filter(Boolean)
     .join(' • ');
   const contact = [
     phone ? `Tel: ${value(phone)}` : '',
-    settings?.email ? `Email: ${value(settings.email)}` : '',
+    email ? `Email: ${value(email)}` : '',
     value(settings?.website),
   ]
     .filter(Boolean)
