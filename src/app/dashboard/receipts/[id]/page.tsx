@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
+import { renderCompanyHeaderDetails } from '@/lib/pdf/company-details';
 import toast from 'react-hot-toast';
 import {
   ArrowLeftIcon,
@@ -59,10 +60,18 @@ export default function ReceiptDetailPage() {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [companySettings, setCompanySettings] = useState<any>(null);
 
   useEffect(() => {
     fetchReceipt();
   }, [params.id]);
+
+  useEffect(() => {
+    fetch('/api/settings', { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((settings) => settings && setCompanySettings(settings))
+      .catch((error) => console.error('Failed to load company settings:', error));
+  }, []);
 
   const fetchReceipt = async () => {
     try {
@@ -166,12 +175,7 @@ export default function ReceiptDetailPage() {
             <div class="company-section">
               <img src="/assets/logo.jpg" alt="Breco Safaris Logo" class="logo" />
               <div class="company-info">
-                <h1>Breco Safaris Ltd</h1>
-                <p class="address">Kampala Road Plot 14 Eagen House, Russel Street</p>
-                <p class="address">P.O.Box 144011, Kampala, Uganda</p>
-                <p class="address">Tel: +256 782 884 933 | +256 772 891 729 | +256 775 766 578</p>
-                <p class="address">Email: brecosafaris@gmail.com | Website: www.brecosafaris.com</p>
-                <p class="address">URA TIN: 1014756280 | URSB Reg. No: 80020001634842</p>
+                ${renderCompanyHeaderDetails(companySettings)}
               </div>
             </div>
             <div class="receipt-header">
@@ -508,10 +512,23 @@ export default function ReceiptDetailPage() {
       {/* Company Info Footer */}
       <div className="card bg-gray-50">
         <div className="card-body text-center text-sm text-gray-600">
-          <p className="font-semibold text-gray-900">Breco Safaris Ltd</p>
-          <p>Kampala Road Plot 14 Eagen House, Russel Street, P.O.Box 144011, Kampala, Uganda</p>
-          <p>Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com</p>
-          <p>URA TIN: 1014756280 • URSB Reg. No: 80020001634842</p>
+          <p className="font-semibold text-gray-900">{companySettings?.name || companySettings?.legal_name || 'Breco Safaris Ltd'}</p>
+          <p>{[
+            companySettings?.address_line1,
+            companySettings?.address_line2,
+            companySettings?.city,
+            companySettings?.state,
+            companySettings?.zip_code,
+            companySettings?.country,
+          ].filter(Boolean).join(', ')}</p>
+          {(companySettings?.phone || companySettings?.email || companySettings?.website) && (
+            <p>{[
+              companySettings?.phone ? `Tel: ${companySettings.phone}` : '',
+              companySettings?.email ? `Email: ${companySettings.email}` : '',
+              companySettings?.website,
+            ].filter(Boolean).join(' • ')}</p>
+          )}
+          <p>{companySettings?.ein ? `URA TIN: ${companySettings.ein} • ` : ''}URSB Reg. No: 80020001634842</p>
           <p className="mt-2 text-xs">This is an official receipt for accounting purposes.</p>
         </div>
       </div>

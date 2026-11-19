@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { renderCompanyContactLine } from '@/lib/pdf/company-details';
 import Link from 'next/link';
 import {
   ChartBarIcon,
@@ -252,7 +253,7 @@ export default function PurchasesByVendorPage() {
             <div class="company-info">
               <h1>Breco Safaris Ltd</h1>
               <div class="address">Kampala Road Plot 14 Eagen House, Russel Street, P.O.Box 144011, Kampala, Uganda</div>
-              <div class="address">Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com</div>
+              ${renderCompanyContactLine(companySettings)}
               <div class="address">URA TIN: 1014756280 • URSB Reg. No: 80020001634842</div>
               ${companySettings?.duns_number ? `<div class="address">DUNS: ${companySettings.duns_number}</div>` : ''}
             </div>

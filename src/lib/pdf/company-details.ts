@@ -72,10 +72,25 @@ export function renderCompanyHeaderDetails(settings?: CompanyDocumentSettings): 
     getRegistrationLine(settings),
   ].filter(Boolean);
 
-  return `<div class="company-name">${getCompanyDisplayName(settings)}</div>
+  return `<h1 class="company-name">${getCompanyDisplayName(settings)}</h1>
     <div class="company-details">
-      ${details.map((detail) => `<p>${detail}</p>`).join('\n      ')}
+      ${details.map((detail) => `<p class="address">${detail}</p>`).join('\n      ')}
     </div>`;
+}
+
+export function renderCompanyContactLine(
+  settings?: CompanyDocumentSettings,
+  className = 'address'
+): string {
+  const contact = [
+    settings?.phone ? `Tel: ${value(settings.phone)}` : '',
+    settings?.email ? `Email: ${value(settings.email)}` : '',
+    value(settings?.website),
+  ]
+    .filter(Boolean)
+    .join(' • ');
+
+  return contact ? `<div class="${escapeHtml(className)}">${contact}</div>` : '';
 }
 
 export function renderCompanySenderDetails(settings?: CompanyDocumentSettings): string {

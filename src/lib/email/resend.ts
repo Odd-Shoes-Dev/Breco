@@ -1,3 +1,6 @@
+import { getCompanySettings } from '@/lib/company-settings';
+import { renderCompanyFooterDetails } from '@/lib/pdf/company-details';
+
 // Lazily construct Resend client inside functions so missing API keys don't throw during
 // module import (which can break builds when environment variables are not provided).
 async function getResendClient() {
@@ -29,6 +32,7 @@ export async function sendInvoiceEmail(params: SendInvoiceEmailParams) {
     balanceDue,
     paymentLink,
   } = params;
+  const companySettings = await getCompanySettings();
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -128,12 +132,7 @@ export async function sendInvoiceEmail(params: SendInvoiceEmailParams) {
           
           <!-- Footer -->
           <div style="background: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
-            <p style="margin: 0; font-size: 12px; color: #999;">
-              Breco Safaris Ltd • Kampala Road Plot 14 Eagen House, Kampala, Uganda
-            </p>
-            <p style="margin: 4px 0 0 0; font-size: 12px; color: #999;">
-              Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com
-            </p>
+            ${renderCompanyFooterDetails(companySettings)}
           </div>
         </div>
       </div>
@@ -182,6 +181,7 @@ export async function sendPaymentReceiptEmail(params: SendPaymentReceiptParams) 
     paymentMethod,
     remainingBalance,
   } = params;
+  const companySettings = await getCompanySettings();
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -274,12 +274,7 @@ export async function sendPaymentReceiptEmail(params: SendPaymentReceiptParams) 
           
           <!-- Footer -->
           <div style="background: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
-            <p style="margin: 0; font-size: 12px; color: #999;">
-              Breco Safaris Ltd • Kampala Road Plot 14 Eagen House, Kampala, Uganda
-            </p>
-            <p style="margin: 4px 0 0 0; font-size: 12px; color: #999;">
-              Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com
-            </p>
+            ${renderCompanyFooterDetails(companySettings)}
           </div>
         </div>
       </div>

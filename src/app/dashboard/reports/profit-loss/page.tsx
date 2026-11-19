@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { renderCompanyContactLine } from '@/lib/pdf/company-details';
 import Link from 'next/link';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import {
@@ -266,7 +267,7 @@ export default function ProfitLossReportPage() {
             <div class="company-info">
               <div class="company-name">Breco Safaris Ltd</div>
               <div class="company-address">Kampala Road Plot 14 Eagen House, Russel Street, P.O.Box 144011, Kampala, Uganda</div>
-              <div class="company-contact">Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com</div>
+              ${renderCompanyContactLine(companySettings, 'company-contact')}
               <div class="company-contact">URA TIN: 1014756280 • URSB Reg. No: 80020001634842</div>
               ${companySettings?.duns_number ? `<div class="company-contact">DUNS: ${companySettings.duns_number}</div>` : ''}
             </div>
