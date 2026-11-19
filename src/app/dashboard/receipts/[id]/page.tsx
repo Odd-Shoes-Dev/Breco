@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import {
+  formatCompanyEmails,
   formatCompanyPhoneNumbers,
   renderCompanyHeaderDetails,
 } from '@/lib/pdf/company-details';
@@ -529,7 +530,9 @@ export default function ReceiptDetailPage() {
               formatCompanyPhoneNumbers(companySettings?.phone)
                 ? `Tel: ${formatCompanyPhoneNumbers(companySettings?.phone)}`
                 : '',
-              companySettings?.email ? `Email: ${companySettings.email}` : '',
+              formatCompanyEmails(companySettings?.email)
+                ? `Email: ${formatCompanyEmails(companySettings?.email)}`
+                : '',
               companySettings?.website,
             ].filter(Boolean).join(' • ')}</p>
           )}
