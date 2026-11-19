@@ -2,11 +2,12 @@ import Link from 'next/link';
 import { CheckCircleIcon } from '@heroicons/react/24/outline';
 import PrintButton from '@/components/print-button';
 import { getCompanySettings } from '@/lib/company-settings';
+import { parseCompanyPhoneNumbers } from '@/lib/pdf/company-details';
 
 export default async function PaymentSuccessPage(props: any) {
   const invoiceId = props?.searchParams?.invoice || 'N/A';
   const companySettings = await getCompanySettings();
-  const phoneLink = companySettings.phone?.replace(/[^\d+]/g, '');
+  const phoneNumbers = parseCompanyPhoneNumbers(companySettings.phone);
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -54,10 +55,21 @@ export default async function PaymentSuccessPage(props: any) {
         {/* Footer */}
         <p className="text-xs text-gray-500 mt-8">
           Questions about your payment?{' '}
-          {phoneLink ? (
-            <a href={`tel:${phoneLink}`} className="text-[#1e3a5f] hover:underline">
-              Contact us
-            </a>
+          {phoneNumbers.length > 0 ? (
+            <>
+              Contact us:{' '}
+              {phoneNumbers.map((phone, index) => (
+                <span key={`${phone}-${index}`}>
+                  {index > 0 && ' | '}
+                  <a
+                    href={`tel:${phone.replace(/[^\d+]/g, '')}`}
+                    className="text-[#1e3a5f] hover:underline"
+                  >
+                    {phone}
+                  </a>
+                </span>
+              ))}
+            </>
           ) : (
             <span>Contact us</span>
           )}

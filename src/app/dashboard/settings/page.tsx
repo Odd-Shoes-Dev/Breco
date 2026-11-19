@@ -326,12 +326,17 @@ export default function SettingsPage() {
                 <h3 className="font-medium text-gray-900">Contact</h3>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="form-group">
-                    <label className="label">Phone</label>
+                    <label className="label">Phone numbers</label>
                     <input
-                      type="tel"
+                      type="text"
+                      inputMode="tel"
+                      placeholder="Add a phone number"
                       {...companyForm.register('phone')}
                       className="input"
                     />
+                    <p className="text-xs text-gray-500 mt-1">
+                      For multiple numbers, separate them with commas.
+                    </p>
                   </div>
                   <div className="form-group">
                     <label className="label">Email</label>

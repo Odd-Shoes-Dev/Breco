@@ -4,7 +4,10 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
-import { renderCompanyHeaderDetails } from '@/lib/pdf/company-details';
+import {
+  formatCompanyPhoneNumbers,
+  renderCompanyHeaderDetails,
+} from '@/lib/pdf/company-details';
 import toast from 'react-hot-toast';
 import {
   ArrowLeftIcon,
@@ -523,7 +526,9 @@ export default function ReceiptDetailPage() {
           ].filter(Boolean).join(', ')}</p>
           {(companySettings?.phone || companySettings?.email || companySettings?.website) && (
             <p>{[
-              companySettings?.phone ? `Tel: ${companySettings.phone}` : '',
+              formatCompanyPhoneNumbers(companySettings?.phone)
+                ? `Tel: ${formatCompanyPhoneNumbers(companySettings?.phone)}`
+                : '',
               companySettings?.email ? `Email: ${companySettings.email}` : '',
               companySettings?.website,
             ].filter(Boolean).join(' • ')}</p>
