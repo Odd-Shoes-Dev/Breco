@@ -18,6 +18,7 @@ import {
   PrinterIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import { renderCompanyHeaderDetails } from '@/lib/pdf/company-details';
 
 interface Employee {
   id: string;
@@ -63,12 +64,20 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const [recentPayslips, setRecentPayslips] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [employeeId, setEmployeeId] = useState<string>('');
+  const [companySettings, setCompanySettings] = useState<any>(null);
 
   useEffect(() => {
     params.then(({ id }) => {
       setEmployeeId(id);
       fetchEmployeeDetails(id);
     });
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/settings', { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((settings) => settings && setCompanySettings(settings))
+      .catch((error) => console.error('Failed to load company settings:', error));
   }, []);
 
   const fetchEmployeeDetails = async (id: string) => {
@@ -294,11 +303,7 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
             <div class="company-section">
               <img src="${window.location.origin}/assets/logo.jpg" alt="Breco Safaris" class="logo" onerror="this.style.display='none'">
               <div class="company-info">
-                <h1>Breco Safaris Ltd</h1>
-                <p class="address">Plot 123, Kampala Road</p>
-                <p class="address">Kampala, Uganda</p>
-                <p class="address">Tel: +256 123 456 789</p>
-                <p class="address">Email: info@brecosafaris.com</p>
+                ${renderCompanyHeaderDetails(companySettings)}
               </div>
             </div>
             <div class="document-header">

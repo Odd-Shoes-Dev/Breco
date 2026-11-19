@@ -18,6 +18,7 @@ import {
   XCircleIcon,
 } from '@heroicons/react/24/outline';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
+import { renderCompanyHeaderDetails } from '@/lib/pdf/company-details';
 
 interface Expense {
   id: string;
@@ -64,12 +65,20 @@ export default function ExpenseDetailPage() {
   const [expense, setExpense] = useState<Expense | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [companySettings, setCompanySettings] = useState<any>(null);
 
   useEffect(() => {
     if (params.id) {
       loadExpenseDetails();
     }
   }, [params.id]);
+
+  useEffect(() => {
+    fetch('/api/settings', { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((settings) => settings && setCompanySettings(settings))
+      .catch((error) => console.error('Failed to load company settings:', error));
+  }, []);
 
   const loadExpenseDetails = async () => {
     try {
@@ -268,12 +277,7 @@ export default function ExpenseDetailPage() {
             <div class="company-section">
               <img src="/assets/logo.jpg" alt="Breco Safaris Logo" class="logo" />
               <div class="company-info">
-                <h1>Breco Safaris Ltd</h1>
-                <p class="address">Kampala Road Plot 14 Eagen House, Russel Street</p>
-                <p class="address">P.O.Box 144011, Kampala, Uganda</p>
-                <p class="address">Tel: +256 782 884 933 | +256 772 891 729 | +256 775 766 578</p>
-                <p class="address">Email: brecosafaris@gmail.com | Website: www.brecosafaris.com</p>
-                <p class="address">URA TIN: 1014756280 | URSB Reg. No: 80020001634842</p>
+                ${renderCompanyHeaderDetails(companySettings)}
               </div>
             </div>
             <div class="expense-header">

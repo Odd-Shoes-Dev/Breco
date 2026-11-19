@@ -34,6 +34,21 @@ export function getCompanyDisplayName(settings?: CompanyDocumentSettings): strin
   return value(settings?.name) || value(settings?.legal_name);
 }
 
+export function parseCompanyPhoneNumbers(phone?: string | null): string[] {
+  return (phone || '')
+    .split(/[\r\n,]+/)
+    .map((number) => number.trim())
+    .filter(Boolean);
+}
+
+export function normalizeCompanyPhoneNumbers(phone?: string | null): string {
+  return parseCompanyPhoneNumbers(phone).join(', ');
+}
+
+export function formatCompanyPhoneNumbers(phone?: string | null): string {
+  return parseCompanyPhoneNumbers(phone).join(' | ');
+}
+
 function getAddressLines(settings?: CompanyDocumentSettings): string[] {
   const street = [value(settings?.address_line1), value(settings?.address_line2)]
     .filter(Boolean)
@@ -64,24 +79,42 @@ function getRegistrationLine(settings?: CompanyDocumentSettings): string {
 }
 
 export function renderCompanyHeaderDetails(settings?: CompanyDocumentSettings): string {
+  const phone = formatCompanyPhoneNumbers(settings?.phone);
   const details = [
     ...getAddressLines(settings),
-    settings?.phone ? `Tel: ${value(settings.phone)}` : '',
+    phone ? `Tel: ${value(phone)}` : '',
     settings?.email ? `Email: ${value(settings.email)}` : '',
     settings?.website ? `Website: ${value(settings.website)}` : '',
     getRegistrationLine(settings),
   ].filter(Boolean);
 
-  return `<div class="company-name">${getCompanyDisplayName(settings)}</div>
+  return `<h1 class="company-name">${getCompanyDisplayName(settings)}</h1>
     <div class="company-details">
-      ${details.map((detail) => `<p>${detail}</p>`).join('\n      ')}
+      ${details.map((detail) => `<p class="address">${detail}</p>`).join('\n      ')}
     </div>`;
 }
 
+export function renderCompanyContactLine(
+  settings?: CompanyDocumentSettings,
+  className = 'address'
+): string {
+  const phone = formatCompanyPhoneNumbers(settings?.phone);
+  const contact = [
+    phone ? `Tel: ${value(phone)}` : '',
+    settings?.email ? `Email: ${value(settings.email)}` : '',
+    value(settings?.website),
+  ]
+    .filter(Boolean)
+    .join(' • ');
+
+  return contact ? `<div class="${escapeHtml(className)}">${contact}</div>` : '';
+}
+
 export function renderCompanySenderDetails(settings?: CompanyDocumentSettings): string {
+  const phone = formatCompanyPhoneNumbers(settings?.phone);
   const details = [
     ...getAddressLines(settings),
-    settings?.phone ? `Tel: ${value(settings.phone)}` : '',
+    phone ? `Tel: ${value(phone)}` : '',
     settings?.email ? `Email: ${value(settings.email)}` : '',
     settings?.website ? `Website: ${value(settings.website)}` : '',
   ].filter(Boolean);
@@ -91,11 +124,12 @@ export function renderCompanySenderDetails(settings?: CompanyDocumentSettings): 
 }
 
 export function renderCompanyFooterDetails(settings?: CompanyDocumentSettings): string {
+  const phone = formatCompanyPhoneNumbers(settings?.phone);
   const nameAndAddress = [getCompanyDisplayName(settings), ...getAddressLines(settings)]
     .filter(Boolean)
     .join(' • ');
   const contact = [
-    settings?.phone ? `Tel: ${value(settings.phone)}` : '',
+    phone ? `Tel: ${value(phone)}` : '',
     settings?.email ? `Email: ${value(settings.email)}` : '',
     value(settings?.website),
   ]

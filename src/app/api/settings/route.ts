@@ -1,4 +1,5 @@
 import { sql } from '@/lib/db';
+import { normalizeCompanyPhoneNumbers } from '@/lib/pdf/company-details';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET() {
@@ -37,7 +38,7 @@ export async function PATCH(request: NextRequest) {
           ${body.state || null},
           ${body.zip_code || null},
           ${body.country || 'Uganda'},
-          ${body.phone || null},
+          ${typeof body.phone === 'string' ? normalizeCompanyPhoneNumbers(body.phone) || null : null},
           ${body.email || null},
           ${body.website || null},
           ${body.base_currency || 'UGX'},
@@ -59,7 +60,9 @@ export async function PATCH(request: NextRequest) {
     const updates: Record<string, any> = {};
     for (const field of allowedFields) {
       if (field in body) {
-        updates[field] = body[field];
+        updates[field] = field === 'phone'
+          ? (typeof body.phone === 'string' ? normalizeCompanyPhoneNumbers(body.phone) || null : null)
+          : body[field];
       }
     }
 
@@ -81,7 +84,7 @@ export async function PATCH(request: NextRequest) {
         state = COALESCE(${updates.state ?? null}, state),
         zip_code = COALESCE(${updates.zip_code ?? null}, zip_code),
         country = COALESCE(${updates.country ?? null}, country),
-        phone = COALESCE(${updates.phone ?? null}, phone),
+        phone = CASE WHEN ${'phone' in updates} THEN ${updates.phone ?? null} ELSE phone END,
         email = COALESCE(${updates.email ?? null}, email),
         website = COALESCE(${updates.website ?? null}, website),
         logo_url = COALESCE(${updates.logo_url ?? null}, logo_url),

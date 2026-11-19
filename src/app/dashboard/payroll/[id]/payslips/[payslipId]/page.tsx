@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { formatCurrency as currencyFormatter, type SupportedCurrency } from '@/lib/currency';
 import { ArrowLeftIcon, PrinterIcon, EnvelopeIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import { renderCompanyHeaderDetails } from '@/lib/pdf/company-details';
 
 interface Employee {
   first_name: string;
@@ -78,6 +79,7 @@ export default function PayslipDetailPage({
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [periodId, setPeriodId] = useState<string>('');
   const [payslipId, setPayslipId] = useState<string>('');
+  const [companySettings, setCompanySettings] = useState<any>(null);
 
   useEffect(() => {
     params.then(({ id, payslipId: pId }) => {
@@ -85,6 +87,13 @@ export default function PayslipDetailPage({
       setPayslipId(pId);
       fetchPayslipDetails(pId);
     });
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/settings', { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((settings) => settings && setCompanySettings(settings))
+      .catch((error) => console.error('Failed to load company settings:', error));
   }, []);
 
   const fetchPayslipDetails = async (id: string) => {
@@ -310,11 +319,7 @@ export default function PayslipDetailPage({
               <div class="company-section">
                 <img src="${typeof window !== 'undefined' ? window.location.origin : ''}/assets/logo.jpg" alt="Breco Safaris" class="logo" onerror="this.style.display='none'">
                 <div class="company-info">
-                  <h1>Breco Safaris Ltd</h1>
-                  <p class="address">Plot 123, Kampala Road</p>
-                  <p class="address">Kampala, Uganda</p>
-                  <p class="address">Tel: +256 123 456 789</p>
-                  <p class="address">Email: info@brecosafaris.com</p>
+                  ${renderCompanyHeaderDetails(companySettings)}
                 </div>
               </div>
               <div class="payslip-header">

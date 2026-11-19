@@ -27,7 +27,7 @@ function getDefaultSettings(): CompanySettings {
     state: null,
     zip_code: 'P.O.Box 144011',
     country: 'Uganda',
-    phone: '+256 782 884 933',
+    phone: null,
     email: 'brecosafaris@gmail.com',
     website: 'www.brecosafaris.com',
     logo_url: '/assets/logo.jpg',
