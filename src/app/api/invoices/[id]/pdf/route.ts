@@ -26,8 +26,8 @@ export async function GET(request: NextRequest, context: any) {
       SELECT * FROM invoice_line_items WHERE invoice_id = ${invoiceId} ORDER BY line_number
     `;
 
-    // Fetch company settings for DUNS number
-    const settingsRows = await sql`SELECT duns_number FROM company_settings LIMIT 1`;
+    // Fetch company details used by the document templates
+    const settingsRows = await sql`SELECT * FROM company_settings LIMIT 1`;
     const companySettings = settingsRows[0] || {};
 
     // Generate HTML for PDF based on document type

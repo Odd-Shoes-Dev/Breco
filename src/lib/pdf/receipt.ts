@@ -2,9 +2,16 @@
 
 import { Invoice, InvoiceLine, Customer } from '@/types/database';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
+import {
+  getCompanyDisplayName,
+  renderCompanyFooterDetails,
+  renderCompanyHeaderDetails,
+  renderCompanySenderDetails,
+} from '@/lib/pdf/company-details';
+import type { CompanyDocumentSettings } from '@/lib/pdf/company-details';
 
 interface ReceiptPDFData {
-  companySettings?: { duns_number?: string };
+  companySettings?: CompanyDocumentSettings;
   invoice: Invoice;
   lineItems: InvoiceLine[];
   customer: Customer;
@@ -278,15 +285,7 @@ export function generateReceiptHTML(data: ReceiptPDFData): string {
           <div class="logo-section">
             <img src="/assets/logo.jpg" alt="Breco Safaris" class="logo">
             <div class="company-info">
-              <div class="company-name">Breco Safaris Ltd</div>
-              <div class="company-details">
-                <p>Kampala Road Plot 14 Eagen House, Russel Street</p>
-                <p>P.O.Box 144011, Kampala, Uganda</p>
-                <p>Tel: +256 782 884 933, +256 772 891 729, +256 775 766 578</p>
-                <p>+256 746 757 53991, +256 702 834 511</p>
-                <p>Email: brecosafaris@gmail.com • Website: www.brecosafaris.com</p>
-                <p>URA TIN: 1014756280 • URSB Reg. No: 80020001634842${companySettings?.duns_number ? ` • DUNS: ${companySettings.duns_number}` : ''}</p>
-              </div>
+              ${renderCompanyHeaderDetails(companySettings)}
             </div>
           </div>
           <div class="receipt-title">
@@ -348,10 +347,7 @@ export function generateReceiptHTML(data: ReceiptPDFData): string {
 
         <div class="info-block" style="margin-bottom: 20px;">
           <h3>Received By</h3>
-          <p><strong>Breco Safaris Ltd</strong></p>
-          <p>Kampala Road Plot 14 Eagen House, Russel Street</p>
-          <p>P.O.Box 144011, Kampala, Uganda</p>
-          <p>Tel: +256 782 884 933, +256 772 891 729</p>
+          ${renderCompanySenderDetails(companySettings)}
         </div>
 
         <table class="items-table">
@@ -422,16 +418,14 @@ export function generateReceiptHTML(data: ReceiptPDFData): string {
           <div class="signature-box">
             <div class="signature-line">
               Authorized Signature<br>
-              <strong>Breco Safaris Ltd</strong>
+              <strong>${getCompanyDisplayName(companySettings)}</strong>
             </div>
           </div>
         </div>
 
         <div class="footer">
           <p>Thank you for your payment!</p>
-          <p style="margin-top: 8px;">Breco Safaris Ltd • Kampala Road Plot 14 Eagen House, Kampala, Uganda</p>
-          <p>Tel: +256 782 884 933, +256 772 891 729 • Email: brecosafaris@gmail.com • www.brecosafaris.com</p>
-          <p>URA TIN: 1014756280 • URSB Reg. No: 80020001634842</p>
+          ${renderCompanyFooterDetails(companySettings)}
           <p style="margin-top: 12px; color: #666; font-size: 11px;">
             This is an official receipt for accounting purposes.
           </p>
