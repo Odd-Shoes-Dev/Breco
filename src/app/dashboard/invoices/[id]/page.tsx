@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { renderCompanyHeaderDetails } from '@/lib/pdf/company-details';
 import { Button, Card, CardHeader, CardTitle, CardBody, Badge, LoadingSpinner } from '@/components/ui';
 import { formatCurrency as currencyFormatter } from '@/lib/currency';
 import {
@@ -209,13 +210,13 @@ export default function InvoiceDetailPage() {
               border-radius: 8px;
               object-fit: contain;
             }
-            .company-info h1 { 
+            .company-info .company-name {
               font-size: 24px; 
               font-weight: bold; 
               color: #1e3a5f;
               margin-bottom: 8px;
             }
-            .company-info .address { 
+            .company-info .company-details p {
               font-size: 11px; 
               color: #6b7280;
               margin-bottom: 3px;
@@ -381,13 +382,7 @@ export default function InvoiceDetailPage() {
             <div class="company-section">
               <img src="/assets/logo.jpg" alt="Breco Safaris Logo" class="logo" />
               <div class="company-info">
-                <h1>Breco Safaris Ltd</h1>
-                <p class="address">Kampala Road Plot 14 Eagen House, Russel Street</p>
-                <p class="address">P.O.Box 144011, Kampala, Uganda</p>
-                <p class="address">Tel: +256 782 884 933 | +256 772 891 729 | +256 775 766 578</p>
-                <p class="address">Email: brecosafaris@gmail.com | Website: www.brecosafaris.com</p>
-                <p class="address">URA TIN: 1014756280 | URSB Reg. No: 80020001634842</p>
-                ${companySettings?.duns_number ? `<p class="address">DUNS: ${companySettings.duns_number}</p>` : ''}
+                ${renderCompanyHeaderDetails(companySettings)}
               </div>
             </div>
             <div class="invoice-header">
